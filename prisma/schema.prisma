@@ -13,8 +13,10 @@ datasource db {
 
 enum Role {
   SUPER_ADMIN
+  COORDINADOR
   ADMIN
   ASESOR
+  AUXILIAR
 }
 
 enum Status {
@@ -39,7 +41,7 @@ enum PaymentMethod {
 model User {
   id          Int       @id @default(autoincrement())
   role        Role      @default(ASESOR)
-  name        String
+  name        String    @default("SIN NOMBRE")
   email       String    @unique
   phone       String?
   address     String?
@@ -50,6 +52,7 @@ model User {
   local       String?
   status      Status    @default(ACTIVO)
   password    String
+  avatar      String?
 
   locals      Local[]    @relation("UserLocals")
   sales       Sale[]     @relation("UserSales")
@@ -242,3 +245,4 @@ model SaleItem {
   sale        Sale       @relation("SaleItems", fields: [saleId], references: [id], onDelete: Cascade)
   product     Inventory?  @relation("ProductSaleItems", fields: [productId], references: [id], onDelete: SetNull)
 }
+

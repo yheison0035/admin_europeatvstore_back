@@ -1,23 +1,29 @@
 import {
   IsEmail,
-  IsEnum,
-  IsOptional,
   IsString,
   MinLength,
+  IsOptional,
+  IsEnum,
+  IsDateString,
 } from 'class-validator';
 import { Role, Status } from '@prisma/client';
 
 export class CreateUserDto {
-  @IsEnum(Role)
-  role: Role;
-
-  @IsString()
-  name: string;
-
   @IsEmail()
   email: string;
 
+  @IsString()
+  @MinLength(6)
+  password: string;
+
   @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsDateString()
+  birthdate?: string;
+
   @IsString()
   phone?: string;
 
@@ -27,11 +33,7 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsString()
-  birthdate?: string;
-
-  @IsOptional()
-  @IsString()
-  document?: string;
+  city?: string;
 
   @IsOptional()
   @IsString()
@@ -39,17 +41,17 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsString()
-  city?: string;
+  document?: string;
 
   @IsOptional()
   @IsString()
-  local?: string;
+  avatar?: string;
 
+  @IsOptional()
+  @IsEnum(Role)
+  role?: Role;
+
+  @IsOptional()
   @IsEnum(Status)
-  @IsOptional()
   status?: Status;
-
-  @IsString()
-  @MinLength(6)
-  password: string;
 }
