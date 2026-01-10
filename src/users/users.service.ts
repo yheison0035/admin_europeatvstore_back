@@ -99,7 +99,13 @@ export class UsersService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const users = await this.prisma.user.findMany();
+    const users = await this.prisma.user.findMany({
+      include: {
+        locals: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
     return {
       success: true,
       message: 'Usuarios obtenidos correctamente',
@@ -109,7 +115,12 @@ export class UsersService {
 
   // Obtener un usuario por ID
   async getUserId(id: number, requester?: { role: Role; userId: number }) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        locals: true,
+      },
+    });
     if (!user) {
       throw new NotFoundException(`Usuario con id ${id} no fue encontrado`);
     }

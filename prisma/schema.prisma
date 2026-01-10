@@ -49,7 +49,6 @@ model User {
   document    String?
   department  String?
   city        String?
-  local       String?
   status      Status    @default(ACTIVO)
   password    String
   avatar      String?
