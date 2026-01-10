@@ -12,6 +12,7 @@ import { ConfigModule } from '@nestjs/config';
 
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma.module';
+import { VariantsModule } from './inventory/variants/variants.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PrismaModule } from './prisma.module';
     ProvidersModule,
     SalesModule,
     UsersModule,
+    VariantsModule,
   ],
 })
 export class AppModule {}

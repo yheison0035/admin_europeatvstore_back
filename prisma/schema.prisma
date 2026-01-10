@@ -39,33 +39,33 @@ enum PaymentMethod {
 //////////////////////////////////////////////////
 
 model User {
-  id          Int       @id @default(autoincrement())
-  role        Role      @default(ASESOR)
-  name        String    @default("SIN NOMBRE")
-  email       String    @unique
-  phone       String?
-  address     String?
-  birthdate   DateTime?
-  document    String?
-  department  String?
-  city        String?
-  status      Status    @default(ACTIVO)
-  password    String
-  avatar      String?
+  id         Int       @id @default(autoincrement())
+  role       Role      @default(ASESOR)
+  name       String    @default("SIN NOMBRE")
+  email      String    @unique
+  phone      String?
+  address    String?
+  birthdate  DateTime?
+  document   String?
+  department String?
+  city       String?
+  status     Status    @default(ACTIVO)
+  password   String
+  avatar     String?
 
-  locals      Local[]    @relation("UserLocals")
-  sales       Sale[]     @relation("UserSales")
+  locals Local[] @relation("UserLocals")
+  sales  Sale[]  @relation("UserSales")
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////
 
 model Customer {
-  id           Int        @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   type_document String?
-  document      String?    @unique
+  document      String?   @unique
   firstName     String
   lastName      String
   email         String?
@@ -74,158 +74,183 @@ model Customer {
   city          String?
   address       String?
   birthdate     DateTime?
-  status        Status     @default(ACTIVO)
+  status        Status    @default(ACTIVO)
 
-  sales         Sale[]     @relation("CustomerSales")
+  sales Sale[] @relation("CustomerSales")
 
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////
 
 model Provider {
-  id           Int        @id @default(autoincrement())
-  name         String
-  company      String?
-  contactName  String?
-  phone        String?
-  email        String?
-  city         String?
-  department   String?
-  address      String?
-  productType  String?
-  status       Status     @default(ACTIVO)
+  id          Int     @id @default(autoincrement())
+  name        String
+  contactName String?
+  phone       String?
+  email       String?
+  city        String?
+  department  String?
+  address     String?
+  productType String?
+  status      Status  @default(ACTIVO)
 
-  inventories  Inventory[] @relation("ProviderProducts")
-  expenses     Expense[]   @relation("ProviderExpenses")
+  inventories Inventory[] @relation("ProviderProducts")
+  expenses    Expense[]   @relation("ProviderExpenses")
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////
 
 model Local {
-  id           Int        @id @default(autoincrement())
-  name         String
-  address      String?
-  department   String?
-  city         String?
-  phone        String?
-  status       Status     @default(ACTIVO)
-  userId       Int?
+  id         Int     @id @default(autoincrement())
+  name       String
+  address    String?
+  department String?
+  city       String?
+  phone      String?
+  status     Status  @default(ACTIVO)
+  userId     Int?
 
-  user         User?       @relation("UserLocals", fields: [userId], references: [id], onDelete: SetNull)
-  inventories  Inventory[] @relation("LocalInventory")
-  expenses     Expense[]   @relation("LocalExpenses")
-  sales        Sale[]      @relation("LocalSales")
+  user        User?       @relation("UserLocals", fields: [userId], references: [id], onDelete: SetNull)
+  inventories Inventory[] @relation("LocalInventory")
+  expenses    Expense[]   @relation("LocalExpenses")
+  sales       Sale[]      @relation("LocalSales")
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////
 
 model Category {
-  id           Int        @id @default(autoincrement())
-  name         String
-  description  String?
-  status       Status     @default(ACTIVO)
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+  status      Status  @default(ACTIVO)
 
-  inventories  Inventory[] @relation("CategoryProducts")
+  inventories Inventory[] @relation("CategoryProducts")
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////
 
 model Brand {
-  id           Int        @id @default(autoincrement())
-  name         String
-  description  String?
-  status       Status     @default(ACTIVO)
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+  status      Status  @default(ACTIVO)
 
-  inventories  Inventory[] @relation("BrandProducts")
+  inventories Inventory[] @relation("BrandProducts")
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////
 
 model Inventory {
-  id            Int        @id @default(autoincrement())
-  sku           String     @unique
+  id            Int     @id @default(autoincrement())
   name          String
-  color         String?
-  stock         Int        @default(0)
+  description   String?
   purchasePrice Float
   salePrice     Float
-  status        Status     @default(ACTIVO)
+  status        Status  @default(ACTIVO)
 
-  localId       Int?
-  providerId    Int?
-  categoryId    Int?
-  brandId       Int?
+  localId    Int?
+  providerId Int?
+  categoryId Int?
+  brandId    Int?
 
-  local         Local?      @relation("LocalInventory", fields: [localId], references: [id], onDelete: SetNull)
-  provider      Provider?   @relation("ProviderProducts", fields: [providerId], references: [id], onDelete: SetNull)
-  category      Category?   @relation("CategoryProducts", fields: [categoryId], references: [id], onDelete: SetNull)
-  brand         Brand?      @relation("BrandProducts", fields: [brandId], references: [id], onDelete: SetNull)
+  local    Local?    @relation("LocalInventory", fields: [localId], references: [id], onDelete: SetNull)
+  provider Provider? @relation("ProviderProducts", fields: [providerId], references: [id], onDelete: SetNull)
+  category Category? @relation("CategoryProducts", fields: [categoryId], references: [id], onDelete: SetNull)
+  brand    Brand?    @relation("BrandProducts", fields: [brandId], references: [id], onDelete: SetNull)
 
-  saleItems     SaleItem[]  @relation("ProductSaleItems")
+  variants InventoryVariant[]
+  images   InventoryImage[] 
 
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InventoryVariant {
+  id          Int    @id @default(autoincrement())
+  sequence    Int    @unique @default(autoincrement())
+  color       String
+  stock       Int    @default(0)
+  sku         String @unique
+  inventoryId Int
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  saleItems SaleItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InventoryImage {
+  id          Int      @id @default(autoincrement())
+  url         String
+  publicId    String
+  inventoryId Int
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
 }
 
 //////////////////////////////////////////////////
 
 model Expense {
-  id             Int        @id @default(autoincrement())
-  concept        String
-  category       String?
-  amount         Float
-  paymentMethod  PaymentMethod?
-  notes          String?
-  status         Status     @default(ACTIVO)
-  expenseDate    DateTime   @default(now())
+  id            Int            @id @default(autoincrement())
+  concept       String
+  category      String?
+  amount        Float
+  paymentMethod PaymentMethod?
+  notes         String?
+  status        Status         @default(ACTIVO)
+  expenseDate   DateTime       @default(now())
 
-  providerId     Int?
-  localId        Int?
+  providerId Int?
+  localId    Int?
 
-  provider       Provider?  @relation("ProviderExpenses", fields: [providerId], references: [id], onDelete: SetNull)
-  local          Local?     @relation("LocalExpenses", fields: [localId], references: [id], onDelete: SetNull)
+  provider Provider? @relation("ProviderExpenses", fields: [providerId], references: [id], onDelete: SetNull)
+  local    Local?    @relation("LocalExpenses", fields: [localId], references: [id], onDelete: SetNull)
 
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////
 
 model Sale {
-  id            Int         @id @default(autoincrement())
-  code          String       @unique
+  id            Int            @id @default(autoincrement())
+  code          String         @unique
   totalAmount   Float
   paymentMethod PaymentMethod?
-  status        Status       @default(ACTIVO)
-  saleDate      DateTime     @default(now())
+  status        Status         @default(ACTIVO)
+  saleDate      DateTime       @default(now())
   notes         String?
 
-  customerId    Int?
-  localId       Int?
-  userId        Int?
+  customerId Int?
+  localId    Int?
+  userId     Int?
 
-  customer      Customer?    @relation("CustomerSales", fields: [customerId], references: [id], onDelete: SetNull)
-  local         Local?       @relation("LocalSales", fields: [localId], references: [id], onDelete: SetNull)
-  user          User?        @relation("UserSales", fields: [userId], references: [id], onDelete: SetNull)
+  customer Customer? @relation("CustomerSales", fields: [customerId], references: [id], onDelete: SetNull)
+  local    Local?    @relation("LocalSales", fields: [localId], references: [id], onDelete: SetNull)
+  user     User?     @relation("UserSales", fields: [userId], references: [id], onDelete: SetNull)
 
-  items         SaleItem[]   @relation("SaleItems")
+  items SaleItem[] @relation("SaleItems")
 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////
@@ -233,15 +258,16 @@ model Sale {
 //////////////////////////////////////////////////
 
 model SaleItem {
-  id          Int        @id @default(autoincrement())
-  quantity    Int        @default(1)
-  price       Float
-  subtotal    Float
+  id       Int   @id @default(autoincrement())
+  quantity Int
+  price    Float
+  subtotal Float
 
-  saleId      Int
-  productId   Int
+  saleId             Int
+  inventoryVariantId Int
 
-  sale        Sale       @relation("SaleItems", fields: [saleId], references: [id], onDelete: Cascade)
-  product     Inventory?  @relation("ProductSaleItems", fields: [productId], references: [id], onDelete: SetNull)
+  sale    Sale             @relation("SaleItems", fields: [saleId], references: [id], onDelete: Cascade)
+  variant InventoryVariant @relation(fields: [inventoryVariantId], references: [id])
+
+  createdAt DateTime @default(now())
 }
-

@@ -10,43 +10,34 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
-import { v2 as Cloudinary } from 'cloudinary';
 import { hasRole } from 'src/common/role-check.util';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private prisma: PrismaService,
-    @Inject('CLOUDINARY') private cloudinary: typeof Cloudinary,
+    private cloudinaryService: CloudinaryService,
   ) {}
 
   // Actualizar avatar
   async updateAvatar(userId: number, file: Express.Multer.File) {
-    return new Promise(async (resolve, reject) => {
-      const uploadStream = this.cloudinary.uploader.upload_stream(
-        {
-          folder: 'avatars',
-          public_id: `user_${userId}`,
-          overwrite: true,
-        },
-        async (error, uploaded) => {
-          if (error) return reject(error);
+    const upload = await this.cloudinaryService.uploadImage(
+      file,
+      'avatars', // carpeta
+      `user_${userId}`, // publicId fijo
+    );
 
-          try {
-            const updatedUser = await this.prisma.user.update({
-              where: { id: userId },
-              data: { avatar: uploaded?.secure_url },
-            });
-
-            resolve(updatedUser);
-          } catch (err) {
-            reject(err);
-          }
-        },
-      );
-
-      uploadStream.end(file.buffer);
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatar: upload.url },
     });
+
+    return {
+      success: true,
+      message: 'Avatar actualizado correctamente',
+      data: updatedUser,
+    };
   }
 
   // Eliminar Avatar
@@ -58,15 +49,12 @@ export class UsersService {
     }
 
     if (user.avatar) {
-      const publicId = this.extractPublicIdFromUrl(user.avatar);
-
-      if (publicId) {
-        try {
-          await this.cloudinary.uploader.destroy(publicId);
-        } catch (err) {
-          console.error('Error eliminando imagen de Cloudinary:', err);
-          throw new Error('No se pudo eliminar la imagen en Cloudinary');
-        }
+      try {
+        // Eliminamos directamente con el publicId que usamos al subir
+        await this.cloudinaryService.deleteImage(`avatars/user_${userId}`);
+      } catch (err) {
+        console.error('Error eliminando imagen de Cloudinary:', err);
+        throw new Error('No se pudo eliminar la imagen en Cloudinary');
       }
 
       await this.prisma.user.update({
@@ -79,18 +67,6 @@ export class UsersService {
       success: true,
       message: 'Avatar eliminado correctamente',
     };
-  }
-
-  private extractPublicIdFromUrl(url: string): string | null {
-    try {
-      const parts = url.split('/');
-      const filename = parts[parts.length - 1];
-      const folder = parts[parts.length - 2];
-      const publicId = `${folder}/${filename.split('.')[0]}`;
-      return publicId;
-    } catch {
-      return null;
-    }
   }
 
   // Obtener todos los usuarios (solo SUPER_ADMIN y ADMIN)
