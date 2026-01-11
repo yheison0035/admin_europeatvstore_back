@@ -11,18 +11,20 @@ import { hasRole } from 'src/common/role-check.util';
 import { InventoryImage, InventoryVariant, Role } from '@prisma/client';
 import { generateSku } from 'utils/sku.util';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { VariantsService } from './variants/variants.service';
 
 @Injectable()
 export class InventoryService {
   constructor(
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
+    private variantsService: VariantsService,
   ) {}
 
   async findAll() {
     const products = await this.prisma.inventory.findMany({
       include: {
-        images: true,
+        images: { orderBy: { position: 'asc' } },
         variants: true,
         brand: true,
         category: true,
@@ -55,7 +57,7 @@ export class InventoryService {
     const product = await this.prisma.inventory.findUnique({
       where: { id },
       include: {
-        images: true,
+        images: { orderBy: { position: 'asc' } },
         variants: true,
         brand: true,
         category: true,
@@ -116,7 +118,7 @@ export class InventoryService {
             color: v.color,
             stock: v.stock,
             inventoryId: product.id,
-            sku: 'PENDING', // valor temporal ÚNICO
+            sku: 'PENDING',
           },
         });
 
@@ -156,23 +158,12 @@ export class InventoryService {
     if (dto.salePrice !== undefined) data.salePrice = dto.salePrice;
     if (dto.status !== undefined) data.status = dto.status;
 
-    if (dto.brandId) {
-      data.brand = { connect: { id: dto.brandId } };
-    }
+    if (dto.brandId) data.brand = { connect: { id: dto.brandId } };
+    if (dto.categoryId) data.category = { connect: { id: dto.categoryId } };
+    if (dto.providerId) data.provider = { connect: { id: dto.providerId } };
+    if (dto.localId) data.local = { connect: { id: dto.localId } };
 
-    if (dto.categoryId) {
-      data.category = { connect: { id: dto.categoryId } };
-    }
-
-    if (dto.providerId) {
-      data.provider = { connect: { id: dto.providerId } };
-    }
-
-    if (dto.localId) {
-      data.local = { connect: { id: dto.localId } };
-    }
-
-    return this.prisma.inventory.update({
+    const updatedProduct = await this.prisma.inventory.update({
       where: { id },
       data,
       include: {
@@ -183,6 +174,16 @@ export class InventoryService {
         local: true,
       },
     });
+
+    if (dto.variants && dto.variants.length > 0) {
+      await this.variantsService.syncVariants(id, dto.variants, user);
+    }
+
+    return {
+      success: true,
+      message: 'Producto actualizado correctamente',
+      data: updatedProduct,
+    };
   }
 
   async remove(id: number, user: any) {
@@ -190,100 +191,133 @@ export class InventoryService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    await this.findOne(id);
-
-    await this.prisma.inventory.delete({
-      where: { id },
-    });
-
-    return {
-      success: true,
-      message: 'Producto eliminado correctamente',
-    };
-  }
-
-  // SUBIR IMAGEN DE PRODUCTO
-  async uploadProductImages(
-    inventoryId: number,
-    files: Express.Multer.File[],
-    user: any,
-  ) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
-      throw new ForbiddenException('No tienes permisos');
-    }
-
-    if (!files || files.length === 0) {
-      throw new BadRequestException('Debes subir al menos una imagen');
-    }
-
     const product = await this.prisma.inventory.findUnique({
-      where: { id: inventoryId },
+      where: { id },
+      include: {
+        images: true,
+      },
     });
 
     if (!product) {
       throw new NotFoundException('Producto no encontrado');
     }
 
-    const uploadedImages: InventoryImage[] = [];
-
-    for (const file of files) {
-      const upload = await this.cloudinaryService.uploadImage(
-        file,
-        'inventory', // carpeta en Cloudinary
-        undefined,
-      );
-
-      const image = await this.prisma.inventoryImage.create({
-        data: {
-          inventoryId,
-          url: upload.url,
-          publicId: upload.publicId,
-        },
-      });
-
-      uploadedImages.push(image);
+    // Eliminar imágenes de Cloudinary
+    for (const img of product.images) {
+      try {
+        await this.cloudinaryService.deleteImage(img.publicId);
+      } catch (err) {
+        console.error(
+          `Error eliminando imagen en Cloudinary (${img.publicId}):`,
+          err,
+        );
+      }
     }
+
+    // Eliminar producto (y todo en cascada: variantes, imágenes en BD)
+    await this.prisma.inventory.delete({
+      where: { id },
+    });
 
     return {
       success: true,
       message:
-        files.length === 1
-          ? 'Imagen subida correctamente'
-          : 'Imágenes subidas correctamente',
-      data: uploadedImages,
+        'Producto eliminado correctamente junto con imágenes y variantes',
     };
   }
 
-  // ELIMINAR IMAGEN
-  async deleteProductImage(imageId: number, user: any) {
+  // Endpoint para sincronizar imágenes de un producto
+  async syncProductImages(
+    inventoryId: number,
+    files: Express.Multer.File[],
+    keepImageIds: number[],
+    user: any,
+  ) {
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const image = await this.prisma.inventoryImage.findUnique({
-      where: { id: imageId },
+    const product = await this.prisma.inventory.findUnique({
+      where: { id: inventoryId },
+      include: {
+        images: true,
+        category: true,
+        brand: true,
+      },
     });
 
-    if (!image) {
-      throw new NotFoundException('Imagen no encontrada');
+    if (!product) {
+      throw new NotFoundException('Producto no encontrado');
     }
 
-    // Eliminar de Cloudinary
-    try {
-      await this.cloudinaryService.deleteImage(image.publicId);
-    } catch (err) {
-      console.error('Error eliminando imagen en Cloudinary:', err);
-      throw new Error('No se pudo eliminar la imagen en Cloudinary');
+    // Carpeta dinámica
+    const categoryFolder = product.category?.name
+      ? product.category.name.toLowerCase().replace(/\s+/g, '-')
+      : 'sin-categoria';
+
+    const brandFolder = product.brand?.name
+      ? product.brand.name.toLowerCase().replace(/\s+/g, '-')
+      : 'sin-marca';
+
+    const folderPath = `inventory/${categoryFolder}/${brandFolder}`;
+
+    // SUBIR NUEVAS IMÁGENES (al final)
+    for (const file of files) {
+      const upload = await this.cloudinaryService.uploadImage(
+        file,
+        folderPath,
+        undefined,
+      );
+
+      await this.prisma.inventoryImage.create({
+        data: {
+          inventoryId,
+          url: upload.url,
+          publicId: upload.publicId,
+          position: keepImageIds.length, // se agrega al final
+        },
+      });
     }
 
-    // Eliminar de la base de datos
-    await this.prisma.inventoryImage.delete({
-      where: { id: imageId },
+    // ELIMINAR LAS QUE YA NO EXISTEN
+    if (Array.isArray(keepImageIds)) {
+      const imagesToDelete = product.images.filter(
+        (img) => !keepImageIds.includes(img.id),
+      );
+
+      for (const img of imagesToDelete) {
+        try {
+          await this.cloudinaryService.deleteImage(img.publicId);
+        } catch (err) {
+          console.error('Error eliminando imagen en Cloudinary:', err);
+        }
+
+        await this.prisma.inventoryImage.delete({
+          where: { id: img.id },
+        });
+      }
+    }
+
+    // ACTUALIZAR ORDEN (POSITION)
+    if (Array.isArray(keepImageIds)) {
+      for (let i = 0; i < keepImageIds.length; i++) {
+        await this.prisma.inventoryImage.update({
+          where: { id: keepImageIds[i] },
+          data: { position: i },
+        });
+      }
+    }
+
+    // DEVOLVER IMÁGENES ORDENADAS
+    const finalImages = await this.prisma.inventoryImage.findMany({
+      where: { inventoryId },
+      orderBy: { position: 'asc' },
     });
 
     return {
       success: true,
-      message: 'Imagen eliminada correctamente',
+      message: 'Imágenes sincronizadas correctamente',
+      data: finalImages,
     };
   }
 }

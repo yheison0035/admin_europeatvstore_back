@@ -13,12 +13,15 @@ import { generateSku } from 'utils/sku.util';
 export class VariantsService {
   constructor(private prisma: PrismaService) {}
 
-  async addVariants(
+  async syncVariants(
     inventoryId: number,
-    variants: { color: string; stock: number }[],
+    variants: {
+      id?: number;
+      color: string;
+      stock: number;
+    }[],
     user: any,
   ) {
-    console.log('Adding variants to inventory ID:', user.role);
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
       throw new ForbiddenException('No tienes permisos');
     }
@@ -35,20 +38,17 @@ export class VariantsService {
     const result: InventoryVariant[] = [];
 
     for (const v of variants) {
-      const existing = inventory.variants.find((iv) => iv.color === v.color);
-
-      if (existing) {
-        // SUMAR STOCK
+      if (v.id) {
         const updated = await this.prisma.inventoryVariant.update({
-          where: { id: existing.id },
+          where: { id: v.id },
           data: {
-            stock: { increment: v.stock },
+            color: v.color,
+            stock: v.stock,
           },
         });
         result.push(updated);
       } else {
-        // CREAR VARIANTE
-        const variant = await this.prisma.inventoryVariant.create({
+        const created = await this.prisma.inventoryVariant.create({
           data: {
             color: v.color,
             stock: v.stock,
@@ -59,22 +59,34 @@ export class VariantsService {
 
         const sku = generateSku(
           inventory.name,
-          variant.sequence,
-          variant.color,
+          created.sequence,
+          created.color,
         );
 
-        const updated = await this.prisma.inventoryVariant.update({
-          where: { id: variant.id },
+        const withSku = await this.prisma.inventoryVariant.update({
+          where: { id: created.id },
           data: { sku },
         });
 
-        result.push(updated);
+        result.push(withSku);
       }
+    }
+
+    const incomingIds = variants.filter((v) => v.id).map((v) => v.id);
+
+    const toDelete = inventory.variants.filter(
+      (v) => !incomingIds.includes(v.id),
+    );
+
+    if (toDelete.length > 0) {
+      await this.prisma.inventoryVariant.deleteMany({
+        where: { id: { in: toDelete.map((v) => v.id) } },
+      });
     }
 
     return {
       success: true,
-      message: 'Stock actualizado correctamente',
+      message: 'Variantes sincronizadas correctamente',
       data: result,
     };
   }

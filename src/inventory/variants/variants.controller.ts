@@ -7,7 +7,7 @@ import {
   UseGuards,
   Put,
 } from '@nestjs/common';
-import { AddInventoryVariantsDto } from './dto/add-inventory-variants.dto';
+import { SyncInventoryVariantsDto } from './dto/sync-inventory-variants.dto';
 import { VariantsService } from './variants.service';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -21,11 +21,11 @@ export class VariantsController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id/variants')
-  create(
+  sync(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: AddInventoryVariantsDto,
+    @Body() dto: SyncInventoryVariantsDto,
     @Req() req,
   ) {
-    return this.variantsService.addVariants(id, dto.variants, req.user);
+    return this.variantsService.syncVariants(id, dto.variants, req.user);
   }
 }

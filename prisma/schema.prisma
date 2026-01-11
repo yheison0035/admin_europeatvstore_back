@@ -200,6 +200,7 @@ model InventoryImage {
   url         String
   publicId    String
   inventoryId Int
+  position    Int      @default(0)
 
   inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
 

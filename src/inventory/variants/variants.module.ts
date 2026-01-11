@@ -5,5 +5,6 @@ import { VariantsService } from './variants.service';
 @Module({
   controllers: [VariantsController],
   providers: [VariantsService],
+  exports: [VariantsService],
 })
 export class VariantsModule {}

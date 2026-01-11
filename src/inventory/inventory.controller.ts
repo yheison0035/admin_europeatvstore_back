@@ -64,24 +64,19 @@ export class InventoryController {
     return this.inventoryService.remove(id, req.user);
   }
 
-  // SUBIR IMAGEN A PRODUCTO
+  // Endpoint para sincronizar imágenes de un producto
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
-  @Post(':id/images')
-  @UseInterceptors(FilesInterceptor('images', 10)) // acepta de 1 a 10 imágenes
-  uploadImages(
+  @Put(':id/images')
+  @UseInterceptors(FilesInterceptor('images', 10))
+  syncImages(
     @Param('id', ParseIntPipe) id: number,
     @UploadedFiles() files: Express.Multer.File[],
+    @Body('keepImageIds') keepImageIds: string[],
     @Req() req,
   ) {
-    return this.inventoryService.uploadProductImages(id, files, req.user);
-  }
+    const ids = Array.isArray(keepImageIds) ? keepImageIds.map(Number) : [];
 
-  // ELIMINAR IMAGEN
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
-  @Delete('images/:imageId')
-  deleteImage(@Param('imageId', ParseIntPipe) imageId: number, @Req() req) {
-    return this.inventoryService.deleteProductImage(imageId, req.user);
+    return this.inventoryService.syncProductImages(id, files, ids, req.user);
   }
 }
