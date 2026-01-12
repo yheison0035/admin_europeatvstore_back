@@ -24,7 +24,7 @@ export class ProvidersController {
 
   // LISTAR
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
   findAll() {
     return this.providersService.findAll();

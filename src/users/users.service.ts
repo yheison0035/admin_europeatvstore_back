@@ -71,13 +71,57 @@ export class UsersService {
 
   // Obtener todos los usuarios (solo SUPER_ADMIN y ADMIN)
   async getUsers(user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.COORDINADOR])) {
+    if (
+      !hasRole(user.role, [
+        Role.SUPER_ADMIN,
+        Role.ADMIN,
+        Role.COORDINADOR,
+        Role.ASESOR,
+      ])
+    ) {
       throw new ForbiddenException('No tienes permisos');
     }
 
+    let where: any = {};
+
+    // SUPER_ADMIN y ADMIN → ven todos
+    if (hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+      // sin filtros
+    }
+
+    // COORDINADOR (manager) → usuarios de sus locales
+    else if (user.role === Role.COORDINADOR) {
+      // Traemos sus locales administrados
+      const dbUser = await this.prisma.user.findUnique({
+        where: { id: user.userId },
+        include: { managedLocals: true },
+      });
+
+      if (!dbUser || dbUser.managedLocals.length === 0) {
+        return {
+          success: true,
+          message: 'No tienes locales asignados',
+          data: [],
+        };
+      }
+
+      const localIds = dbUser.managedLocals.map((l) => l.id);
+
+      where = {
+        localId: { in: localIds },
+      };
+    }
+
+    // ASESOR → solo se ve a sí mismo
+    else if (user.role === Role.ASESOR) {
+      where = { id: user.userId };
+    }
+
     const users = await this.prisma.user.findMany({
+      where,
       include: {
-        locals: true,
+        local: true,
+        managedLocals: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -89,18 +133,20 @@ export class UsersService {
     };
   }
 
-  // Obtener un usuario por ID
   async getUserId(id: number, requester?: { role: Role; userId: number }) {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
-        locals: true,
+        local: true,
+        managedLocals: true,
       },
     });
+
     if (!user) {
       throw new NotFoundException(`Usuario con id ${id} no fue encontrado`);
     }
 
+    // PROTECCIÓN SUPER_ADMIN
     if (
       user.role === Role.SUPER_ADMIN &&
       requester?.role !== Role.SUPER_ADMIN
@@ -108,8 +154,25 @@ export class UsersService {
       throw new ForbiddenException('No tienes permiso para ver este usuario');
     }
 
+    // ASESOR → solo puede verse a sí mismo
     if (requester?.role === Role.ASESOR && requester.userId !== id) {
       throw new ForbiddenException('No tienes permiso para ver este usuario');
+    }
+
+    // COORDINADOR → solo usuarios de sus locales
+    if (requester?.role === Role.COORDINADOR) {
+      const dbRequester = await this.prisma.user.findUnique({
+        where: { id: requester.userId },
+        include: { managedLocals: true },
+      });
+
+      const managedLocalIds = dbRequester?.managedLocals.map((l) => l.id) || [];
+
+      if (!user.localId || !managedLocalIds.includes(user.localId)) {
+        throw new ForbiddenException(
+          'No tienes permiso para ver usuarios de otros locales',
+        );
+      }
     }
 
     const { password, ...safeData } = user;
@@ -137,6 +200,15 @@ export class UsersService {
       throw new ConflictException(`El email ${dto.email} ya está registrado`);
     }
 
+    if (dto.localId) {
+      const local = await this.prisma.local.findUnique({
+        where: { id: dto.localId },
+      });
+      if (!local) {
+        throw new NotFoundException('El local asignado no existe');
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const created = await this.prisma.user.create({
@@ -152,6 +224,7 @@ export class UsersService {
         document: dto.document?.trim(),
         role: dto.role ?? Role.ASESOR,
         status: dto.status ?? 'ACTIVO',
+        localId: dto.localId ?? null,
       },
     });
 
@@ -226,6 +299,20 @@ export class UsersService {
     });
 
     return { success: true, message: 'Rol actualizado', data: updated };
+  }
+
+  // Obtener roles del enum de Prisma
+  async getRoles() {
+    const roles = Object.values(Role).map((role) => ({
+      id: role,
+      name: role.replace('_', ' '),
+    }));
+
+    return {
+      success: true,
+      message: 'Roles obtenidos correctamente',
+      data: roles,
+    };
   }
 }
 

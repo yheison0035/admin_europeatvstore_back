@@ -17,6 +17,8 @@ enum Role {
   ADMIN
   ASESOR
   AUXILIAR
+  BODEGUERO
+  VENTAS
 }
 
 enum Status {
@@ -53,8 +55,14 @@ model User {
   password   String
   avatar     String?
 
-  locals Local[] @relation("UserLocals")
-  sales  Sale[]  @relation("UserSales")
+  localId Int?
+  local   Local? @relation("LocalUsers", fields: [localId], references: [id], onDelete: SetNull)
+
+  managedLocals      Local[]     @relation("LocalManager")
+  createdInventories Inventory[] @relation("InventoryCreatedBy")
+  updatedInventories Inventory[] @relation("InventoryUpdatedBy")
+
+  sales Sale[] @relation("UserSales")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -66,15 +74,16 @@ model Customer {
   id            Int       @id @default(autoincrement())
   type_document String?
   document      String?   @unique
-  firstName     String
-  lastName      String
+  name          String
   email         String?
   phone         String?
   department    String?
   city          String?
   address       String?
-  birthdate     DateTime?
   status        Status    @default(ACTIVO)
+
+  localId Int?
+  local   Local? @relation(fields: [localId], references: [id], onDelete: SetNull)
 
   sales Sale[] @relation("CustomerSales")
 
@@ -113,15 +122,18 @@ model Local {
   city       String?
   phone      String?
   status     Status  @default(ACTIVO)
-  userId     Int?
 
-  user        User?       @relation("UserLocals", fields: [userId], references: [id], onDelete: SetNull)
+  managerId Int?
+  manager   User? @relation("LocalManager", fields: [managerId], references: [id])
+
+  users       User[]      @relation("LocalUsers")
   inventories Inventory[] @relation("LocalInventory")
   expenses    Expense[]   @relation("LocalExpenses")
   sales       Sale[]      @relation("LocalSales")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  Customer  Customer[]
 }
 
 //////////////////////////////////////////////////
@@ -167,13 +179,18 @@ model Inventory {
   categoryId Int?
   brandId    Int?
 
-  local    Local?    @relation("LocalInventory", fields: [localId], references: [id], onDelete: SetNull)
-  provider Provider? @relation("ProviderProducts", fields: [providerId], references: [id], onDelete: SetNull)
-  category Category? @relation("CategoryProducts", fields: [categoryId], references: [id], onDelete: SetNull)
-  brand    Brand?    @relation("BrandProducts", fields: [brandId], references: [id], onDelete: SetNull)
+  createdById Int?
+  updatedById Int?
+
+  createdBy User?     @relation("InventoryCreatedBy", fields: [createdById], references: [id])
+  updatedBy User?     @relation("InventoryUpdatedBy", fields: [updatedById], references: [id])
+  local     Local?    @relation("LocalInventory", fields: [localId], references: [id], onDelete: SetNull)
+  provider  Provider? @relation("ProviderProducts", fields: [providerId], references: [id], onDelete: SetNull)
+  category  Category? @relation("CategoryProducts", fields: [categoryId], references: [id], onDelete: SetNull)
+  brand     Brand?    @relation("BrandProducts", fields: [brandId], references: [id], onDelete: SetNull)
 
   variants InventoryVariant[]
-  images   InventoryImage[] 
+  images   InventoryImage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -196,11 +213,11 @@ model InventoryVariant {
 }
 
 model InventoryImage {
-  id          Int      @id @default(autoincrement())
+  id          Int    @id @default(autoincrement())
   url         String
   publicId    String
   inventoryId Int
-  position    Int      @default(0)
+  position    Int    @default(0)
 
   inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
 

@@ -48,7 +48,7 @@ export class UsersController {
 
   // Solo ADMIN puede listar todos los usuarios
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'COORDINADOR')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
   getAllUsers(@Req() req) {
     return this.usersService.getUsers(req.user); // se pasa user para validar permisos en el service
@@ -95,5 +95,12 @@ export class UsersController {
   @Patch('/:id/toggle-role')
   updateUserSegment(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.usersService.updateUserSegment(id, req.user);
+  }
+
+  // Obtener lista de roles del sistema
+  @UseGuards(JwtAuthGuard)
+  @Get('roles/list')
+  getRoles() {
+    return this.usersService.getRoles();
   }
 }

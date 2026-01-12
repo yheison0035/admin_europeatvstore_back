@@ -8,7 +8,7 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
 import { hasRole } from 'src/common/role-check.util';
-import { InventoryImage, InventoryVariant, Role } from '@prisma/client';
+import { InventoryVariant, Role } from '@prisma/client';
 import { generateSku } from 'utils/sku.util';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { VariantsService } from './variants/variants.service';
@@ -21,9 +21,129 @@ export class InventoryService {
     private variantsService: VariantsService,
   ) {}
 
-  async findAll() {
+  // Endpoint para buscar productos por término (nombre o parte de él)
+  async search(term: string, user: any) {
+    const isGlobal = hasRole(user.role, [
+      Role.SUPER_ADMIN,
+      Role.ADMIN,
+      Role.COORDINADOR,
+      Role.AUXILIAR,
+    ]);
+
+    let where: any = {
+      name: {
+        contains: term,
+        mode: 'insensitive',
+      },
+    };
+
+    // SI NO ES GLOBAL → FILTRAR POR LOCALES DEL USUARIO
+    if (!isGlobal) {
+      // Cargar usuario real con relaciones
+      const dbUser = await this.prisma.user.findUnique({
+        where: { id: user.userId },
+        include: {
+          managedLocals: true,
+          local: true,
+        },
+      });
+
+      if (!dbUser) {
+        throw new ForbiddenException('Usuario no encontrado');
+      }
+
+      // ENCARGADO → varios locales
+      if (dbUser.managedLocals.length > 0) {
+        where.localId = {
+          in: dbUser.managedLocals.map((l) => l.id),
+        };
+      }
+      // USUARIO NORMAL → un solo local
+      else if (dbUser.localId) {
+        where.localId = dbUser.localId;
+      }
+      // SIN LOCAL → NO PUEDE BUSCAR
+      else {
+        throw new ForbiddenException(
+          'No tienes un local asignado. Contacta al administrador.',
+        );
+      }
+    }
+
     const products = await this.prisma.inventory.findMany({
+      where,
       include: {
+        variants: true,
+      },
+      take: 10,
+    });
+
+    // Aplanamos variantes (cada color es una opción de venta)
+    const result = products.flatMap((p) =>
+      p.variants.map((v) => ({
+        id: v.id,
+        name: p.name,
+        color: v.color,
+        sku: v.sku,
+        stock: v.stock,
+        price: p.salePrice,
+        localId: p.localId,
+      })),
+    );
+
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  async findAll(user: any) {
+    const isGlobal = hasRole(user.role, [
+      Role.SUPER_ADMIN,
+      Role.ADMIN,
+      Role.COORDINADOR,
+      Role.AUXILIAR,
+    ]);
+
+    const where: any = {};
+
+    if (!isGlobal) {
+      // Cargar usuario real con relaciones
+      const dbUser = await this.prisma.user.findUnique({
+        where: { id: user.userId },
+        include: {
+          managedLocals: true,
+          local: true,
+        },
+      });
+
+      if (!dbUser) {
+        throw new ForbiddenException('Usuario no encontrado');
+      }
+
+      // ENCARGADO → varios locales
+      if (dbUser.managedLocals.length > 0) {
+        where.localId = {
+          in: dbUser.managedLocals.map((l) => l.id),
+        };
+      }
+      // USUARIO NORMAL → un solo local
+      else if (dbUser.localId) {
+        where.localId = dbUser.localId;
+      }
+      // SIN LOCAL
+      else {
+        throw new ForbiddenException(
+          'No tienes un local asignado. Contacta al administrador.',
+        );
+      }
+    }
+
+    const products = await this.prisma.inventory.findMany({
+      where,
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        updatedBy: { select: { id: true, name: true, email: true } },
         images: { orderBy: { position: 'asc' } },
         variants: true,
         brand: true,
@@ -40,10 +160,7 @@ export class InventoryService {
         0,
       );
 
-      return {
-        ...product,
-        stock: totalStock,
-      };
+      return { ...product, stock: totalStock };
     });
 
     return {
@@ -53,10 +170,12 @@ export class InventoryService {
     };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, user: any) {
     const product = await this.prisma.inventory.findUnique({
       where: { id },
       include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        updatedBy: { select: { id: true, name: true, email: true } },
         images: { orderBy: { position: 'asc' } },
         variants: true,
         brand: true,
@@ -70,6 +189,43 @@ export class InventoryService {
       throw new NotFoundException(`Producto con ID ${id} no encontrado`);
     }
 
+    const isGlobal = hasRole(user.role, [
+      Role.SUPER_ADMIN,
+      Role.ADMIN,
+      Role.COORDINADOR,
+      Role.AUXILIAR,
+    ]);
+
+    if (!isGlobal) {
+      const dbUser = await this.prisma.user.findUnique({
+        where: { id: user.userId },
+        include: {
+          managedLocals: true,
+          local: true,
+        },
+      });
+
+      if (!dbUser) {
+        throw new ForbiddenException('Usuario no encontrado');
+      }
+
+      // ENCARGADO
+      if (dbUser.managedLocals.length > 0) {
+        const managedIds = dbUser.managedLocals.map((l) => l.id);
+        if (!product.localId || !managedIds.includes(product.localId)) {
+          throw new ForbiddenException(
+            'No tienes permiso para ver productos de otro local',
+          );
+        }
+      }
+      // USUARIO NORMAL
+      else if (dbUser.localId !== product.localId) {
+        throw new ForbiddenException(
+          'No tienes permiso para ver productos de otro local',
+        );
+      }
+    }
+
     const stock = product.variants.reduce(
       (sum, variant) => sum + variant.stock,
       0,
@@ -78,15 +234,12 @@ export class InventoryService {
     return {
       success: true,
       message: 'Producto obtenido correctamente',
-      data: {
-        ...product,
-        stock,
-      },
+      data: { ...product, stock },
     };
   }
 
   async create(dto: CreateInventoryDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.ASESOR])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
@@ -107,6 +260,9 @@ export class InventoryService {
             provider: { connect: { id: dto.providerId } },
           }),
           ...(dto.localId && { local: { connect: { id: dto.localId } } }),
+
+          createdBy: { connect: { id: user.userId } },
+          updatedBy: { connect: { id: user.userId } },
         },
       });
 
@@ -144,11 +300,11 @@ export class InventoryService {
   }
 
   async update(id: number, dto: UpdateInventoryDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.ASESOR])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    await this.findOne(id);
+    await this.findOne(id, user);
 
     const data: any = {};
 
@@ -162,6 +318,8 @@ export class InventoryService {
     if (dto.categoryId) data.category = { connect: { id: dto.categoryId } };
     if (dto.providerId) data.provider = { connect: { id: dto.providerId } };
     if (dto.localId) data.local = { connect: { id: dto.localId } };
+
+    data.updatedBy = { connect: { id: user.userId } };
 
     const updatedProduct = await this.prisma.inventory.update({
       where: { id },
@@ -233,7 +391,7 @@ export class InventoryService {
     keepImageIds: number[],
     user: any,
   ) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.ASESOR])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
@@ -279,8 +437,8 @@ export class InventoryService {
       });
     }
 
-    // ELIMINAR LAS QUE YA NO EXISTEN
-    if (Array.isArray(keepImageIds)) {
+    // ELIMINAR SOLO SI REALMENTE ME ENVIARON IDS A CONSERVAR
+    if (Array.isArray(keepImageIds) && keepImageIds.length > 0) {
       const imagesToDelete = product.images.filter(
         (img) => !keepImageIds.includes(img.id),
       );

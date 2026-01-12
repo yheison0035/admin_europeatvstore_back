@@ -22,7 +22,7 @@ export class VariantsService {
     }[],
     user: any,
   ) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.ASESOR])) {
       throw new ForbiddenException('No tienes permisos');
     }
 

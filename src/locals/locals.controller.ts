@@ -24,7 +24,7 @@ export class LocalsController {
 
   // ADMIN / COORDINADOR / SUPER_ADMIN
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
   findAll(@Req() req) {
     return this.localsService.findAll(req.user);

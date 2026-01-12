@@ -26,28 +26,42 @@ export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN',
+    'COORDINADOR',
+    'AUXILIAR',
+    'ASESOR',
+    'BODEGUERO',
+  )
   @Get()
-  findAll() {
-    return this.inventoryService.findAll();
+  findAll(@Req() req) {
+    return this.inventoryService.findAll(req.user);
   }
 
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN',
+    'COORDINADOR',
+    'AUXILIAR',
+    'ASESOR',
+    'BODEGUERO',
+  )
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.inventoryService.findOne(id);
+  findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.inventoryService.findOne(id, req.user);
   }
 
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Post()
   create(@Body() dto: CreateInventoryDto, @Req() req) {
     return this.inventoryService.create(dto, req.user);
   }
 
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -66,7 +80,7 @@ export class InventoryController {
 
   // Endpoint para sincronizar imágenes de un producto
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Put(':id/images')
   @UseInterceptors(FilesInterceptor('images', 10))
   syncImages(
@@ -78,5 +92,20 @@ export class InventoryController {
     const ids = Array.isArray(keepImageIds) ? keepImageIds.map(Number) : [];
 
     return this.inventoryService.syncProductImages(id, files, ids, req.user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN',
+    'COORDINADOR',
+    'AUXILIAR',
+    'ASESOR',
+    'BODEGUERO',
+    'VENTAS',
+  )
+  @Get('search/:term')
+  search(@Param('term') term: string, @Req() req) {
+    return this.inventoryService.search(term, req.user);
   }
 }

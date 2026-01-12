@@ -14,13 +14,21 @@ export class LocalsService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.COORDINADOR])) {
+    if (
+      !hasRole(user.role, [
+        Role.SUPER_ADMIN,
+        Role.COORDINADOR,
+        Role.ADMIN,
+        Role.ASESOR,
+      ])
+    ) {
       throw new ForbiddenException('No tienes permisos');
     }
 
     const locals = await this.prisma.local.findMany({
       include: {
-        user: true,
+        users: true,
+        manager: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -36,7 +44,8 @@ export class LocalsService {
     const local = await this.prisma.local.findUnique({
       where: { id },
       include: {
-        user: true,
+        users: true,
+        manager: true,
       },
     });
 
@@ -45,7 +54,7 @@ export class LocalsService {
     }
 
     // ADMIN solo puede ver su propio local
-    if (requester.role === Role.ADMIN && local.userId !== requester.userId) {
+    if (requester.role === Role.ADMIN && local.managerId !== requester.userId) {
       throw new ForbiddenException('No tienes acceso a este local');
     }
 
@@ -64,7 +73,7 @@ export class LocalsService {
     const local = await this.prisma.local.create({
       data: {
         ...dto,
-        userId: dto.userId ?? null,
+        managerId: dto.managerId ?? null,
       },
     });
 
@@ -85,9 +94,36 @@ export class LocalsService {
       throw new NotFoundException(`Local con ID ${id} no encontrado`);
     }
 
+    const data: any = {};
+
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.address !== undefined) data.address = dto.address;
+    if (dto.city !== undefined) data.city = dto.city;
+    if (dto.department !== undefined) data.department = dto.department;
+    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.status !== undefined) data.status = dto.status;
+
+    if (dto.managerId !== undefined) {
+      const manager = await this.prisma.user.findUnique({
+        where: { id: dto.managerId },
+      });
+
+      if (!manager) {
+        throw new NotFoundException(
+          'El usuario asignado como encargado no existe',
+        );
+      }
+
+      data.manager = { connect: { id: dto.managerId } };
+    }
+
     const updated = await this.prisma.local.update({
       where: { id },
-      data: dto,
+      data,
+      include: {
+        users: true,
+        manager: true,
+      },
     });
 
     return {

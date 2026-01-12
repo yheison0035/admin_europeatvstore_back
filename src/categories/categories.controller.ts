@@ -22,9 +22,9 @@ import { Roles } from 'src/auth/roles.decorator';
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
-  // ADMIN / COORDINADOR / SUPER_ADMIN
+  // ADMIN / COORDINADOR / SUPER_ADMIN / ASESOR
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
   findAll(@Req() req) {
     return this.categoriesService.findAll(req.user);

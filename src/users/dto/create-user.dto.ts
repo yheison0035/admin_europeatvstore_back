@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsEnum,
   IsDateString,
+  IsInt,
 } from 'class-validator';
 import { Role, Status } from '@prisma/client';
 
@@ -24,6 +25,7 @@ export class CreateUserDto {
   @IsDateString()
   birthdate?: string;
 
+  @IsOptional()
   @IsString()
   phone?: string;
 
@@ -51,7 +53,12 @@ export class CreateUserDto {
   @IsEnum(Role)
   role?: Role;
 
+  // 🔑 Estado
   @IsOptional()
   @IsEnum(Status)
   status?: Status;
+
+  @IsOptional()
+  @IsInt()
+  localId?: number;
 }

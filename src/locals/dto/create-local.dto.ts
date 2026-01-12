@@ -23,7 +23,7 @@ export class CreateLocalDto {
 
   @IsOptional()
   @IsInt()
-  userId?: number;
+  managerId?: number;
 
   @IsOptional()
   @IsEnum(Status)
