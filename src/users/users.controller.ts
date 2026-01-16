@@ -96,11 +96,4 @@ export class UsersController {
   updateUserSegment(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.usersService.updateUserSegment(id, req.user);
   }
-
-  // Obtener lista de roles del sistema
-  @UseGuards(JwtAuthGuard)
-  @Get('roles/list')
-  getRoles() {
-    return this.usersService.getRoles();
-  }
 }

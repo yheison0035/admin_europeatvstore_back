@@ -19,6 +19,18 @@ async function main() {
   });
 
   console.log('✅ Super admin creado:', admin.email);
+
+  const consumidorFinal = await prisma.customer.upsert({
+    where: { document: '222222222222' },
+    update: {},
+    create: {
+      name: 'CONSUMIDOR FINAL',
+      document: '222222222222',
+      status: Status.ACTIVO,
+    },
+  });
+
+  console.log('✅ Cliente Consumidor Final listo:', consumidorFinal);
 }
 
 main()

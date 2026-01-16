@@ -1,24 +1,55 @@
-import { IsArray, IsInt, IsNumber, IsOptional } from 'class-validator';
-import { PaymentMethod } from '@prisma/client';
+import {
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsDateString,
+} from 'class-validator';
+import { PaymentMethod, PaymentStatus, SaleStatus } from '@prisma/client';
 
-class SaleItemDto {
+export class CreateSaleItemDto {
   @IsInt()
   inventoryVariantId: number;
 
   @IsInt()
   quantity: number;
+
+  @IsOptional()
+  discount?: number;
 }
 
 export class CreateSaleDto {
+  @IsEnum(PaymentMethod)
+  paymentMethod: PaymentMethod;
+
+  @IsEnum(PaymentStatus)
   @IsOptional()
-  customerId?: number;
+  paymentStatus: PaymentStatus;
+
+  @IsEnum(SaleStatus)
+  @IsOptional()
+  saleStatus?: SaleStatus;
+
+  @IsInt()
+  customerId: number;
+
+  @IsInt()
+  localId: number;
+
+  @IsInt()
+  userId: number;
 
   @IsOptional()
-  localId?: number;
+  @IsDateString()
+  saleDate?: string;
 
   @IsOptional()
-  paymentMethod?: PaymentMethod;
+  @IsString()
+  notes?: string;
 
   @IsArray()
-  items: SaleItemDto[];
+  @IsNotEmpty({ each: true })
+  items: CreateSaleItemDto[];
 }

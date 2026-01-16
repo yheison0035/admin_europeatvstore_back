@@ -300,20 +300,6 @@ export class UsersService {
 
     return { success: true, message: 'Rol actualizado', data: updated };
   }
-
-  // Obtener roles del enum de Prisma
-  async getRoles() {
-    const roles = Object.values(Role).map((role) => ({
-      id: role,
-      name: role.replace('_', ' '),
-    }));
-
-    return {
-      success: true,
-      message: 'Roles obtenidos correctamente',
-      data: roles,
-    };
-  }
 }
 
 // Utilidad local

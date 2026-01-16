@@ -33,11 +33,24 @@ export class CustomersService {
       where.localId = user.localId;
     }
 
-    const customers = await this.prisma.customer.findMany({
-      where,
+    const consumidorFinal = await this.prisma.customer.findFirst({
+      where: {
+        ...where,
+        document: '222222222222',
+      },
+      include: { local: true },
+    });
+
+    const others = await this.prisma.customer.findMany({
+      where: {
+        ...where,
+        NOT: { document: '222222222222' },
+      },
       include: { local: true },
       orderBy: { createdAt: 'desc' },
     });
+
+    const customers = consumidorFinal ? [consumidorFinal, ...others] : others;
 
     return {
       success: true,

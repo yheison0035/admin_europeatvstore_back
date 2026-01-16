@@ -31,9 +31,33 @@ enum Status {
 enum PaymentMethod {
   EFECTIVO
   BANCOLOMBIA
-  NEQUI
+  TRANSFERENCIA
   DATAFONO
-  OTRO
+  ADDI
+}
+
+enum PaymentStatus {
+  PENDIENTE
+  EN_VALIDACION
+  PLAN_SEPARE
+  PAGADA
+  RECHAZADA
+  VENCIDO
+  REEMBOLSADO
+  ANULADO
+}
+
+enum SaleStatus {
+  NUEVA
+  EN_PROCESO
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+  CANCELADA
+  FACTURADA
+  DESPACHADA
+  ENTREGADA
+  DEVUELTA
 }
 
 //////////////////////////////////////////////////
@@ -71,16 +95,16 @@ model User {
 //////////////////////////////////////////////////
 
 model Customer {
-  id            Int       @id @default(autoincrement())
+  id            Int     @id @default(autoincrement())
   type_document String?
-  document      String?   @unique
+  document      String? @unique
   name          String
   email         String?
   phone         String?
   department    String?
   city          String?
   address       String?
-  status        Status    @default(ACTIVO)
+  status        Status  @default(ACTIVO)
 
   localId Int?
   local   Local? @relation(fields: [localId], references: [id], onDelete: SetNull)
@@ -249,21 +273,22 @@ model Expense {
 //////////////////////////////////////////////////
 
 model Sale {
-  id            Int            @id @default(autoincrement())
-  code          String         @unique
+  id            Int           @id @default(autoincrement())
+  code          String        @unique
   totalAmount   Float
-  paymentMethod PaymentMethod?
-  status        Status         @default(ACTIVO)
-  saleDate      DateTime       @default(now())
+  paymentMethod PaymentMethod
+  saleStatus    SaleStatus    @default(NUEVA)
+  paymentStatus PaymentStatus @default(PENDIENTE)
+  saleDate      DateTime      @default(now())
   notes         String?
 
-  customerId Int?
-  localId    Int?
-  userId     Int?
+  customerId Int
+  localId    Int
+  userId     Int
 
-  customer Customer? @relation("CustomerSales", fields: [customerId], references: [id], onDelete: SetNull)
-  local    Local?    @relation("LocalSales", fields: [localId], references: [id], onDelete: SetNull)
-  user     User?     @relation("UserSales", fields: [userId], references: [id], onDelete: SetNull)
+  customer Customer @relation("CustomerSales", fields: [customerId], references: [id])
+  local    Local    @relation("LocalSales", fields: [localId], references: [id])
+  user     User     @relation("UserSales", fields: [userId], references: [id])
 
   items SaleItem[] @relation("SaleItems")
 
@@ -280,6 +305,7 @@ model SaleItem {
   quantity Int
   price    Float
   subtotal Float
+  discount Float @default(0)
 
   saleId             Int
   inventoryVariantId Int

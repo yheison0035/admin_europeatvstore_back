@@ -13,6 +13,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma.module';
 import { VariantsModule } from './inventory/variants/variants.module';
+import { EnumsModule } from './enums/enums.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { VariantsModule } from './inventory/variants/variants.module';
     SalesModule,
     UsersModule,
     VariantsModule,
+    EnumsModule,
   ],
 })
 export class AppModule {}

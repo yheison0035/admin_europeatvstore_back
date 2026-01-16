@@ -154,13 +154,31 @@ export class InventoryService {
       orderBy: { name: 'asc' },
     });
 
+    const canSeePurchasePrice = hasRole(user.role, [
+      Role.SUPER_ADMIN,
+      Role.ADMIN,
+      Role.COORDINADOR,
+      Role.AUXILIAR,
+    ]);
+
     const data = products.map((product) => {
       const totalStock = product.variants.reduce(
         (sum, variant) => sum + variant.stock,
         0,
       );
 
-      return { ...product, stock: totalStock };
+      if (!canSeePurchasePrice) {
+        const { purchasePrice, ...rest } = product;
+        return {
+          ...rest,
+          stock: totalStock,
+        };
+      }
+
+      return {
+        ...product,
+        stock: totalStock,
+      };
     });
 
     return {
@@ -230,6 +248,23 @@ export class InventoryService {
       (sum, variant) => sum + variant.stock,
       0,
     );
+
+    const canSeePurchasePrice = hasRole(user.role, [
+      Role.SUPER_ADMIN,
+      Role.ADMIN,
+      Role.COORDINADOR,
+      Role.AUXILIAR,
+    ]);
+
+    if (!canSeePurchasePrice) {
+      const { purchasePrice, ...rest } = product;
+
+      return {
+        success: true,
+        message: 'Producto obtenido correctamente',
+        data: { ...rest, stock },
+      };
+    }
 
     return {
       success: true,
