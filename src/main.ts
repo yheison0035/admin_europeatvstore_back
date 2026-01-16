@@ -20,7 +20,7 @@ async function bootstrap() {
 
   // Configuración de Swagger
   const config = new DocumentBuilder()
-    .setTitle('API_MotorentingSAS')
+    .setTitle('API_EUROPEATVSTORE_ADMIN')
     .setDescription('Documentación y pruebas de la API')
     .setVersion('1.0')
     .addBearerAuth() // si quieres probar con JWT
