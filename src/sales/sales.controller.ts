@@ -16,6 +16,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { UpdateSaleDto } from './dto/update-sale.dto';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard)
@@ -62,6 +63,7 @@ export class SalesController {
   }
 
   @Get('verify/:code')
+  @Public()
   async verify(@Param('code') code: string) {
     return this.salesService.verifySale(code);
   }

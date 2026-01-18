@@ -414,7 +414,7 @@ export class SalesService {
       local: sale.local?.name || '',
       user: sale.user?.name || '',
 
-      // 🔽 AQUÍ VAN LOS PRODUCTOS COMPRADOS
+      // AQUÍ VAN LOS PRODUCTOS COMPRADOS
       items: sale.items.map((item) => ({
         id: item.id,
         product: item.variant.inventory.name,
