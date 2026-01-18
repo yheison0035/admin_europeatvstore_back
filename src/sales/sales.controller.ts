@@ -18,6 +18,7 @@ import { Roles } from 'src/auth/roles.decorator';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto';
+import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard)
@@ -74,5 +75,12 @@ export class SalesController {
   @Post('reports/daily')
   dailyReport(@Body() dto: DailySalesReportDto, @Req() req) {
     return this.salesService.dailySalesReport(dto, req.user);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Post('reports/range')
+  rangeReport(@Body() dto: RangeSalesReportDto, @Req() req) {
+    return this.salesService.rangeSalesReport(dto, req.user);
   }
 }

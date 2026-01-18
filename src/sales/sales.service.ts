@@ -10,6 +10,7 @@ import { UpdateSaleDto } from './dto/update-sale.dto';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto';
 import { PaymentMethod } from '@prisma/client';
+import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto';
 
 @Injectable()
 export class SalesService {
@@ -613,6 +614,138 @@ export class SalesService {
       data: {
         date,
         localId,
+        methods,
+        total: {
+          total: grandTotal,
+          users: totalByUser,
+        },
+      },
+    };
+  }
+
+  async rangeSalesReport(dto: RangeSalesReportDto, user: any) {
+    const { startDate, endDate, localId, userId } = dto;
+
+    if (!startDate || !endDate || !localId) {
+      throw new BadRequestException(
+        'Fecha inicial, fecha final y local son obligatorios',
+      );
+    }
+
+    // Validar acceso al local
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    if (localIds !== null && !localIds.includes(localId)) {
+      throw new ForbiddenException('No tienes permiso para ver este local');
+    }
+
+    // Zona horaria Colombia
+    const start = new Date(`${startDate}T00:00:00-05:00`);
+    const end = new Date(`${endDate}T23:59:59-05:00`);
+
+    // Filtro base
+    const where: any = {
+      localId,
+      saleDate: {
+        gte: start,
+        lte: end,
+      },
+    };
+
+    // Filtro opcional por asesor
+    if (userId) {
+      where.userId = userId;
+    }
+
+    /**
+     * Ventas en el rango
+     */
+    const sales = await this.prisma.sale.findMany({
+      where,
+      include: {
+        user: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    /**
+     * Usuarios relacionados al local
+     */
+    const linkedUsers = await this.prisma.user.findMany({
+      where: {
+        OR: [{ localId }, { managedLocals: { some: { id: localId } } }],
+      },
+      select: { id: true, name: true },
+    });
+
+    /**
+     * Unificar usuarios:
+     * - enlazados al local
+     * - que vendieron en el rango
+     */
+    const usersMap = new Map<number, string>();
+
+    linkedUsers.forEach((u) => usersMap.set(u.id, u.name));
+    sales.forEach((s) => {
+      if (s.user) usersMap.set(s.user.id, s.user.name);
+    });
+
+    const users = Array.from(usersMap.values());
+
+    /**
+     * Inicializar métodos de pago
+     */
+    const methods: Record<string, any> = {};
+    let grandTotal = 0;
+
+    Object.values(PaymentMethod).forEach((method) => {
+      methods[method] = {
+        total: 0,
+        users: {},
+      };
+
+      users.forEach((userName) => {
+        methods[method].users[userName] = 0;
+      });
+    });
+
+    /**
+     * Acumular ventas
+     */
+    for (const sale of sales) {
+      const method = sale.paymentMethod;
+      const userName = sale.user?.name;
+
+      if (!userName) continue;
+
+      methods[method].total += sale.totalAmount;
+      methods[method].users[userName] += sale.totalAmount;
+
+      grandTotal += sale.totalAmount;
+    }
+
+    /**
+     * Total general por usuario
+     */
+    const totalByUser: Record<string, number> = {};
+    users.forEach((u) => (totalByUser[u] = 0));
+
+    sales.forEach((sale) => {
+      const userName = sale.user?.name;
+      if (userName) {
+        totalByUser[userName] += sale.totalAmount;
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Reporte de ventas por rango',
+      data: {
+        startDate,
+        endDate,
+        localId,
+        userId: userId ?? null,
         methods,
         total: {
           total: grandTotal,
