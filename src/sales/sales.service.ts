@@ -8,6 +8,8 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto';
+import { PaymentMethod } from '@prisma/client';
 
 @Injectable()
 export class SalesService {
@@ -491,6 +493,132 @@ export class SalesService {
         discount: item.discount,
         subtotal: item.subtotal,
       })),
+    };
+  }
+
+  async dailySalesReport(dto: DailySalesReportDto, user: any) {
+    const { date, localId } = dto;
+
+    if (!date || !localId) {
+      throw new BadRequestException('Fecha y local son obligatorios');
+    }
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    if (localIds !== null && !localIds.includes(localId)) {
+      throw new ForbiddenException('No tienes permiso para ver este local');
+    }
+
+    // Zona horaria Colombia
+    const start = new Date(`${date}T00:00:00-05:00`);
+    const end = new Date(`${date}T23:59:59-05:00`);
+
+    /**
+     * Ventas del día
+     */
+    const sales = await this.prisma.sale.findMany({
+      where: {
+        localId,
+        saleDate: {
+          gte: start,
+          lte: end,
+        },
+      },
+      include: {
+        user: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    /**
+     * Usuarios enlazados al local
+     * - usuarios asignados
+     * - managers del local
+     */
+    const linkedUsers = await this.prisma.user.findMany({
+      where: {
+        OR: [{ localId }, { managedLocals: { some: { id: localId } } }],
+      },
+      select: { id: true, name: true },
+    });
+
+    /**
+     * Unir:
+     * - usuarios enlazados
+     * - usuarios que vendieron
+     */
+    const usersMap = new Map<number, string>();
+
+    linkedUsers.forEach((u) => {
+      usersMap.set(u.id, u.name);
+    });
+
+    sales.forEach((sale) => {
+      if (sale.user) {
+        usersMap.set(sale.user.id, sale.user.name);
+      }
+    });
+
+    const users = Array.from(usersMap.values());
+
+    /**
+     * Inicializar métodos desde ENUM
+     */
+    const methods: Record<string, any> = {};
+    let grandTotal = 0;
+
+    Object.values(PaymentMethod).forEach((method) => {
+      methods[method] = {
+        total: 0,
+        users: {},
+      };
+
+      users.forEach((userName) => {
+        methods[method].users[userName] = 0;
+      });
+    });
+
+    /**
+     * Acumulación de ventas
+     */
+    for (const sale of sales) {
+      const method = sale.paymentMethod;
+      const userName = sale.user?.name;
+
+      if (!userName) continue;
+
+      methods[method].total += sale.totalAmount;
+      methods[method].users[userName] += sale.totalAmount;
+
+      grandTotal += sale.totalAmount;
+    }
+
+    /**
+     * Total general por usuario
+     */
+    const totalByUser: Record<string, number> = {};
+    users.forEach((u) => (totalByUser[u] = 0));
+
+    sales.forEach((sale) => {
+      const userName = sale.user?.name;
+      if (userName) {
+        totalByUser[userName] += sale.totalAmount;
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Reportes de ventas',
+      data: {
+        date,
+        localId,
+        methods,
+        total: {
+          total: grandTotal,
+          users: totalByUser,
+        },
+      },
     };
   }
 }

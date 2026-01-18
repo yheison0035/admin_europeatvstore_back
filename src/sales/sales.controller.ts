@@ -17,6 +17,7 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { Public } from 'src/auth/decorators/public.decorator';
+import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard)
@@ -66,5 +67,12 @@ export class SalesController {
   @Public()
   async verify(@Param('code') code: string) {
     return this.salesService.verifySale(code);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Post('reports/daily')
+  dailyReport(@Body() dto: DailySalesReportDto, @Req() req) {
+    return this.salesService.dailySalesReport(dto, req.user);
   }
 }
