@@ -268,7 +268,7 @@ export class InventoryService {
     if (dto.providerId) data.provider = { connect: { id: dto.providerId } };
     if (dto.localId) data.local = { connect: { id: dto.localId } };
 
-    data.updatedBy = { connect: { id: user.userId } };
+    data.updatedBy = { connect: { id: user.id } };
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 

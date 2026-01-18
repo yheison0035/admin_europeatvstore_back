@@ -30,20 +30,20 @@ export class UsersController {
   // Autenticación requerida
   // Usa Multer para manejar la subida de archivos
   // El archivo se espera en el campo 'file' del formulario
-  // El avatar se asocia al usuario autenticado (req.user.userId)
+  // El avatar se asocia al usuario autenticado (req.user.id)
   // El servicio maneja la lógica de subir a Cloudinary y actualizar la URL en la base de datos
   @UseGuards(JwtAuthGuard)
   @Post('upload-avatar')
   @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Req() req) {
-    return this.usersService.updateAvatar(req.user.userId, file);
+    return this.usersService.updateAvatar(req.user.id, file);
   }
 
   // Endpoint para eliminar avatar
   @UseGuards(JwtAuthGuard)
   @Delete('avatar')
   async deleteAvatar(@Req() req) {
-    return this.usersService.deleteAvatar(req.user.userId);
+    return this.usersService.deleteAvatar(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

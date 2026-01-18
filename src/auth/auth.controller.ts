@@ -37,18 +37,18 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getProfile(@Req() req) {
-    return this.usersService.getUserId(req.user.userId, req.user);
+    return this.usersService.getUserId(req.user.id, req.user);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('me')
   async updateProfile(@Req() req, @Body() data: UpdateUserDto) {
-    return this.usersService.updateUser(req.user.userId, data, req.user);
+    return this.usersService.updateUser(req.user.id, data, req.user);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('me/password')
   async changePassword(@Req() req, @Body() dto: ChangePasswordDto) {
-    return this.authService.changePassword(req.user.userId, dto);
+    return this.authService.changePassword(req.user.id, dto);
   }
 }
