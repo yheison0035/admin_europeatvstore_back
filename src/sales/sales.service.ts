@@ -632,18 +632,35 @@ export class SalesService {
       );
     }
 
-    // Validar acceso al local
+    /**
+     * Validar acceso al local
+     */
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     if (localIds !== null && !localIds.includes(localId)) {
       throw new ForbiddenException('No tienes permiso para ver este local');
     }
 
-    // Zona horaria Colombia
-    const start = new Date(`${startDate}T00:00:00-05:00`);
-    const end = new Date(`${endDate}T23:59:59-05:00`);
+    /**
+     * Parseo robusto de fechas
+     * Soporta:
+     * - YYYY-MM-DD
+     * - ISO completo (2026-01-10T22:53:32.270Z)
+     */
+    const start = new Date(startDate);
+    const end = new Date(endDate);
 
-    // Filtro base
+    if (isNaN(start.getTime())) {
+      throw new BadRequestException('Fecha inválida en fecha inicial');
+    }
+
+    if (isNaN(end.getTime())) {
+      throw new BadRequestException('Fecha inválida en fecha final');
+    }
+
+    /**
+     * Filtro base de ventas
+     */
     const where: any = {
       localId,
       saleDate: {
@@ -652,7 +669,9 @@ export class SalesService {
       },
     };
 
-    // Filtro opcional por asesor
+    /**
+     * Filtro opcional por asesor
+     */
     if (userId) {
       where.userId = userId;
     }
@@ -670,28 +689,42 @@ export class SalesService {
     });
 
     /**
-     * Usuarios relacionados al local
+     * Determinar usuarios a mostrar en el reporte
+     * - Si viene userId → solo ese asesor
+     * - Si no → todos los asesores del local + los que vendieron
      */
-    const linkedUsers = await this.prisma.user.findMany({
-      where: {
-        OR: [{ localId }, { managedLocals: { some: { id: localId } } }],
-      },
-      select: { id: true, name: true },
-    });
+    let users: string[] = [];
 
-    /**
-     * Unificar usuarios:
-     * - enlazados al local
-     * - que vendieron en el rango
-     */
-    const usersMap = new Map<number, string>();
+    if (userId) {
+      const u = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
 
-    linkedUsers.forEach((u) => usersMap.set(u.id, u.name));
-    sales.forEach((s) => {
-      if (s.user) usersMap.set(s.user.id, s.user.name);
-    });
+      if (!u) {
+        throw new NotFoundException('Asesor no encontrado');
+      }
 
-    const users = Array.from(usersMap.values());
+      users = [u.name];
+    } else {
+      const linkedUsers = await this.prisma.user.findMany({
+        where: {
+          OR: [{ localId }, { managedLocals: { some: { id: localId } } }],
+        },
+        select: { name: true },
+      });
+
+      const usersMap = new Map<string, string>();
+
+      linkedUsers.forEach((u) => usersMap.set(u.name, u.name));
+      sales.forEach((s) => {
+        if (s.user) {
+          usersMap.set(s.user.name, s.user.name);
+        }
+      });
+
+      users = Array.from(usersMap.values());
+    }
 
     /**
      * Inicializar métodos de pago
@@ -754,4 +787,14 @@ export class SalesService {
       },
     };
   }
+}
+
+function parseDateInput(value: string, label: string): Date {
+  const d = new Date(value);
+
+  if (isNaN(d.getTime())) {
+    throw new BadRequestException(`Fecha inválida en ${label}`);
+  }
+
+  return d;
 }

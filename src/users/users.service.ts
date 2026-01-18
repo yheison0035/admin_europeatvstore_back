@@ -126,9 +126,22 @@ export class UsersService {
       throw new NotFoundException(`Usuario con id ${id} no fue encontrado`);
     }
 
+    /**
+     * SIEMPRE permitir que el usuario se vea a sí mismo
+     */
+    if (requester && requester.id === user.id) {
+      return {
+        success: true,
+        message: 'Usuario obtenido',
+        data: sanitizeUser(user),
+      };
+    }
+
     const localIds = await getAccessibleLocalIds(this.prisma, requester);
 
-    // Roles globales
+    /**
+     * Roles con acceso global
+     */
     if (localIds === null) {
       return {
         success: true,
@@ -137,7 +150,9 @@ export class UsersService {
       };
     }
 
-    // Validar acceso por local
+    /**
+     * Validar acceso por local
+     */
     if (!user.localId || !localIds.includes(user.localId)) {
       throw new ForbiddenException('No tienes permiso para ver este usuario');
     }
