@@ -413,6 +413,7 @@ export class SalesService {
       paymentStatus: sale.paymentStatus || '',
       local: sale.local?.name || '',
       user: sale.user?.name || '',
+      notes: sale.notes || '',
 
       // AQUÍ VAN LOS PRODUCTOS COMPRADOS
       items: sale.items.map((item) => ({
