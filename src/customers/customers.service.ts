@@ -2,48 +2,49 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
-import { Role } from '@prisma/client';
-import { hasRole } from 'src/common/role-check.util';
+import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 
 @Injectable()
 export class CustomersService {
   constructor(private prisma: PrismaService) {}
 
-  // OBTENER CLIENTES SEGÚN ROL
   async findAll(user: any) {
-    const isGlobal = hasRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.ADMIN,
-      Role.COORDINADOR,
-      Role.AUXILIAR,
-    ]);
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    const where: any = {};
+    let baseWhere: any = {};
 
-    if (!isGlobal) {
-      if (!user.localId) {
-        throw new ForbiddenException(
-          'Debes tener un local asignado para ver clientes',
-        );
-      }
-      where.localId = user.localId;
+    // Acceso global
+    if (localIds === null) {
+      baseWhere = {};
+    }
+    // Sin locales → solo consumidor final
+    else if (localIds.length === 0) {
+      baseWhere = {};
+    }
+    // Locales asignados
+    else {
+      baseWhere = {
+        localId: { in: localIds },
+      };
     }
 
+    // CONSUMIDOR FINAL (SIN LOCAL)
     const consumidorFinal = await this.prisma.customer.findFirst({
       where: {
-        ...where,
         document: '222222222222',
       },
       include: { local: true },
     });
 
+    // RESTO DE CLIENTES
     const others = await this.prisma.customer.findMany({
       where: {
-        ...where,
+        ...baseWhere,
         NOT: { document: '222222222222' },
       },
       include: { local: true },
@@ -70,14 +71,13 @@ export class CustomersService {
       throw new NotFoundException('Cliente no encontrado');
     }
 
-    const isGlobal = hasRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.ADMIN,
-      Role.COORDINADOR,
-      Role.AUXILIAR,
-    ]);
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    if (!isGlobal && customer.localId !== user.localId) {
+    if (
+      customer.document !== '222222222222' &&
+      localIds !== null &&
+      (!customer.localId || !localIds.includes(customer.localId))
+    ) {
       throw new ForbiddenException(
         'No tienes permiso para ver clientes de otro local',
       );
@@ -92,57 +92,39 @@ export class CustomersService {
 
   // CREAR CLIENTE (SE ASIGNA AUTOMÁTICAMENTE AL LOCAL DEL USUARIO)
   async create(dto: CreateCustomerDto, user: any) {
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
     let localId: number | null = null;
 
-    // Usuario normal con un solo local
-    if (user.localId) {
-      localId = user.localId;
-    } else {
-      // Usuario manager
-      const dbUser = await this.prisma.user.findUnique({
-        where: { id: user.userId },
-        include: { managedLocals: true },
-      });
-
-      if (!dbUser) {
-        throw new ForbiddenException('Usuario no encontrado');
+    // Roles globales → deben enviar localId
+    if (localIds === null) {
+      if (!dto.localId) {
+        throw new BadRequestException('Debes indicar el local del cliente');
+      }
+      localId = dto.localId;
+    }
+    // Usuario con un solo local accesible
+    else if (localIds.length === 1) {
+      localId = localIds[0];
+    }
+    // Usuario con varios locales → debe elegir uno válido
+    else if (localIds.length > 1) {
+      if (!dto.localId) {
+        throw new BadRequestException('Debes indicar el local del cliente');
       }
 
-      if (dbUser.managedLocals.length === 0) {
+      if (!localIds.includes(dto.localId)) {
         throw new ForbiddenException(
-          'No tienes locales asignados para crear clientes',
+          'No puedes crear clientes en un local que no administras',
         );
       }
 
-      // Un solo local → automático
-      if (dbUser.managedLocals.length === 1) {
-        localId = dbUser.managedLocals[0].id;
-      }
-
-      // Varios locales → debe elegir
-      else {
-        if (!dto.localId) {
-          throw new ForbiddenException(
-            'Tienes múltiples locales asignados. Debes indicar el local del cliente.',
-          );
-        }
-
-        const allowedIds = dbUser.managedLocals.map((l) => l.id);
-
-        if (!allowedIds.includes(dto.localId)) {
-          throw new ForbiddenException(
-            'No puedes crear clientes en un local que no administras',
-          );
-        }
-
-        localId = dto.localId;
-      }
+      localId = dto.localId;
     }
-
-    // Protección de TypeScript y lógica
-    if (!localId) {
+    // Sin locales
+    else {
       throw new ForbiddenException(
-        'No se pudo determinar el local para crear el cliente',
+        'No tienes locales asignados para crear clientes',
       );
     }
 
@@ -170,34 +152,22 @@ export class CustomersService {
       throw new NotFoundException('Cliente no encontrado');
     }
 
-    const isGlobal = hasRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.ADMIN,
-      Role.COORDINADOR,
-      Role.AUXILIAR,
-    ]);
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    if (!isGlobal && customer.localId !== user.localId) {
+    if (
+      localIds !== null &&
+      (!customer.localId || !localIds.includes(customer.localId))
+    ) {
       throw new ForbiddenException(
         'No tienes permiso para modificar clientes de otro local',
       );
     }
 
-    // QUITAMOS localId DEL DTO
     const { localId: _ignored, ...cleanDto } = dto;
-
-    const data: any = {
-      ...cleanDto,
-    };
-
-    // (Opcional) Si en el futuro permites cambiar de local:
-    if (dto.localId) {
-      data.local = { connect: { id: dto.localId } };
-    }
 
     const updated = await this.prisma.customer.update({
       where: { id },
-      data,
+      data: cleanDto,
     });
 
     return {
@@ -215,14 +185,12 @@ export class CustomersService {
       throw new NotFoundException('Cliente no encontrado');
     }
 
-    const isGlobal = hasRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.ADMIN,
-      Role.COORDINADOR,
-      Role.AUXILIAR,
-    ]);
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    if (!isGlobal && customer.localId !== user.localId) {
+    if (
+      localIds !== null &&
+      (!customer.localId || !localIds.includes(customer.localId))
+    ) {
       throw new ForbiddenException(
         'No tienes permiso para eliminar clientes de otro local',
       );

@@ -60,7 +60,7 @@ export class CategoriesController {
 
   // Eliminar categoría (soft delete)
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.categoriesService.remove(id, req.user);

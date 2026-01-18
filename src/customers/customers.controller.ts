@@ -56,7 +56,7 @@ export class CustomersController {
 
   // Crear
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR', 'VENTAS')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Post()
   create(@Body() dto: CreateCustomerDto, @Req() req) {
     return this.customersService.create(dto, req.user);
@@ -64,7 +64,7 @@ export class CustomersController {
 
   // Actualizar
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -76,7 +76,7 @@ export class CustomersController {
 
   // Eliminar
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.customersService.remove(id, req.user);

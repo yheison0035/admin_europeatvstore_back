@@ -7,13 +7,32 @@ import {
 import { PrismaService } from 'src/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
+import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 
 @Injectable()
 export class SalesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(user: any) {
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    const where: any = {};
+
+    // Acceso global
+    if (localIds === null) {
+      // sin filtro
+    }
+    // Sin locales → no ve ventas
+    else if (localIds.length === 0) {
+      where.localId = -1;
+    }
+    // Solo locales permitidos
+    else {
+      where.localId = { in: localIds };
+    }
+
     const sales = await this.prisma.sale.findMany({
+      where,
       include: {
         items: {
           include: {
@@ -33,11 +52,12 @@ export class SalesService {
 
     return {
       success: true,
+      message: 'Ventas obtenidas correctamente',
       data: sales,
     };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, user: any) {
     const sale = await this.prisma.sale.findUnique({
       where: { id },
       include: {
@@ -58,8 +78,20 @@ export class SalesService {
       throw new NotFoundException('Venta no encontrada');
     }
 
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    if (
+      localIds !== null &&
+      (!sale.localId || !localIds.includes(sale.localId))
+    ) {
+      throw new ForbiddenException(
+        'No tienes permiso para ver ventas de otro local',
+      );
+    }
+
     return {
       success: true,
+      message: 'Venta obtenida correctamente',
       data: sale,
     };
   }
@@ -112,9 +144,10 @@ export class SalesService {
         }
 
         const price = variant.inventory.salePrice;
-        const discount = item.discount ?? 0;
-
         const base = item.quantity * price;
+
+        const discount = Math.max(0, Math.min(item.discount ?? 0, base));
+
         const subtotal = base - discount;
 
         total += subtotal;
@@ -142,6 +175,18 @@ export class SalesService {
           discount,
           subtotal,
         });
+      }
+
+      const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+      if (localIds !== null && !localIds.includes(dto.localId)) {
+        throw new ForbiddenException(
+          'No puedes crear ventas en un local que no administras',
+        );
+      }
+
+      if (dto.items.some((i) => i.quantity <= 0)) {
+        throw new BadRequestException('La cantidad debe ser mayor a 0');
       }
 
       const sale = await tx.sale.create({
@@ -210,6 +255,17 @@ export class SalesService {
         localId: dto.localId ?? sale.localId,
         userId: dto.userId ?? sale.userId,
       };
+
+      const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+      if (
+        localIds !== null &&
+        (!sale.localId || !localIds.includes(sale.localId))
+      ) {
+        throw new ForbiddenException(
+          'No tienes permiso para modificar ventas de otro local',
+        );
+      }
 
       // Si NO vienen items → solo actualizar campos administrativos
       if (!dto.items || dto.items.length === 0) {
@@ -283,9 +339,10 @@ export class SalesService {
         }
 
         const price = variant.inventory.salePrice;
-        const discount = item.discount ?? 0;
-
         const base = item.quantity * price;
+
+        const discount = Math.max(0, Math.min(item.discount ?? 0, base));
+
         const subtotal = base - discount;
 
         total += subtotal;
@@ -346,7 +403,7 @@ export class SalesService {
     });
   }
 
-  async remove(id: number) {
+  async remove(id: number, user: any) {
     const sale = await this.prisma.sale.findUnique({
       where: { id },
       include: { items: true },
@@ -356,8 +413,18 @@ export class SalesService {
       throw new NotFoundException('Venta no encontrada');
     }
 
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    if (
+      localIds !== null &&
+      (!sale.localId || !localIds.includes(sale.localId))
+    ) {
+      throw new ForbiddenException(
+        'No tienes permiso para eliminar ventas de otro local',
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
-      // Devolver stock
       for (const item of sale.items) {
         await tx.inventoryVariant.update({
           where: { id: item.inventoryVariantId },
@@ -367,7 +434,6 @@ export class SalesService {
         });
       }
 
-      // Eliminar venta (cascade elimina items)
       await tx.sale.delete({
         where: { id },
       });

@@ -12,4 +12,7 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsEnum(Status)
   status?: Status;
+
+  @IsOptional()
+  localId?: number;
 }

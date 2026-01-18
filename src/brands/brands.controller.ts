@@ -26,16 +26,16 @@ export class BrandsController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
-  findAll() {
-    return this.brandsService.findAll();
+  findAll(@Req() req) {
+    return this.brandsService.findAll(req.user);
   }
 
   // VER UNO
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.brandsService.findOne(id);
+  findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.brandsService.findOne(id, req.user);
   }
 
   // CREAR
@@ -60,7 +60,7 @@ export class BrandsController {
 
   // ELIMINAR
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.brandsService.remove(id, req.user);

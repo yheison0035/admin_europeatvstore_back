@@ -26,15 +26,15 @@ export class SalesController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Get()
-  findAll() {
-    return this.salesService.findAll();
+  findAll(@Req() req) {
+    return this.salesService.findAll(req.user);
   }
 
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.salesService.findOne(id);
+  findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.salesService.findOne(id, req.user);
   }
 
   @UseGuards(RolesGuard)
@@ -58,8 +58,8 @@ export class SalesController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.salesService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.salesService.remove(id, req.user);
   }
 
   @Get('verify/:code')

@@ -12,6 +12,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import { hasRole } from 'src/common/role-check.util';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 
 @Injectable()
 export class UsersService {
@@ -71,50 +72,26 @@ export class UsersService {
 
   // Obtener todos los usuarios (solo SUPER_ADMIN y ADMIN)
   async getUsers(user: any) {
-    if (
-      !hasRole(user.role, [
-        Role.SUPER_ADMIN,
-        Role.ADMIN,
-        Role.COORDINADOR,
-        Role.ASESOR,
-      ])
-    ) {
-      throw new ForbiddenException('No tienes permisos');
-    }
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     let where: any = {};
 
-    // SUPER_ADMIN y ADMIN → ven todos
-    if (hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
-      // sin filtros
+    // Roles globales → todos
+    if (localIds === null) {
+      // sin filtro
     }
-
-    // COORDINADOR (manager) → usuarios de sus locales
-    else if (user.role === Role.COORDINADOR) {
-      // Traemos sus locales administrados
-      const dbUser = await this.prisma.user.findUnique({
-        where: { id: user.userId },
-        include: { managedLocals: true },
-      });
-
-      if (!dbUser || dbUser.managedLocals.length === 0) {
-        return {
-          success: true,
-          message: 'No tienes locales asignados',
-          data: [],
-        };
-      }
-
-      const localIds = dbUser.managedLocals.map((l) => l.id);
-
+    // Sin acceso a locales → solo él mismo
+    else if (localIds.length === 0) {
+      where = { id: user.id };
+    }
+    // Usuarios de locales permitidos + usuario autenticado
+    else {
       where = {
-        localId: { in: localIds },
+        OR: [
+          { localId: { in: localIds } }, // usuarios del/los local(es)
+          { id: user.id }, // siempre incluir al solicitante
+        ],
       };
-    }
-
-    // ASESOR → solo se ve a sí mismo
-    else if (user.role === Role.ASESOR) {
-      where = { id: user.userId };
     }
 
     const users = await this.prisma.user.findMany({
@@ -133,7 +110,10 @@ export class UsersService {
     };
   }
 
-  async getUserId(id: number, requester?: { role: Role; userId: number }) {
+  async getUserId(
+    id: number,
+    requester?: { role: Role; id: number; localId?: number },
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
@@ -146,44 +126,26 @@ export class UsersService {
       throw new NotFoundException(`Usuario con id ${id} no fue encontrado`);
     }
 
-    // PROTECCIÓN SUPER_ADMIN
-    if (
-      user.role === Role.SUPER_ADMIN &&
-      requester?.role !== Role.SUPER_ADMIN
-    ) {
+    const localIds = await getAccessibleLocalIds(this.prisma, requester);
+
+    // Roles globales
+    if (localIds === null) {
+      return {
+        success: true,
+        message: 'Usuario obtenido',
+        data: sanitizeUser(user),
+      };
+    }
+
+    // Validar acceso por local
+    if (!user.localId || !localIds.includes(user.localId)) {
       throw new ForbiddenException('No tienes permiso para ver este usuario');
     }
-
-    // ASESOR → solo puede verse a sí mismo
-    if (requester?.role === Role.ASESOR && requester.userId !== id) {
-      throw new ForbiddenException('No tienes permiso para ver este usuario');
-    }
-
-    // COORDINADOR → solo usuarios de sus locales
-    if (requester?.role === Role.COORDINADOR) {
-      const dbRequester = await this.prisma.user.findUnique({
-        where: { id: requester.userId },
-        include: { managedLocals: true },
-      });
-
-      const managedLocalIds = dbRequester?.managedLocals.map((l) => l.id) || [];
-
-      if (!user.localId || !managedLocalIds.includes(user.localId)) {
-        throw new ForbiddenException(
-          'No tienes permiso para ver usuarios de otros locales',
-        );
-      }
-    }
-
-    const { password, ...safeData } = user;
 
     return {
       success: true,
       message: 'Usuario obtenido',
-      data: {
-        ...safeData,
-        birthdate: formatDate(user.birthdate),
-      },
+      data: sanitizeUser(user),
     };
   }
 
@@ -210,6 +172,16 @@ export class UsersService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    if (dto.localId) {
+      const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+      if (localIds !== null && !localIds.includes(dto.localId)) {
+        throw new ForbiddenException(
+          'No puedes crear usuarios en un local que no administras',
+        );
+      }
+    }
 
     const created = await this.prisma.user.create({
       data: {
@@ -249,6 +221,18 @@ export class UsersService {
     }
 
     if (dto.birthdate) dto.birthdate = new Date(dto.birthdate as any) as any;
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    if (
+      localIds !== null &&
+      found.localId &&
+      !localIds.includes(found.localId)
+    ) {
+      throw new ForbiddenException(
+        'No tienes permiso para modificar usuarios de otro local',
+      );
+    }
 
     const updated = await this.prisma.user.update({
       where: { id },
@@ -302,8 +286,12 @@ export class UsersService {
   }
 }
 
-// Utilidad local
-function formatDate(date: Date | null): string | null {
-  if (!date) return null;
-  return date.toISOString().split('T')[0]; // yyyy-mm-dd
+function sanitizeUser(user: any) {
+  const { password, ...safe } = user;
+  return {
+    ...safe,
+    birthdate: user.birthdate
+      ? user.birthdate.toISOString().split('T')[0]
+      : null,
+  };
 }

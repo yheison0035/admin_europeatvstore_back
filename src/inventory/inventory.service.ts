@@ -12,6 +12,7 @@ import { InventoryVariant, Role } from '@prisma/client';
 import { generateSku } from 'utils/sku.util';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { VariantsService } from './variants/variants.service';
+import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 
 @Injectable()
 export class InventoryService {
@@ -23,51 +24,21 @@ export class InventoryService {
 
   // Endpoint para buscar productos por término (nombre o parte de él)
   async search(term: string, user: any) {
-    const isGlobal = hasRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.ADMIN,
-      Role.COORDINADOR,
-      Role.AUXILIAR,
-    ]);
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    let where: any = {
+    const where: any = {
       name: {
         contains: term,
         mode: 'insensitive',
       },
     };
 
-    // SI NO ES GLOBAL → FILTRAR POR LOCALES DEL USUARIO
-    if (!isGlobal) {
-      // Cargar usuario real con relaciones
-      const dbUser = await this.prisma.user.findUnique({
-        where: { id: user.userId },
-        include: {
-          managedLocals: true,
-          local: true,
-        },
-      });
-
-      if (!dbUser) {
-        throw new ForbiddenException('Usuario no encontrado');
+    if (localIds !== null) {
+      if (localIds.length === 0) {
+        return { success: true, data: [] };
       }
 
-      // ENCARGADO → varios locales
-      if (dbUser.managedLocals.length > 0) {
-        where.localId = {
-          in: dbUser.managedLocals.map((l) => l.id),
-        };
-      }
-      // USUARIO NORMAL → un solo local
-      else if (dbUser.localId) {
-        where.localId = dbUser.localId;
-      }
-      // SIN LOCAL → NO PUEDE BUSCAR
-      else {
-        throw new ForbiddenException(
-          'No tienes un local asignado. Contacta al administrador.',
-        );
-      }
+      where.localId = { in: localIds };
     }
 
     const products = await this.prisma.inventory.findMany({
@@ -78,7 +49,6 @@ export class InventoryService {
       take: 10,
     });
 
-    // Aplanamos variantes (cada color es una opción de venta)
     const result = products.flatMap((p) =>
       p.variants.map((v) => ({
         id: v.id,
@@ -98,45 +68,20 @@ export class InventoryService {
   }
 
   async findAll(user: any) {
-    const isGlobal = hasRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.ADMIN,
-      Role.COORDINADOR,
-      Role.AUXILIAR,
-    ]);
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {};
 
-    if (!isGlobal) {
-      // Cargar usuario real con relaciones
-      const dbUser = await this.prisma.user.findUnique({
-        where: { id: user.userId },
-        include: {
-          managedLocals: true,
-          local: true,
-        },
-      });
-
-      if (!dbUser) {
-        throw new ForbiddenException('Usuario no encontrado');
-      }
-
-      // ENCARGADO → varios locales
-      if (dbUser.managedLocals.length > 0) {
-        where.localId = {
-          in: dbUser.managedLocals.map((l) => l.id),
-        };
-      }
-      // USUARIO NORMAL → un solo local
-      else if (dbUser.localId) {
-        where.localId = dbUser.localId;
-      }
-      // SIN LOCAL
-      else {
-        throw new ForbiddenException(
-          'No tienes un local asignado. Contacta al administrador.',
-        );
-      }
+    // Roles globales → sin filtro
+    if (localIds === null) {
+    }
+    // Sin locales accesibles → no devuelve nada
+    else if (localIds.length === 0) {
+      where.localId = -1;
+    }
+    // Filtrar por locales permitidos
+    else {
+      where.localId = { in: localIds };
     }
 
     const products = await this.prisma.inventory.findMany({
@@ -162,23 +107,14 @@ export class InventoryService {
     ]);
 
     const data = products.map((product) => {
-      const totalStock = product.variants.reduce(
-        (sum, variant) => sum + variant.stock,
-        0,
-      );
+      const stock = product.variants.reduce((sum, v) => sum + v.stock, 0);
 
       if (!canSeePurchasePrice) {
         const { purchasePrice, ...rest } = product;
-        return {
-          ...rest,
-          stock: totalStock,
-        };
+        return { ...rest, stock };
       }
 
-      return {
-        ...product,
-        stock: totalStock,
-      };
+      return { ...product, stock };
     });
 
     return {
@@ -207,47 +143,18 @@ export class InventoryService {
       throw new NotFoundException(`Producto con ID ${id} no encontrado`);
     }
 
-    const isGlobal = hasRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.ADMIN,
-      Role.COORDINADOR,
-      Role.AUXILIAR,
-    ]);
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    if (!isGlobal) {
-      const dbUser = await this.prisma.user.findUnique({
-        where: { id: user.userId },
-        include: {
-          managedLocals: true,
-          local: true,
-        },
-      });
-
-      if (!dbUser) {
-        throw new ForbiddenException('Usuario no encontrado');
-      }
-
-      // ENCARGADO
-      if (dbUser.managedLocals.length > 0) {
-        const managedIds = dbUser.managedLocals.map((l) => l.id);
-        if (!product.localId || !managedIds.includes(product.localId)) {
-          throw new ForbiddenException(
-            'No tienes permiso para ver productos de otro local',
-          );
-        }
-      }
-      // USUARIO NORMAL
-      else if (dbUser.localId !== product.localId) {
-        throw new ForbiddenException(
-          'No tienes permiso para ver productos de otro local',
-        );
-      }
+    if (
+      localIds !== null &&
+      (!product.localId || !localIds.includes(product.localId))
+    ) {
+      throw new ForbiddenException(
+        'No tienes permiso para ver productos de otro local',
+      );
     }
 
-    const stock = product.variants.reduce(
-      (sum, variant) => sum + variant.stock,
-      0,
-    );
+    const stock = product.variants.reduce((sum, v) => sum + v.stock, 0);
 
     const canSeePurchasePrice = hasRole(user.role, [
       Role.SUPER_ADMIN,
@@ -258,7 +165,6 @@ export class InventoryService {
 
     if (!canSeePurchasePrice) {
       const { purchasePrice, ...rest } = product;
-
       return {
         success: true,
         message: 'Producto obtenido correctamente',
@@ -274,8 +180,16 @@ export class InventoryService {
   }
 
   async create(dto: CreateInventoryDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.ASESOR])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
       throw new ForbiddenException('No tienes permisos');
+    }
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    if (dto.localId && localIds !== null && !localIds.includes(dto.localId)) {
+      throw new ForbiddenException(
+        'No puedes crear o modificar productos en un local que no administras',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -296,8 +210,8 @@ export class InventoryService {
           }),
           ...(dto.localId && { local: { connect: { id: dto.localId } } }),
 
-          createdBy: { connect: { id: user.userId } },
-          updatedBy: { connect: { id: user.userId } },
+          createdBy: { connect: { id: user.id } },
+          updatedBy: { connect: { id: user.id } },
         },
       });
 
@@ -335,7 +249,7 @@ export class InventoryService {
   }
 
   async update(id: number, dto: UpdateInventoryDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.ASESOR])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
@@ -355,6 +269,14 @@ export class InventoryService {
     if (dto.localId) data.local = { connect: { id: dto.localId } };
 
     data.updatedBy = { connect: { id: user.userId } };
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    if (dto.localId && localIds !== null && !localIds.includes(dto.localId)) {
+      throw new ForbiddenException(
+        'No puedes crear o modificar productos en un local que no administras',
+      );
+    }
 
     const updatedProduct = await this.prisma.inventory.update({
       where: { id },

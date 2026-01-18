@@ -24,13 +24,14 @@ export class LocalsController {
 
   // ADMIN / COORDINADOR / SUPER_ADMIN
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get()
   findAll(@Req() req) {
     return this.localsService.findAll(req.user);
   }
 
-  // ADMIN ve cualquiera, ASESOR solo si es responsable
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.localsService.findOne(id, req.user);
@@ -38,7 +39,7 @@ export class LocalsController {
 
   // Crear local (ADMIN / SUPER_ADMIN)
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN')
   @Post()
   create(@Body() dto: CreateLocalDto, @Req() req) {
     return this.localsService.create(dto, req.user);
@@ -46,7 +47,7 @@ export class LocalsController {
 
   // Actualizar local
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -58,7 +59,7 @@ export class LocalsController {
 
   // Eliminar local
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.localsService.remove(id, req.user);

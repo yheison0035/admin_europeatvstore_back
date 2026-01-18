@@ -54,14 +54,14 @@ export class InventoryController {
   }
 
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Post()
   create(@Body() dto: CreateInventoryDto, @Req() req) {
     return this.inventoryService.create(dto, req.user);
   }
 
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -72,7 +72,7 @@ export class InventoryController {
   }
 
   @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.inventoryService.remove(id, req.user);
@@ -80,7 +80,7 @@ export class InventoryController {
 
   // Endpoint para sincronizar imágenes de un producto
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id/images')
   @UseInterceptors(FilesInterceptor('images', 10))
   syncImages(

@@ -14,18 +14,29 @@ export class LocalsService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(user: any) {
+    let where: any = {};
+
+    // Roles con acceso total
     if (
-      !hasRole(user.role, [
-        Role.SUPER_ADMIN,
-        Role.COORDINADOR,
-        Role.ADMIN,
-        Role.ASESOR,
-      ])
+      [Role.SUPER_ADMIN, Role.COORDINADOR, Role.AUXILIAR].includes(user.role)
     ) {
-      throw new ForbiddenException('No tienes permisos');
+      // sin filtro
+    }
+    // ADMIN → solo locales que administra
+    else if (user.role === Role.ADMIN) {
+      where.managerId = user.id;
+    }
+    // Usuario con local asignado
+    else if (user.localId) {
+      where.id = user.localId;
+    }
+    // Sin acceso
+    else {
+      where.id = -1;
     }
 
     const locals = await this.prisma.local.findMany({
+      where,
       include: {
         users: true,
         manager: true,
@@ -40,7 +51,7 @@ export class LocalsService {
     };
   }
 
-  async findOne(id: number, requester: any) {
+  async findOne(id: number, user: any) {
     const local = await this.prisma.local.findUnique({
       where: { id },
       include: {
@@ -53,20 +64,40 @@ export class LocalsService {
       throw new NotFoundException(`Local con ID ${id} no encontrado`);
     }
 
-    // ADMIN solo puede ver su propio local
-    if (requester.role === Role.ADMIN && local.managerId !== requester.userId) {
-      throw new ForbiddenException('No tienes acceso a este local');
+    // Roles globales → permitido
+    if (
+      [Role.SUPER_ADMIN, Role.COORDINADOR, Role.AUXILIAR].includes(user.role)
+    ) {
+      return {
+        success: true,
+        message: 'Local obtenido correctamente',
+        data: local,
+      };
     }
 
-    return {
-      success: true,
-      message: 'Local obtenido correctamente',
-      data: local,
-    };
+    // ADMIN → solo si es manager
+    if (user.role === Role.ADMIN && local.managerId === user.id) {
+      return {
+        success: true,
+        message: 'Local obtenido correctamente',
+        data: local,
+      };
+    }
+
+    // Usuario normal → solo su local
+    if (user.localId && user.localId === local.id) {
+      return {
+        success: true,
+        message: 'Local obtenido correctamente',
+        data: local,
+      };
+    }
+
+    throw new ForbiddenException('No tienes acceso a este local');
   }
 
   async create(dto: CreateLocalDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
@@ -85,23 +116,29 @@ export class LocalsService {
   }
 
   async update(id: number, dto: UpdateLocalDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
-      throw new ForbiddenException('No tienes permisos');
-    }
-
     const found = await this.prisma.local.findUnique({ where: { id } });
     if (!found) {
       throw new NotFoundException(`Local con ID ${id} no encontrado`);
     }
 
-    const data: any = {};
+    // Roles globales → OK
+    if (
+      ![Role.SUPER_ADMIN, Role.COORDINADOR, Role.AUXILIAR].includes(user.role)
+    ) {
+      // ADMIN → solo sus locales
+      if (user.role === Role.ADMIN && found.managerId !== user.id) {
+        throw new ForbiddenException('No puedes modificar este local');
+      }
+    }
 
-    if (dto.name !== undefined) data.name = dto.name;
-    if (dto.address !== undefined) data.address = dto.address;
-    if (dto.city !== undefined) data.city = dto.city;
-    if (dto.department !== undefined) data.department = dto.department;
-    if (dto.phone !== undefined) data.phone = dto.phone;
-    if (dto.status !== undefined) data.status = dto.status;
+    const data: any = {
+      ...(dto.name !== undefined && { name: dto.name }),
+      ...(dto.address !== undefined && { address: dto.address }),
+      ...(dto.city !== undefined && { city: dto.city }),
+      ...(dto.department !== undefined && { department: dto.department }),
+      ...(dto.phone !== undefined && { phone: dto.phone }),
+      ...(dto.status !== undefined && { status: dto.status }),
+    };
 
     if (dto.managerId !== undefined) {
       const manager = await this.prisma.user.findUnique({

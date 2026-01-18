@@ -12,4 +12,7 @@ export class CreateBrandDto {
   @IsOptional()
   @IsEnum(Status)
   status?: Status;
+
+  @IsOptional()
+  localId?: number;
 }

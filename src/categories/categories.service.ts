@@ -8,28 +8,30 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { Role, Status } from '@prisma/client';
 import { hasRole } from 'src/common/role-check.util';
+import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 
 @Injectable()
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(user: any) {
-    if (
-      !hasRole(user.role, [
-        Role.SUPER_ADMIN,
-        Role.ADMIN,
-        Role.COORDINADOR,
-        Role.ASESOR,
-      ])
-    ) {
-      throw new ForbiddenException('No tienes permisos');
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    const where: any = {
+      status: { not: Status.ELIMINADO },
+    };
+
+    if (localIds === null) {
+    } else if (localIds.length === 0) {
+      where.localId = -1;
+    } else {
+      where.localId = { in: localIds };
     }
 
     const categories = await this.prisma.category.findMany({
-      where: {
-        status: {
-          not: Status.ELIMINADO,
-        },
+      where,
+      include: {
+        local: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -42,15 +44,28 @@ export class CategoriesService {
   }
 
   async findOne(id: number, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.COORDINADOR])) {
-      throw new ForbiddenException('No tienes permisos');
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    const where: any = {
+      id,
+      status: { not: Status.ELIMINADO },
+    };
+
+    if (localIds === null) {
+    } else if (localIds.length === 0) {
+      where.localId = -1;
+    } else {
+      where.localId = { in: localIds };
     }
 
-    const category = await this.prisma.category.findUnique({
-      where: { id },
+    const category = await this.prisma.category.findFirst({
+      where,
+      include: {
+        local: true,
+      },
     });
 
-    if (!category || category.status === Status.ELIMINADO) {
+    if (!category) {
       throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
     }
 
@@ -71,6 +86,9 @@ export class CategoriesService {
         name: dto.name,
         description: dto.description,
         status: dto.status ?? Status.ACTIVO,
+        local: {
+          connect: { id: dto.localId },
+        },
       },
     });
 
@@ -94,9 +112,29 @@ export class CategoriesService {
       throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
     }
 
+    if (dto.localId) {
+      const localExists = await this.prisma.local.findUnique({
+        where: { id: dto.localId },
+      });
+
+      if (!localExists) {
+        throw new NotFoundException(`Local con ID ${dto.localId} no existe`);
+      }
+    }
+
     const updated = await this.prisma.category.update({
       where: { id },
-      data: dto,
+      data: {
+        ...(dto.name && { name: dto.name }),
+        ...(dto.description && { description: dto.description }),
+        ...(dto.status && { status: dto.status }),
+
+        ...(dto.localId && {
+          local: {
+            connect: { id: dto.localId },
+          },
+        }),
+      },
     });
 
     return {
