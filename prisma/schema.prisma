@@ -60,6 +60,22 @@ enum SaleStatus {
   DEVUELTA
 }
 
+enum ExpenseType {
+  ARRIENDO
+  SERVICIOS_PUBLICOS
+  EMPLEADOS
+  TRANSPORTE
+  PEDIDOS
+  PLAN_CELULAR
+  PLAN_INTERNET
+  ASEO
+  MANTENIMIENTO
+  PUBLICIDAD
+  IMPUESTOS
+  COMISIONES
+  OTROS
+}
+
 //////////////////////////////////////////////////
 // MODELOS
 //////////////////////////////////////////////////
@@ -259,18 +275,19 @@ model InventoryImage {
 model Expense {
   id            Int            @id @default(autoincrement())
   concept       String
-  category      String?
+  type          ExpenseType
   amount        Float
   paymentMethod PaymentMethod?
+  paidTo        String?
   notes         String?
   status        Status         @default(ACTIVO)
-  expenseDate   DateTime       @default(now())
+  expenseDate   DateTime
 
   providerId Int?
-  localId    Int?
+  localId    Int
 
   provider Provider? @relation("ProviderExpenses", fields: [providerId], references: [id], onDelete: SetNull)
-  local    Local?    @relation("LocalExpenses", fields: [localId], references: [id], onDelete: SetNull)
+  local    Local    @relation("LocalExpenses", fields: [localId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

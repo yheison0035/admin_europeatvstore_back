@@ -31,4 +31,9 @@ export class EnumsController {
   getSaleStatus() {
     return { success: true, data: this.enumsService.getSaleStatus() };
   }
+
+  @Get('type-expenses')
+  getTypeExpenses() {
+    return { success: true, data: this.enumsService.getTypeExpenses() };
+  }
 }

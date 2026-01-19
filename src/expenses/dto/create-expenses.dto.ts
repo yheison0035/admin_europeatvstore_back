@@ -1,14 +1,46 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { PaymentMethod, Status } from '@prisma/client';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsDateString,
+  IsInt,
+} from 'class-validator';
+import { ExpenseType, PaymentMethod, Status } from '@prisma/client';
 
 export class CreateExpenseDto {
-  @IsString() concept: string;
-  @IsOptional() @IsString() category?: string;
-  @IsNumber() amount: number;
-  @IsOptional() paymentMethod?: PaymentMethod;
-  @IsOptional() @IsString() notes?: string;
-  @IsOptional() status?: Status;
-  @IsOptional() expenseDate?: string;
-  @IsOptional() @IsNumber() providerId?: number;
-  @IsOptional() @IsNumber() localId?: number;
+  @IsString()
+  concept: string;
+
+  @IsEnum(ExpenseType)
+  type: ExpenseType;
+
+  @IsNumber()
+  amount: number;
+
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
+
+  @IsOptional()
+  @IsString()
+  paidTo?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsDateString()
+  expenseDate: string;
+
+  @IsInt()
+  localId: number;
+
+  @IsOptional()
+  @IsInt()
+  providerId?: number;
+
+  @IsOptional()
+  @IsEnum(Status)
+  status?: Status;
 }
