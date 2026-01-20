@@ -35,6 +35,7 @@ async function bootstrap() {
         'http://localhost:3000',
         'https://admineuropeatvstoreback-production.up.railway.app/',
         'https://admin.europeatvstore.com',
+        'https://www.europeatvstore.com',
       ];
       if (!origin || allowed.includes(origin)) {
         callback(null, true);
