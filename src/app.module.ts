@@ -14,6 +14,7 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma.module';
 import { VariantsModule } from './inventory/variants/variants.module';
 import { EnumsModule } from './enums/enums.module';
+import { EcommerceModule } from './ecommerce/ecommerce.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { EnumsModule } from './enums/enums.module';
     UsersModule,
     VariantsModule,
     EnumsModule,
+    EcommerceModule,
   ],
 })
 export class AppModule {}

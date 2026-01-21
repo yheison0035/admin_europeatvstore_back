@@ -38,6 +38,10 @@ export class UpdateInventoryDto {
 
   @IsOptional()
   @IsNumber()
+  oldPrice?: number;
+
+  @IsOptional()
+  @IsNumber()
   salePrice?: number;
 
   @IsOptional()

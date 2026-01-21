@@ -28,6 +28,9 @@ export class CreateInventoryDto {
   purchasePrice: number;
 
   @IsNumber()
+  oldPrice: number;
+
+  @IsNumber()
   salePrice: number;
 
   @IsOptional()

@@ -788,13 +788,3 @@ export class SalesService {
     };
   }
 }
-
-function parseDateInput(value: string, label: string): Date {
-  const d = new Date(value);
-
-  if (isNaN(d.getTime())) {
-    throw new BadRequestException(`Fecha inválida en ${label}`);
-  }
-
-  return d;
-}

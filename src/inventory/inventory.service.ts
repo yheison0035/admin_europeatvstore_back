@@ -198,6 +198,7 @@ export class InventoryService {
           name: dto.name,
           description: dto.description,
           purchasePrice: dto.purchasePrice,
+          oldPrice: dto.oldPrice,
           salePrice: dto.salePrice,
           status: dto.status,
 
@@ -260,6 +261,7 @@ export class InventoryService {
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.purchasePrice !== undefined) data.purchasePrice = dto.purchasePrice;
+    if (dto.oldPrice !== undefined) data.oldPrice = dto.oldPrice;
     if (dto.salePrice !== undefined) data.salePrice = dto.salePrice;
     if (dto.status !== undefined) data.status = dto.status;
 

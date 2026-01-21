@@ -217,6 +217,7 @@ model Inventory {
   name          String
   description   String?
   purchasePrice Float
+  oldPrice      Float?
   salePrice     Float
   status        Status  @default(ACTIVO)
 
