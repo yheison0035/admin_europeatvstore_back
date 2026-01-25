@@ -17,4 +17,16 @@ export class EcommerceController {
   search(@Param('term') term: string) {
     return this.ecommerceService.searchProducts(term);
   }
+
+  @Public()
+  @Get('novedades')
+  getNovedades() {
+    return this.ecommerceService.getNewProducts(10);
+  }
+
+  @Public()
+  @Get('ofertas')
+  getOfertas() {
+    return this.ecommerceService.getOffers(10);
+  }
 }

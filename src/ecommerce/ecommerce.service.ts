@@ -113,4 +113,86 @@ export class EcommerceService {
 
     return { success: true, data };
   }
+
+  async getNewProducts(limit = 10) {
+    const products = await this.prisma.inventory.findMany({
+      where: {
+        localId: ECOMMERCE_LOCAL_ID,
+        status: 'ACTIVO',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+      include: {
+        images: { orderBy: { position: 'asc' } },
+        variants: true,
+        brand: true,
+      },
+    });
+
+    return {
+      success: true,
+      data: products.map((product) => {
+        const stock = product.variants.reduce((s, v) => s + v.stock, 0);
+
+        const oldPrice =
+          product.oldPrice && product.oldPrice > product.salePrice
+            ? product.oldPrice
+            : null;
+
+        const discount = oldPrice
+          ? Math.round(((oldPrice - product.salePrice) / oldPrice) * 100)
+          : 0;
+
+        return {
+          id: product.id,
+          name: product.name,
+          price: product.salePrice,
+          oldPrice,
+          discount,
+          stock,
+          brand: product.brand?.name ?? null,
+          image: product.images[0]?.url ?? null,
+        };
+      }),
+    };
+  }
+
+  async getOffers(limit = 10) {
+    const products = await this.prisma.inventory.findMany({
+      where: {
+        localId: ECOMMERCE_LOCAL_ID,
+        status: 'ACTIVO',
+        oldPrice: { not: null },
+        salePrice: { lt: this.prisma.inventory.fields.oldPrice },
+      },
+      orderBy: {
+        oldPrice: 'desc',
+      },
+      take: limit,
+      include: {
+        images: { orderBy: { position: 'asc' } },
+        variants: true,
+      },
+    });
+
+    return {
+      success: true,
+      data: products.map((product) => {
+        const discount = Math.round(
+          ((product.oldPrice! - product.salePrice) / product.oldPrice!) * 100,
+        );
+
+        return {
+          id: product.id,
+          name: product.name,
+          price: product.salePrice,
+          oldPrice: product.oldPrice,
+          discount,
+          image: product.images[0]?.url ?? null,
+        };
+      }),
+    };
+  }
 }
