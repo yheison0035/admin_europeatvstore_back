@@ -238,6 +238,8 @@ model Inventory {
 
   variants InventoryVariant[]
   images   InventoryImage[]
+  features       InventoryFeature[]
+  specifications InventorySpecification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -265,6 +267,29 @@ model InventoryImage {
   publicId    String
   inventoryId Int
   position    Int    @default(0)
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model InventoryFeature {
+  id          Int    @id @default(autoincrement())
+  title       String
+  inventoryId Int
+  order       Int    @default(0)
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model InventorySpecification {
+  id          Int    @id @default(autoincrement())
+  key         String
+  value       String
+  inventoryId Int
+  order       Int    @default(0)
 
   inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
 

@@ -95,6 +95,8 @@ export class InventoryService {
         category: true,
         provider: true,
         local: true,
+        features: { orderBy: { order: 'asc' } },
+        specifications: { orderBy: { order: 'asc' } },
       },
       orderBy: { name: 'asc' },
     });
@@ -136,6 +138,8 @@ export class InventoryService {
         category: true,
         provider: true,
         local: true,
+        features: { orderBy: { order: 'asc' } },
+        specifications: { orderBy: { order: 'asc' } },
       },
     });
 
@@ -216,6 +220,27 @@ export class InventoryService {
         },
       });
 
+      if (dto.features?.length) {
+        await tx.inventoryFeature.createMany({
+          data: dto.features.map((f, index) => ({
+            title: f.title,
+            order: f.order ?? index,
+            inventoryId: product.id,
+          })),
+        });
+      }
+
+      if (dto.specifications?.length) {
+        await tx.inventorySpecification.createMany({
+          data: dto.specifications.map((s, index) => ({
+            key: s.key,
+            value: s.value,
+            order: s.order ?? index,
+            inventoryId: product.id,
+          })),
+        });
+      }
+
       const variants: InventoryVariant[] = [];
 
       for (const v of dto.variants) {
@@ -294,6 +319,35 @@ export class InventoryService {
 
     if (dto.variants && dto.variants.length > 0) {
       await this.variantsService.syncVariants(id, dto.variants, user);
+    }
+
+    if (dto.features) {
+      await this.prisma.inventoryFeature.deleteMany({
+        where: { inventoryId: id },
+      });
+
+      await this.prisma.inventoryFeature.createMany({
+        data: dto.features.map((f, index) => ({
+          title: f.title,
+          order: f.order ?? index,
+          inventoryId: id,
+        })),
+      });
+    }
+
+    if (dto.specifications) {
+      await this.prisma.inventorySpecification.deleteMany({
+        where: { inventoryId: id },
+      });
+
+      await this.prisma.inventorySpecification.createMany({
+        data: dto.specifications.map((s, index) => ({
+          key: s.key,
+          value: s.value,
+          order: s.order ?? index,
+          inventoryId: id,
+        })),
+      });
     }
 
     return {

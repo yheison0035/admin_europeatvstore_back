@@ -7,6 +7,7 @@ const ECOMMERCE_LOCAL_ID = 3;
 export class EcommerceService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Imprime categorias
   async getCategoriesWithProducts() {
     const categories = await this.prisma.category.findMany({
       where: {
@@ -68,6 +69,7 @@ export class EcommerceService {
     };
   }
 
+  // Busqueda de productos
   async searchProducts(term: string) {
     const products = await this.prisma.inventory.findMany({
       where: {
@@ -114,6 +116,7 @@ export class EcommerceService {
     return { success: true, data };
   }
 
+  // Imprime novedades
   async getNewProducts(limit = 10) {
     const products = await this.prisma.inventory.findMany({
       where: {
@@ -159,6 +162,7 @@ export class EcommerceService {
     };
   }
 
+  // Imprime ofertas
   async getOffers(limit = 10) {
     const products = await this.prisma.inventory.findMany({
       where: {

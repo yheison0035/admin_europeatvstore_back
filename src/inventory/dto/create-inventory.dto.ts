@@ -53,4 +53,37 @@ export class CreateInventoryDto {
   @ValidateNested({ each: true })
   @Type(() => VariantDto)
   variants: VariantDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FeatureDto)
+  features?: FeatureDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SpecificationDto)
+  specifications?: SpecificationDto[];
+}
+
+class FeatureDto {
+  @IsString()
+  title: string;
+
+  @IsOptional()
+  @IsNumber()
+  order?: number;
+}
+
+class SpecificationDto {
+  @IsString()
+  key: string;
+
+  @IsString()
+  value: string;
+
+  @IsOptional()
+  @IsNumber()
+  order?: number;
 }
