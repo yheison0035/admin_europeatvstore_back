@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { EcommerceService } from './ecommerce.service';
 import { Public } from 'src/auth/decorators/public.decorator';
 
@@ -28,5 +28,11 @@ export class EcommerceController {
   @Get('ofertas')
   getOfertas() {
     return this.ecommerceService.getOffers(10);
+  }
+
+  @Public()
+  @Get('category/:slug')
+  getProductsByCategory(@Param('slug') slug: string, @Query() query: any) {
+    return this.ecommerceService.getProductsByCategory(slug, query);
   }
 }
