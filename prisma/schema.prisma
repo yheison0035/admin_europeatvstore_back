@@ -216,6 +216,7 @@ model Inventory {
   id            Int     @id @default(autoincrement())
   name          String
   description   String?
+  slug          String? @unique
   purchasePrice Float
   oldPrice      Float?
   salePrice     Float

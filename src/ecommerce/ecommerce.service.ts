@@ -229,6 +229,7 @@ export class EcommerceService {
     };
   }
 
+  // Imprime productos por categorias y filtros
   async getProductsByCategory(
     slug: string,
     filters: {
@@ -337,6 +338,57 @@ export class EcommerceService {
       success: true,
       total: data.length,
       data,
+    };
+  }
+
+  // Imprime producto por slug
+  async getProductBySlug(slug: string) {
+    const product = await this.prisma.inventory.findFirst({
+      where: {
+        slug,
+        localId: ECOMMERCE_LOCAL_ID,
+        status: 'ACTIVO',
+      },
+      include: {
+        images: { orderBy: { position: 'asc' } },
+        variants: true,
+        features: { orderBy: { order: 'asc' } },
+        specifications: { orderBy: { order: 'asc' } },
+      },
+    });
+
+    if (!product) {
+      return { success: false, data: null };
+    }
+
+    const colors = product.variants.map((v) => ({
+      name: v.color,
+      stock: v.stock,
+    }));
+
+    const oldPrice =
+      product.oldPrice && product.oldPrice > product.salePrice
+        ? product.oldPrice
+        : null;
+
+    const discount = oldPrice
+      ? Math.round(((oldPrice - product.salePrice) / oldPrice) * 100)
+      : 0;
+
+    return {
+      success: true,
+      data: {
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.salePrice,
+        oldPrice,
+        discount,
+        images: product.images.map((i) => i.url),
+        colors,
+        features: product.features,
+        specifications: product.specifications,
+      },
     };
   }
 }

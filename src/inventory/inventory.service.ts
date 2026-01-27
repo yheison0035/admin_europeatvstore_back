@@ -13,6 +13,7 @@ import { generateSku } from 'utils/sku.util';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { VariantsService } from './variants/variants.service';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { generateSlug } from 'src/utils/slug.util';
 
 @Injectable()
 export class InventoryService {
@@ -196,10 +197,24 @@ export class InventoryService {
       );
     }
 
+    const baseSlug = generateSlug(dto.name);
+    let slug = baseSlug;
+    let counter = 1;
+
+    // Asegurar unicidad
+    while (
+      await this.prisma.inventory.findFirst({
+        where: { slug },
+      })
+    ) {
+      slug = `${baseSlug}-${counter++}`;
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.inventory.create({
         data: {
           name: dto.name,
+          slug,
           description: dto.description,
           purchasePrice: dto.purchasePrice,
           oldPrice: dto.oldPrice,

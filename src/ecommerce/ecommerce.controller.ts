@@ -35,4 +35,10 @@ export class EcommerceController {
   getProductsByCategory(@Param('slug') slug: string, @Query() query: any) {
     return this.ecommerceService.getProductsByCategory(slug, query);
   }
+
+  @Public()
+  @Get('product/:slug')
+  getProduct(@Param('slug') slug: string) {
+    return this.ecommerceService.getProductBySlug(slug);
+  }
 }
