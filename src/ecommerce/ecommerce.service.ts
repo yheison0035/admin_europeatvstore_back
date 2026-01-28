@@ -160,6 +160,7 @@ export class EcommerceService {
         images: { orderBy: { position: 'asc' } },
         variants: true,
         brand: true,
+        category: true,
       },
     });
 
@@ -185,6 +186,7 @@ export class EcommerceService {
           discount,
           stock,
           brand: product.brand?.name ?? null,
+          category: product.category?.name ?? null,
           image: product.images[0]?.url ?? null,
         };
       }),
@@ -207,6 +209,7 @@ export class EcommerceService {
       include: {
         images: { orderBy: { position: 'asc' } },
         variants: true,
+        category: true,
       },
     });
 
@@ -223,6 +226,7 @@ export class EcommerceService {
           price: product.salePrice,
           oldPrice: product.oldPrice,
           discount,
+          category: product.category?.name ?? null,
           image: product.images[0]?.url ?? null,
         };
       }),
