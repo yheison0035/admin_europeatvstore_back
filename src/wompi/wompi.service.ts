@@ -31,4 +31,21 @@ export class WompiService {
 
     return { signature };
   }
+
+  async getTransaction(transactionId: string) {
+    const response = await fetch(
+      `https://sandbox.wompi.co/v1/transactions/${transactionId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.WOMPI_PRIVATE_KEY}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error('Error consultando transacción en Wompi');
+    }
+
+    return response.json();
+  }
 }
