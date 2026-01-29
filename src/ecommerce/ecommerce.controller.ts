@@ -61,4 +61,10 @@ export class EcommerceController {
       limit ? Number(limit) : 8,
     );
   }
+
+  @Public()
+  @Get('sitemap/products')
+  getProductsForSitemap() {
+    return this.ecommerceService.getProductsForSitemap();
+  }
 }

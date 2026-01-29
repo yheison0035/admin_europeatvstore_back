@@ -565,4 +565,33 @@ export class EcommerceService {
       data,
     };
   }
+
+  async getProductsForSitemap() {
+    const products = await this.prisma.inventory.findMany({
+      where: {
+        status: 'ACTIVO',
+        localId: ECOMMERCE_LOCAL_ID,
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+      select: {
+        slug: true,
+        updatedAt: true,
+        category: {
+          select: { name: true },
+        },
+      },
+    });
+
+    return products.map((p) => ({
+      slug: p.slug,
+      category: p.category?.name
+        ?.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, '-'),
+      updatedAt: p.updatedAt,
+    }));
+  }
 }
