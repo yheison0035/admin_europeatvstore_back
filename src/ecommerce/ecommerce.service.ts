@@ -287,7 +287,7 @@ export class EcommerceService {
       },
     };
 
-    /** MODO CATEGORY */
+    /** CATEGORY */
     if (mode === 'category' && categorySlug) {
       where.category = {
         name: {
@@ -297,14 +297,14 @@ export class EcommerceService {
       };
     }
 
-    /** MODO NOVEDADES */
+    /** NOVEDADES */
     if (mode === 'new') {
       where.createdAt = {
-        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // últimos 30 días
+        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
       };
     }
 
-    /** MODO OFERTAS */
+    /** OFERTAS */
     if (mode === 'offers') {
       where.oldPrice = { not: null };
       where.salePrice = { lt: this.prisma.inventory.fields.oldPrice };
@@ -343,13 +343,32 @@ export class EcommerceService {
       orderBy,
     });
 
+    /** ====== FILTROS DINÁMICOS ====== */
+    const colorMap = new Map<string, number>();
+    const brandMap = new Map<string, number>();
+    let minPriceFound = Infinity;
+    let maxPriceFound = 0;
+
     const data = products.map((product) => {
+      product.variants.forEach((v) => {
+        if (v.stock > 0) {
+          colorMap.set(v.color, (colorMap.get(v.color) || 0) + v.stock);
+        }
+      });
+
+      if (product.brand?.name) {
+        brandMap.set(
+          product.brand.name,
+          (brandMap.get(product.brand.name) || 0) + 1,
+        );
+      }
+
+      minPriceFound = Math.min(minPriceFound, product.salePrice);
+      maxPriceFound = Math.max(maxPriceFound, product.salePrice);
+
       const colors = product.variants
         .filter((v) => v.stock > 0)
-        .map((v) => ({
-          name: v.color,
-          stock: v.stock,
-        }));
+        .map((v) => ({ name: v.color, stock: v.stock }));
 
       const stock = colors.reduce((s, c) => s + c.stock, 0);
 
@@ -377,10 +396,34 @@ export class EcommerceService {
       };
     });
 
+    const filters = {
+      colors: Array.from(colorMap.entries()).map(([name, count]) => ({
+        label: name.charAt(0).toUpperCase() + name.slice(1),
+        value: name.toLowerCase(),
+        count,
+      })),
+      brands: Array.from(brandMap.entries()).map(([name, count]) => ({
+        label: name,
+        value: name.toLowerCase(),
+        count,
+      })),
+      price: {
+        min: isFinite(minPriceFound) ? minPriceFound : 0,
+        max: maxPriceFound,
+      },
+      sort: [
+        { label: 'Precio: menor a mayor', value: 'price_asc' },
+        { label: 'Precio: mayor a menor', value: 'price_desc' },
+        { label: 'A - Z', value: 'name_asc' },
+        { label: 'Z - A', value: 'name_desc' },
+      ],
+    };
+
     return {
       success: true,
       total: data.length,
       data,
+      filters,
     };
   }
 
