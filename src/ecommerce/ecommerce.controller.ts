@@ -31,14 +31,34 @@ export class EcommerceController {
   }
 
   @Public()
-  @Get('category/:slug')
-  getProductsByCategory(@Param('slug') slug: string, @Query() query: any) {
-    return this.ecommerceService.getProductsByCategory(slug, query);
+  @Get('catalog')
+  getCatalog(@Query() query: any) {
+    return this.ecommerceService.getProductsCatalog({
+      categorySlug: query.category,
+      mode: query.mode,
+      colors: query.colors,
+      brands: query.brands,
+      minPrice: query.minPrice,
+      maxPrice: query.maxPrice,
+      sort: query.sort,
+    });
   }
 
   @Public()
   @Get('product/:slug')
   getProduct(@Param('slug') slug: string) {
     return this.ecommerceService.getProductBySlug(slug);
+  }
+
+  @Public()
+  @Get('product/:slug/related')
+  getRelatedProducts(
+    @Param('slug') slug: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.ecommerceService.getRelatedProducts(
+      slug,
+      limit ? Number(limit) : 8,
+    );
   }
 }

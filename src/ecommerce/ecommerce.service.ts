@@ -54,6 +54,7 @@ export class EcommerceService {
         return {
           id: product.id,
           name: product.name,
+          slug: product.slug,
           description: product.description,
           price: product.salePrice,
           oldPrice,
@@ -126,6 +127,7 @@ export class EcommerceService {
       return {
         id: product.id,
         name: product.name,
+        slug: product.slug,
         description: product.description,
         price: product.salePrice,
         oldPrice,
@@ -181,6 +183,7 @@ export class EcommerceService {
         return {
           id: product.id,
           name: product.name,
+          slug: product.slug,
           price: product.salePrice,
           oldPrice,
           discount,
@@ -223,6 +226,7 @@ export class EcommerceService {
         return {
           id: product.id,
           name: product.name,
+          slug: product.slug,
           price: product.salePrice,
           oldPrice: product.oldPrice,
           discount,
@@ -233,18 +237,25 @@ export class EcommerceService {
     };
   }
 
-  // Imprime productos por categorias y filtros
-  async getProductsByCategory(
-    slug: string,
-    filters: {
-      colors?: string;
-      brands?: string;
-      minPrice?: string;
-      maxPrice?: string;
-      sort?: string;
-    },
-  ) {
-    const { colors, brands, minPrice, maxPrice, sort } = filters;
+  // Imprime productos por (categorias-novedades-filtros) y filtros
+  async getProductsCatalog(options: {
+    categorySlug?: string;
+    mode?: 'category' | 'new' | 'offers';
+    colors?: string;
+    brands?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    sort?: string;
+  }) {
+    const {
+      categorySlug,
+      mode = 'category',
+      colors,
+      brands,
+      minPrice,
+      maxPrice,
+      sort,
+    } = options;
 
     let orderBy: any = { createdAt: 'desc' };
 
@@ -266,44 +277,68 @@ export class EcommerceService {
         break;
     }
 
-    const products = await this.prisma.inventory.findMany({
-      where: {
-        localId: ECOMMERCE_LOCAL_ID,
-        status: 'ACTIVO',
-        category: {
-          name: {
-            equals: slug.replace('-', ' '),
+    /** WHERE BASE */
+    const where: any = {
+      localId: ECOMMERCE_LOCAL_ID,
+      status: 'ACTIVO',
+      salePrice: {
+        gte: minPrice ? Number(minPrice) : undefined,
+        lte: maxPrice ? Number(maxPrice) : undefined,
+      },
+    };
+
+    /** MODO CATEGORY */
+    if (mode === 'category' && categorySlug) {
+      where.category = {
+        name: {
+          equals: categorySlug.replace('-', ' '),
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    /** MODO NOVEDADES */
+    if (mode === 'new') {
+      where.createdAt = {
+        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // últimos 30 días
+      };
+    }
+
+    /** MODO OFERTAS */
+    if (mode === 'offers') {
+      where.oldPrice = { not: null };
+      where.salePrice = { lt: this.prisma.inventory.fields.oldPrice };
+    }
+
+    /** FILTROS */
+    if (brands) {
+      where.brand = {
+        name: {
+          in: brands.split(','),
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    if (colors) {
+      where.variants = {
+        some: {
+          color: {
+            in: colors.split(','),
             mode: 'insensitive',
           },
+          stock: { gt: 0 },
         },
-        salePrice: {
-          gte: minPrice ? Number(minPrice) : undefined,
-          lte: maxPrice ? Number(maxPrice) : undefined,
-        },
-        brand: brands
-          ? {
-              name: {
-                in: brands.split(','),
-                mode: 'insensitive',
-              },
-            }
-          : undefined,
-        variants: colors
-          ? {
-              some: {
-                color: {
-                  in: colors.split(','),
-                  mode: 'insensitive',
-                },
-                stock: { gt: 0 },
-              },
-            }
-          : undefined,
-      },
+      };
+    }
+
+    const products = await this.prisma.inventory.findMany({
+      where,
       include: {
         images: { orderBy: { position: 'asc' } },
         variants: true,
         brand: true,
+        category: true,
       },
       orderBy,
     });
@@ -315,6 +350,8 @@ export class EcommerceService {
           name: v.color,
           stock: v.stock,
         }));
+
+      const stock = colors.reduce((s, c) => s + c.stock, 0);
 
       const oldPrice =
         product.oldPrice && product.oldPrice > product.salePrice
@@ -328,12 +365,14 @@ export class EcommerceService {
       return {
         id: product.id,
         name: product.name,
-        description: product.description,
+        slug: product.slug,
         price: product.salePrice,
         oldPrice,
         discount,
+        stock,
         colors,
         brand: product.brand?.name ?? null,
+        category: product.category?.name ?? null,
         image: product.images[0]?.url ?? null,
       };
     });
@@ -384,6 +423,7 @@ export class EcommerceService {
       data: {
         id: product.id,
         name: product.name,
+        slug: product.slug,
         description: product.description,
         price: product.salePrice,
         oldPrice,
@@ -393,6 +433,93 @@ export class EcommerceService {
         features: product.features,
         specifications: product.specifications,
       },
+    };
+  }
+
+  // Productos relacionados
+  async getRelatedProducts(slug: string, limit = 8) {
+    // 1. Producto base
+    const baseProduct = await this.prisma.inventory.findFirst({
+      where: {
+        slug,
+        localId: ECOMMERCE_LOCAL_ID,
+        status: 'ACTIVO',
+      },
+      select: {
+        id: true,
+        categoryId: true,
+        brandId: true,
+      },
+    });
+
+    if (!baseProduct) {
+      return { success: false, data: [] };
+    }
+
+    const orConditions: any[] = [];
+
+    if (baseProduct.categoryId) {
+      orConditions.push({ categoryId: baseProduct.categoryId });
+    }
+
+    if (baseProduct.brandId) {
+      orConditions.push({ brandId: baseProduct.brandId });
+    }
+
+    if (orConditions.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // 3. Query relacionados
+    const products = await this.prisma.inventory.findMany({
+      where: {
+        localId: ECOMMERCE_LOCAL_ID,
+        status: 'ACTIVO',
+        id: { not: baseProduct.id },
+        OR: orConditions,
+      },
+      include: {
+        images: { orderBy: { position: 'asc' } },
+        variants: true,
+        brand: true,
+        category: true,
+      },
+      take: limit,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // 4. Formatear respuesta
+    const data = products.map((product) => {
+      const stock = product.variants.reduce((sum, v) => sum + v.stock, 0);
+
+      const oldPrice =
+        product.oldPrice && product.oldPrice > product.salePrice
+          ? product.oldPrice
+          : null;
+
+      const discount = oldPrice
+        ? Math.round(((oldPrice - product.salePrice) / oldPrice) * 100)
+        : 0;
+
+      return {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        price: product.salePrice,
+        oldPrice,
+        discount,
+        stock,
+        brand: product.brand?.name ?? null,
+        category: product.category?.name ?? null,
+        image: product.images[0]?.url ?? null,
+      };
+    });
+
+    return {
+      success: true,
+      data,
     };
   }
 }
