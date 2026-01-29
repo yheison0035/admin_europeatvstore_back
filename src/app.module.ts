@@ -15,6 +15,7 @@ import { PrismaModule } from './prisma.module';
 import { VariantsModule } from './inventory/variants/variants.module';
 import { EnumsModule } from './enums/enums.module';
 import { EcommerceModule } from './ecommerce/ecommerce.module';
+import { WompiModule } from './wompi/wompi.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { EcommerceModule } from './ecommerce/ecommerce.module';
     VariantsModule,
     EnumsModule,
     EcommerceModule,
+    WompiModule,
   ],
 })
 export class AppModule {}

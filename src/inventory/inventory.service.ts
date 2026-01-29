@@ -45,7 +45,9 @@ export class InventoryService {
     const products = await this.prisma.inventory.findMany({
       where,
       include: {
-        variants: true,
+        variants: {
+          where: { isActive: true },
+        },
       },
       take: 10,
     });
@@ -73,15 +75,11 @@ export class InventoryService {
 
     const where: any = {};
 
-    // Roles globales → sin filtro
     if (localIds === null) {
-    }
-    // Sin locales accesibles → no devuelve nada
-    else if (localIds.length === 0) {
+      // acceso global
+    } else if (localIds.length === 0) {
       where.localId = -1;
-    }
-    // Filtrar por locales permitidos
-    else {
+    } else {
       where.localId = { in: localIds };
     }
 
@@ -91,7 +89,14 @@ export class InventoryService {
         createdBy: { select: { id: true, name: true, email: true } },
         updatedBy: { select: { id: true, name: true, email: true } },
         images: { orderBy: { position: 'asc' } },
-        variants: true,
+
+        variants: {
+          where: {
+            isActive: true,
+            stock: { gt: 0 },
+          },
+        },
+
         brand: true,
         category: true,
         provider: true,
@@ -99,7 +104,9 @@ export class InventoryService {
         features: { orderBy: { order: 'asc' } },
         specifications: { orderBy: { order: 'asc' } },
       },
-      orderBy: { name: 'asc' },
+      orderBy: {
+        updatedAt: 'desc',
+      },
     });
 
     const canSeePurchasePrice = hasRole(user.role, [
@@ -134,7 +141,12 @@ export class InventoryService {
         createdBy: { select: { id: true, name: true, email: true } },
         updatedBy: { select: { id: true, name: true, email: true } },
         images: { orderBy: { position: 'asc' } },
-        variants: true,
+        variants: {
+          where: {
+            isActive: true,
+            stock: { gt: 0 },
+          },
+        },
         brand: true,
         category: true,
         provider: true,
@@ -159,7 +171,9 @@ export class InventoryService {
       );
     }
 
-    const stock = product.variants.reduce((sum, v) => sum + v.stock, 0);
+    const stock = product.variants
+      .filter((v) => v.isActive)
+      .reduce((sum, v) => sum + v.stock, 0);
 
     const canSeePurchasePrice = hasRole(user.role, [
       Role.SUPER_ADMIN,

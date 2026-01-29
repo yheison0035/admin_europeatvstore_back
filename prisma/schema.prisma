@@ -252,6 +252,9 @@ model InventoryVariant {
   color       String
   stock       Int    @default(0)
   sku         String @unique
+
+  isActive    Boolean  @default(true)
+  
   inventoryId Int
 
   inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
