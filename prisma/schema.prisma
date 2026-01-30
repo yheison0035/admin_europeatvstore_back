@@ -76,6 +76,20 @@ enum ExpenseType {
   OTROS
 }
 
+enum OrderSource {
+  CRM
+  ECOMMERCE
+}
+
+enum ShippingStatus {
+  PENDIENTE
+  ASIGNADO_TRANSPORTADORA
+  EN_CAMINO
+  ENTREGADO
+  DEVUELTO
+  FALLIDO
+}
+
 //////////////////////////////////////////////////
 // MODELOS
 //////////////////////////////////////////////////
@@ -335,15 +349,29 @@ model Sale {
   saleDate      DateTime      @default(now())
   notes         String?
 
+  source        OrderSource   @default(CRM)
+  ecommerceCustomerId Int?
+
+  shippingStatus ShippingStatus @default(PENDIENTE)
+
+  wompiTransactionId String?
+  wompiReference     String?
+  wompiStatus        String?
+  wompiPayload       Json?
+
   customerId Int
   localId    Int
   userId     Int
 
   customer Customer @relation("CustomerSales", fields: [customerId], references: [id])
+  ecommerceCustomer EcommerceCustomer? @relation("EcommerceOrders", fields: [ecommerceCustomerId], references: [id])
+
   local    Local    @relation("LocalSales", fields: [localId], references: [id])
   user     User     @relation("UserSales", fields: [userId], references: [id])
 
   items SaleItem[] @relation("SaleItems")
+
+  shipment Shipment?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -367,4 +395,59 @@ model SaleItem {
   variant InventoryVariant @relation(fields: [inventoryVariantId], references: [id])
 
   createdAt DateTime @default(now())
+}
+
+//////////////////////////////////////////////////
+// ECOMMERCE
+//////////////////////////////////////////////////
+
+model EcommerceCustomer {
+  id Int @id @default(autoincrement())
+
+  email String @unique
+  firstName String
+  lastName String
+  phone String
+
+  documentNumber String?
+
+  department String
+  city String
+  address String
+  addressDetail String?
+  neighborhood String?
+
+  billingSameAsShipping Boolean @default(true)
+  billingFirstName String?
+  billingLastName String?
+  billingPhone String?
+  billingAddress String?
+
+  isHardToAccess Boolean @default(false)
+
+  localId Int @default(3)
+
+  orders Sale[] @relation("EcommerceOrders")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Shipment {
+  id Int @id @default(autoincrement())
+
+  saleId Int @unique
+  status ShippingStatus @default(PENDIENTE)
+
+  carrier String?
+  trackingNumber String?
+
+  shippedAt DateTime?
+  deliveredAt DateTime?
+  notes String?
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

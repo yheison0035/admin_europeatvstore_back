@@ -1,6 +1,7 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { EcommerceService } from './ecommerce.service';
 import { Public } from 'src/auth/decorators/public.decorator';
+import { CreateEcommerceOrderDto } from './dto/create-ecommerce-order.dto';
 
 @Controller('ecommerce')
 export class EcommerceController {
@@ -66,5 +67,11 @@ export class EcommerceController {
   @Get('sitemap/products')
   getProductsForSitemap() {
     return this.ecommerceService.getProductsForSitemap();
+  }
+
+  @Post('checkout')
+  @Public()
+  createOrder(@Body() dto: CreateEcommerceOrderDto) {
+    return this.ecommerceService.createOrder(dto);
   }
 }

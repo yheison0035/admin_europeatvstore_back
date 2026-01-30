@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
+import { CreateEcommerceOrderDto } from './dto/create-ecommerce-order.dto';
+import { PaymentMethod } from '@prisma/client';
 
 const ECOMMERCE_LOCAL_ID = 3;
-
+const CONSUMIDOR_FINAL_ID = 1;
 @Injectable()
 export class EcommerceService {
   constructor(private readonly prisma: PrismaService) {}
@@ -593,5 +595,126 @@ export class EcommerceService {
         .replace(/\s+/g, '-'),
       updatedAt: p.updatedAt,
     }));
+  }
+
+  /* CHECKOUT ECOMMERCE */
+
+  async createOrder(dto: CreateEcommerceOrderDto) {
+    return this.prisma.$transaction(async (tx) => {
+      /**  CLIENTE ECOMMERCE */
+      let ecommerceCustomer = await tx.ecommerceCustomer.findUnique({
+        where: { email: dto.customer.email },
+      });
+
+      if (!ecommerceCustomer) {
+        ecommerceCustomer = await tx.ecommerceCustomer.create({
+          data: {
+            email: dto.customer.email,
+            firstName: dto.customer.firstName,
+            lastName: dto.customer.lastName,
+            phone: dto.customer.phone,
+            documentNumber: dto.customer.documentNumber,
+            department: dto.customer.department,
+            city: dto.customer.city,
+            address: dto.customer.address,
+            addressDetail: dto.customer.addressDetail,
+            neighborhood: dto.customer.neighborhood,
+            billingSameAsShipping: dto.customer.billingSameAsShipping,
+            billingFirstName: dto.customer.billingFirstName,
+            billingLastName: dto.customer.billingLastName,
+            billingPhone: dto.customer.billingPhone,
+            billingAddress: dto.customer.billingAddress,
+            isHardToAccess: dto.customer.isHardToAccess ?? false,
+            localId: 3,
+          },
+        });
+      }
+
+      /** =========================
+     * VALIDAR ITEMS + STOCK
+     ========================== */
+      let total = 0;
+      const itemsData: any[] = [];
+
+      for (const item of dto.items) {
+        const variant = await tx.inventoryVariant.findUnique({
+          where: { id: item.inventoryVariantId },
+          include: { inventory: true },
+        });
+
+        if (!variant) {
+          throw new Error(`Variante ${item.inventoryVariantId} no encontrada`);
+        }
+
+        if (variant.stock < item.quantity) {
+          throw new Error(
+            `Stock insuficiente para ${variant.inventory.name} (${variant.color})`,
+          );
+        }
+
+        const price = variant.inventory.salePrice;
+        const subtotal = price * item.quantity;
+        total += subtotal;
+
+        // Descontar stock
+        await tx.inventoryVariant.update({
+          where: { id: variant.id },
+          data: { stock: { decrement: item.quantity } },
+        });
+
+        itemsData.push({
+          inventoryVariantId: variant.id,
+          quantity: item.quantity,
+          price,
+          subtotal,
+        });
+      }
+
+      /** CREAR VENTA (SALE) */
+      const sale = await tx.sale.create({
+        data: {
+          code: `ETS-${Date.now()}`,
+          totalAmount: total,
+
+          paymentMethod: dto.paymentMethod,
+          paymentStatus:
+            dto.paymentMethod === 'TRANSFERENCIA'
+              ? 'EN_VALIDACION'
+              : 'PENDIENTE',
+
+          saleStatus: 'NUEVA',
+          source: 'ECOMMERCE',
+
+          customerId: CONSUMIDOR_FINAL_ID,
+          ecommerceCustomerId: ecommerceCustomer.id,
+
+          localId: ECOMMERCE_LOCAL_ID,
+          userId: 3, // usuario sistema
+
+          wompiTransactionId: dto.wompiTransactionId ?? null,
+          wompiReference: dto.wompiReference ?? null,
+          wompiPayload: dto.wompiPayload ?? null,
+
+          items: {
+            create: itemsData,
+          },
+        },
+      });
+
+      /** CREAR ENVÍO */
+      await tx.shipment.create({
+        data: {
+          saleId: sale.id,
+          status: 'PENDIENTE',
+        },
+      });
+
+      return {
+        success: true,
+        orderCode: sale.code,
+        saleId: sale.id,
+        paymentMethod: dto.paymentMethod,
+      };
+    });
   }
 }
