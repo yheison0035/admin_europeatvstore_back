@@ -235,6 +235,7 @@ model Inventory {
   oldPrice      Float?
   salePrice     Float
   status        Status  @default(ACTIVO)
+  barcode       String? @unique
 
   localId    Int?
   providerId Int?

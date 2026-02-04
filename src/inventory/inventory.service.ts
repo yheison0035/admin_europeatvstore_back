@@ -28,10 +28,17 @@ export class InventoryService {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {
-      name: {
-        contains: term,
-        mode: 'insensitive',
-      },
+      OR: [
+        {
+          name: {
+            contains: term,
+            mode: 'insensitive',
+          },
+        },
+        {
+          barcode: term,
+        },
+      ],
     };
 
     if (localIds !== null) {
@@ -224,12 +231,23 @@ export class InventoryService {
       slug = `${baseSlug}-${counter++}`;
     }
 
+    if (dto.barcode) {
+      const exists = await this.prisma.inventory.findUnique({
+        where: { barcode: dto.barcode },
+      });
+
+      if (exists) {
+        throw new BadRequestException('Este código de barras ya existe');
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.inventory.create({
         data: {
           name: dto.name,
           slug,
           description: dto.description,
+          barcode: dto.barcode ?? null,
           purchasePrice: dto.purchasePrice,
           oldPrice: dto.oldPrice,
           salePrice: dto.salePrice,
@@ -314,6 +332,7 @@ export class InventoryService {
 
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined) data.description = dto.description;
+    if (dto.barcode !== undefined) data.barcode = dto.barcode;
     if (dto.purchasePrice !== undefined) data.purchasePrice = dto.purchasePrice;
     if (dto.oldPrice !== undefined) data.oldPrice = dto.oldPrice;
     if (dto.salePrice !== undefined) data.salePrice = dto.salePrice;
@@ -332,6 +351,19 @@ export class InventoryService {
       throw new ForbiddenException(
         'No puedes crear o modificar productos en un local que no administras',
       );
+    }
+
+    if (dto.barcode) {
+      const exists = await this.prisma.inventory.findFirst({
+        where: {
+          barcode: dto.barcode,
+          NOT: { id },
+        },
+      });
+
+      if (exists) {
+        throw new BadRequestException('Este código de barras ya existe');
+      }
     }
 
     const updatedProduct = await this.prisma.inventory.update({

@@ -30,6 +30,10 @@ export class UpdateInventoryDto {
 
   @IsOptional()
   @IsString()
+  barcode?: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
 
   @IsOptional()

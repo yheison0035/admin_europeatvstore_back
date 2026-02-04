@@ -22,6 +22,10 @@ export class CreateInventoryDto {
 
   @IsOptional()
   @IsString()
+  barcode?: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
 
   @IsNumber()

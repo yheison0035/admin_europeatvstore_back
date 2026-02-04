@@ -47,7 +47,6 @@ export class VariantsService {
         where: { id: variant.id },
         data: {
           isActive: false,
-          stock: 0,
         },
       });
     }
@@ -67,7 +66,6 @@ export class VariantsService {
         where: { id: v.id },
         data: {
           color: v.color,
-          stock: v.stock,
           sku,
           isActive: true,
         },
