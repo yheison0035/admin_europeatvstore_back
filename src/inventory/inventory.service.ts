@@ -29,15 +29,8 @@ export class InventoryService {
 
     const where: any = {
       OR: [
-        {
-          name: {
-            contains: term,
-            mode: 'insensitive',
-          },
-        },
-        {
-          barcode: term,
-        },
+        { name: { contains: term, mode: 'insensitive' } },
+        { barcode: term },
       ],
     };
 
@@ -45,7 +38,6 @@ export class InventoryService {
       if (localIds.length === 0) {
         return { success: true, data: [] };
       }
-
       where.localId = { in: localIds };
     }
 
@@ -71,15 +63,11 @@ export class InventoryService {
       })),
     );
 
-    return {
-      success: true,
-      data: result,
-    };
+    return { success: true, data: result };
   }
 
   async findAll(user: any) {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
-
     const where: any = {};
 
     if (localIds === null) {
@@ -93,17 +81,12 @@ export class InventoryService {
     const products = await this.prisma.inventory.findMany({
       where,
       include: {
-        createdBy: { select: { id: true, name: true, email: true } },
-        updatedBy: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true } },
+        updatedBy: { select: { id: true, name: true } },
         images: { orderBy: { position: 'asc' } },
-
         variants: {
-          where: {
-            isActive: true,
-            stock: { gt: 0 },
-          },
+          where: { isActive: true },
         },
-
         brand: true,
         category: true,
         provider: true,
@@ -111,9 +94,7 @@ export class InventoryService {
         features: { orderBy: { order: 'asc' } },
         specifications: { orderBy: { order: 'asc' } },
       },
-      orderBy: {
-        updatedAt: 'desc',
-      },
+      orderBy: { updatedAt: 'desc' },
     });
 
     const canSeePurchasePrice = hasRole(user.role, [
@@ -145,15 +126,10 @@ export class InventoryService {
     const product = await this.prisma.inventory.findUnique({
       where: { id },
       include: {
-        createdBy: { select: { id: true, name: true, email: true } },
-        updatedBy: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true } },
+        updatedBy: { select: { id: true, name: true } },
         images: { orderBy: { position: 'asc' } },
-        variants: {
-          where: {
-            isActive: true,
-            stock: { gt: 0 },
-          },
-        },
+        variants: { where: { isActive: true } },
         brand: true,
         category: true,
         provider: true,
@@ -164,23 +140,18 @@ export class InventoryService {
     });
 
     if (!product) {
-      throw new NotFoundException(`Producto con ID ${id} no encontrado`);
+      throw new NotFoundException('Producto no encontrado');
     }
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
-
     if (
       localIds !== null &&
-      (!product.localId || !localIds.includes(product.localId))
+      (product.localId === null || !localIds.includes(product.localId))
     ) {
-      throw new ForbiddenException(
-        'No tienes permiso para ver productos de otro local',
-      );
+      throw new ForbiddenException('Acceso denegado');
     }
 
-    const stock = product.variants
-      .filter((v) => v.isActive)
-      .reduce((sum, v) => sum + v.stock, 0);
+    const stock = product.variants.reduce((sum, v) => sum + v.stock, 0);
 
     const canSeePurchasePrice = hasRole(user.role, [
       Role.SUPER_ADMIN,
@@ -191,49 +162,36 @@ export class InventoryService {
 
     if (!canSeePurchasePrice) {
       const { purchasePrice, ...rest } = product;
-      return {
-        success: true,
-        message: 'Producto obtenido correctamente',
-        data: { ...rest, stock },
-      };
+      return { success: true, data: { ...rest, stock } };
     }
 
-    return {
-      success: true,
-      message: 'Producto obtenido correctamente',
-      data: { ...product, stock },
-    };
+    return { success: true, data: { ...product, stock } };
   }
 
   async create(dto: CreateInventoryDto, user: any) {
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
-      throw new ForbiddenException('No tienes permisos');
+      throw new ForbiddenException('No autorizado');
     }
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
-
     if (dto.localId && localIds !== null && !localIds.includes(dto.localId)) {
-      throw new ForbiddenException(
-        'No puedes crear o modificar productos en un local que no administras',
-      );
+      throw new ForbiddenException('Local no permitido');
     }
 
     const baseSlug = generateSlug(dto.name);
     let slug = baseSlug;
     let counter = 1;
 
-    // Asegurar unicidad
-    while (
-      await this.prisma.inventory.findFirst({
-        where: { slug },
-      })
-    ) {
+    while (await this.prisma.inventory.findFirst({ where: { slug } })) {
       slug = `${baseSlug}-${counter++}`;
     }
 
-    if (dto.barcode) {
+    const barcode =
+      dto.barcode && dto.barcode.trim() !== '' ? dto.barcode.trim() : null;
+
+    if (barcode) {
       const exists = await this.prisma.inventory.findUnique({
-        where: { barcode: dto.barcode },
+        where: { barcode },
       });
 
       if (exists) {
@@ -247,12 +205,11 @@ export class InventoryService {
           name: dto.name,
           slug,
           description: dto.description,
-          barcode: dto.barcode ?? null,
+          barcode,
           purchasePrice: dto.purchasePrice,
           oldPrice: dto.oldPrice,
           salePrice: dto.salePrice,
           status: dto.status,
-
           ...(dto.brandId && { brand: { connect: { id: dto.brandId } } }),
           ...(dto.categoryId && {
             category: { connect: { id: dto.categoryId } },
@@ -261,49 +218,28 @@ export class InventoryService {
             provider: { connect: { id: dto.providerId } },
           }),
           ...(dto.localId && { local: { connect: { id: dto.localId } } }),
-
           createdBy: { connect: { id: user.id } },
           updatedBy: { connect: { id: user.id } },
         },
       });
 
-      if (dto.features?.length) {
-        await tx.inventoryFeature.createMany({
-          data: dto.features.map((f, index) => ({
-            title: f.title,
-            order: f.order ?? index,
-            inventoryId: product.id,
-          })),
-        });
-      }
-
-      if (dto.specifications?.length) {
-        await tx.inventorySpecification.createMany({
-          data: dto.specifications.map((s, index) => ({
-            key: s.key,
-            value: s.value,
-            order: s.order ?? index,
-            inventoryId: product.id,
-          })),
-        });
-      }
-
+      // Variantes → SOLO creación inicial
       const variants: InventoryVariant[] = [];
 
-      for (const v of dto.variants) {
-        const variant = await tx.inventoryVariant.create({
+      for (const v of dto.variants ?? []) {
+        const created = await tx.inventoryVariant.create({
           data: {
+            inventoryId: product.id,
             color: v.color,
             stock: v.stock,
-            inventoryId: product.id,
             sku: 'PENDING',
           },
         });
 
-        const sku = generateSku(dto.name, variant.sequence, variant.color);
+        const sku = generateSku(dto.name, created.sequence, created.color);
 
         const updated = await tx.inventoryVariant.update({
-          where: { id: variant.id },
+          where: { id: created.id },
           data: { sku },
         });
 
@@ -313,50 +249,25 @@ export class InventoryService {
       return {
         success: true,
         message: 'Producto creado correctamente',
-        data: {
-          ...product,
-          variants,
-        },
+        data: { ...product, variants },
       };
     });
   }
 
   async update(id: number, dto: UpdateInventoryDto, user: any) {
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
-      throw new ForbiddenException('No tienes permisos');
+      throw new ForbiddenException('No autorizado');
     }
 
     await this.findOne(id, user);
 
-    const data: any = {};
+    const barcode =
+      dto.barcode && dto.barcode.trim() !== '' ? dto.barcode.trim() : null;
 
-    if (dto.name !== undefined) data.name = dto.name;
-    if (dto.description !== undefined) data.description = dto.description;
-    if (dto.barcode !== undefined) data.barcode = dto.barcode;
-    if (dto.purchasePrice !== undefined) data.purchasePrice = dto.purchasePrice;
-    if (dto.oldPrice !== undefined) data.oldPrice = dto.oldPrice;
-    if (dto.salePrice !== undefined) data.salePrice = dto.salePrice;
-    if (dto.status !== undefined) data.status = dto.status;
-
-    if (dto.brandId) data.brand = { connect: { id: dto.brandId } };
-    if (dto.categoryId) data.category = { connect: { id: dto.categoryId } };
-    if (dto.providerId) data.provider = { connect: { id: dto.providerId } };
-    if (dto.localId) data.local = { connect: { id: dto.localId } };
-
-    data.updatedBy = { connect: { id: user.id } };
-
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-    if (dto.localId && localIds !== null && !localIds.includes(dto.localId)) {
-      throw new ForbiddenException(
-        'No puedes crear o modificar productos en un local que no administras',
-      );
-    }
-
-    if (dto.barcode) {
+    if (barcode) {
       const exists = await this.prisma.inventory.findFirst({
         where: {
-          barcode: dto.barcode,
+          barcode,
           NOT: { id },
         },
       });
@@ -368,47 +279,20 @@ export class InventoryService {
 
     const updatedProduct = await this.prisma.inventory.update({
       where: { id },
-      data,
-      include: {
-        variants: true,
-        brand: true,
-        category: true,
-        provider: true,
-        local: true,
+      data: {
+        name: dto.name,
+        description: dto.description,
+        barcode,
+        purchasePrice: dto.purchasePrice,
+        oldPrice: dto.oldPrice,
+        salePrice: dto.salePrice,
+        status: dto.status,
+        updatedBy: { connect: { id: user.id } },
       },
     });
 
     if (dto.variants && dto.variants.length > 0) {
       await this.variantsService.syncVariants(id, dto.variants, user);
-    }
-
-    if (dto.features) {
-      await this.prisma.inventoryFeature.deleteMany({
-        where: { inventoryId: id },
-      });
-
-      await this.prisma.inventoryFeature.createMany({
-        data: dto.features.map((f, index) => ({
-          title: f.title,
-          order: f.order ?? index,
-          inventoryId: id,
-        })),
-      });
-    }
-
-    if (dto.specifications) {
-      await this.prisma.inventorySpecification.deleteMany({
-        where: { inventoryId: id },
-      });
-
-      await this.prisma.inventorySpecification.createMany({
-        data: dto.specifications.map((s, index) => ({
-          key: s.key,
-          value: s.value,
-          order: s.order ?? index,
-          inventoryId: id,
-        })),
-      });
     }
 
     return {
@@ -420,41 +304,25 @@ export class InventoryService {
 
   async remove(id: number, user: any) {
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
-      throw new ForbiddenException('No tienes permisos');
+      throw new ForbiddenException('No autorizado');
     }
 
     const product = await this.prisma.inventory.findUnique({
       where: { id },
-      include: {
-        images: true,
-      },
+      include: { images: true },
     });
 
-    if (!product) {
-      throw new NotFoundException('Producto no encontrado');
-    }
+    if (!product) throw new NotFoundException('Producto no encontrado');
 
-    // Eliminar imágenes de Cloudinary
     for (const img of product.images) {
-      try {
-        await this.cloudinaryService.deleteImage(img.publicId);
-      } catch (err) {
-        console.error(
-          `Error eliminando imagen en Cloudinary (${img.publicId}):`,
-          err,
-        );
-      }
+      await this.cloudinaryService.deleteImage(img.publicId).catch(() => null);
     }
 
-    // Eliminar producto (y todo en cascada: variantes, imágenes en BD)
-    await this.prisma.inventory.delete({
-      where: { id },
-    });
+    await this.prisma.inventory.delete({ where: { id } });
 
     return {
       success: true,
-      message:
-        'Producto eliminado correctamente junto con imágenes y variantes',
+      message: 'Producto eliminado correctamente',
     };
   }
 
@@ -482,7 +350,6 @@ export class InventoryService {
       throw new NotFoundException('Producto no encontrado');
     }
 
-    // Carpeta dinámica
     const categoryFolder = product.category?.name
       ? product.category.name.toLowerCase().replace(/\s+/g, '-')
       : 'sin-categoria';
@@ -493,54 +360,58 @@ export class InventoryService {
 
     const folderPath = `inventory/${categoryFolder}/${brandFolder}`;
 
-    // SUBIR NUEVAS IMÁGENES (al final)
-    for (const file of files) {
-      const upload = await this.cloudinaryService.uploadImage(
-        file,
-        folderPath,
-        undefined,
-      );
+    await this.prisma.$transaction(async (tx) => {
+      /** ELIMINAR IMÁGENES QUE NO SE CONSERVAN */
+      if (Array.isArray(keepImageIds)) {
+        const imagesToDelete = product.images.filter(
+          (img) => !keepImageIds.includes(img.id),
+        );
 
-      await this.prisma.inventoryImage.create({
-        data: {
-          inventoryId,
-          url: upload.url,
-          publicId: upload.publicId,
-          position: keepImageIds.length, // se agrega al final
-        },
-      });
-    }
+        for (const img of imagesToDelete) {
+          await this.cloudinaryService
+            .deleteImage(img.publicId)
+            .catch(() => null);
 
-    // ELIMINAR SOLO SI REALMENTE ME ENVIARON IDS A CONSERVAR
-    if (Array.isArray(keepImageIds) && keepImageIds.length > 0) {
-      const imagesToDelete = product.images.filter(
-        (img) => !keepImageIds.includes(img.id),
-      );
-
-      for (const img of imagesToDelete) {
-        try {
-          await this.cloudinaryService.deleteImage(img.publicId);
-        } catch (err) {
-          console.error('Error eliminando imagen en Cloudinary:', err);
+          await tx.inventoryImage.delete({
+            where: { id: img.id },
+          });
         }
-
-        await this.prisma.inventoryImage.delete({
-          where: { id: img.id },
-        });
       }
-    }
 
-    // ACTUALIZAR ORDEN (POSITION)
-    if (Array.isArray(keepImageIds)) {
-      for (let i = 0; i < keepImageIds.length; i++) {
-        await this.prisma.inventoryImage.update({
-          where: { id: keepImageIds[i] },
-          data: { position: i },
-        });
+      /** REORDENAR IMÁGENES EXISTENTES (ORDEN VIENE DEL FRONT) */
+      if (Array.isArray(keepImageIds)) {
+        for (let i = 0; i < keepImageIds.length; i++) {
+          await tx.inventoryImage.update({
+            where: { id: keepImageIds[i] },
+            data: { position: i },
+          });
+        }
       }
-    }
 
-    // DEVOLVER IMÁGENES ORDENADAS
+      /** SUBIR NUEVAS IMÁGENES AL FINAL */
+      let startPosition = keepImageIds?.length ?? 0;
+
+      if (Array.isArray(files)) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const upload = await this.cloudinaryService.uploadImage(
+            file,
+            folderPath,
+          );
+
+          await tx.inventoryImage.create({
+            data: {
+              inventoryId,
+              url: upload.url,
+              publicId: upload.publicId,
+              position: startPosition + i,
+            },
+          });
+        }
+      }
+    });
+
+    /** DEVOLVER IMÁGENES ORDENADAS */
     const finalImages = await this.prisma.inventoryImage.findMany({
       where: { inventoryId },
       orderBy: { position: 'asc' },

@@ -11,58 +11,29 @@ import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto';
 import { PaymentMethod } from '@prisma/client';
 import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto';
+import { StockService } from 'src/inventory/stock.service';
 
 @Injectable()
 export class SalesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private stockService: StockService,
+  ) {}
 
   async findAll(user: any) {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {};
-
-    // Acceso global
     if (localIds === null) {
-      // sin filtro
-    }
-    // Sin locales → no ve ventas
-    else if (localIds.length === 0) {
+      // acceso global
+    } else if (localIds.length === 0) {
       where.localId = -1;
-    }
-    // Solo locales permitidos
-    else {
+    } else {
       where.localId = { in: localIds };
     }
 
     const sales = await this.prisma.sale.findMany({
       where,
-      include: {
-        items: {
-          include: {
-            variant: {
-              include: {
-                inventory: true,
-              },
-            },
-          },
-        },
-        customer: true,
-        user: true,
-        local: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return {
-      success: true,
-      message: 'Ventas obtenidas correctamente',
-      data: sales,
-    };
-  }
-
-  async findOne(id: number, user: any) {
-    const sale = await this.prisma.sale.findUnique({
-      where: { id },
       include: {
         items: {
           include: {
@@ -75,47 +46,43 @@ export class SalesService {
         user: true,
         local: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
 
-    if (!sale) {
-      throw new NotFoundException('Venta no encontrada');
-    }
+    return { success: true, data: sales };
+  }
+
+  async findOne(id: number, user: any) {
+    const sale = await this.prisma.sale.findUnique({
+      where: { id },
+      include: {
+        items: {
+          include: {
+            variant: { include: { inventory: true } },
+          },
+        },
+        customer: true,
+        user: true,
+        local: true,
+      },
+    });
+
+    if (!sale) throw new NotFoundException('Venta no encontrada');
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-    if (
-      localIds !== null &&
-      (!sale.localId || !localIds.includes(sale.localId))
-    ) {
-      throw new ForbiddenException(
-        'No tienes permiso para ver ventas de otro local',
-      );
+    if (localIds !== null && !localIds.includes(sale.localId)) {
+      throw new ForbiddenException('No tienes permiso para ver esta venta');
     }
 
-    return {
-      success: true,
-      message: 'Venta obtenida correctamente',
-      data: sale,
-    };
+    return { success: true, data: sale };
   }
 
   async create(dto: CreateSaleDto, user: any) {
-    if (!dto.items || dto.items.length === 0) {
-      throw new BadRequestException(
-        'La venta debe contener al menos un producto',
-      );
-    }
+    if (!dto.items?.length)
+      throw new BadRequestException('La venta debe tener productos');
 
-    if (!dto.customerId) {
-      throw new BadRequestException('El cliente es obligatorio');
-    }
-
-    if (!dto.localId) {
-      throw new BadRequestException('El local es obligatorio');
-    }
-
-    if (!dto.paymentMethod) {
-      throw new BadRequestException('El método de pago es obligatorio');
+    if (!dto.customerId || !dto.localId || !dto.paymentMethod) {
+      throw new BadRequestException('Faltan datos obligatorios');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -134,62 +101,26 @@ export class SalesService {
           include: { inventory: true },
         });
 
-        if (!variant) {
-          throw new NotFoundException(
-            `Variante ${item.inventoryVariantId} no encontrada`,
-          );
-        }
+        if (!variant) throw new NotFoundException('Variante no encontrada');
 
-        if (variant.stock < item.quantity) {
-          throw new BadRequestException(
-            `Stock insuficiente para ${variant.inventory.name} - ${variant.color}. Disponible: ${variant.stock}`,
-          );
-        }
+        if (!variant.isActive)
+          throw new BadRequestException('Variante inactiva');
 
         const price = variant.inventory.salePrice;
-        const base = item.quantity * price;
+        const subtotal = price * item.quantity;
 
-        const discount = Math.max(0, Math.min(item.discount ?? 0, base));
-
-        const subtotal = base - discount;
-
-        total += subtotal;
-
-        const updated = await tx.inventoryVariant.updateMany({
-          where: {
-            id: variant.id,
-            stock: { gte: item.quantity },
-          },
-          data: {
-            stock: { decrement: item.quantity },
-          },
-        });
-
-        if (updated.count === 0) {
-          throw new BadRequestException(
-            `No se pudo descontar stock para ${variant.inventory.name} - ${variant.color}. Otro usuario pudo haber vendido antes.`,
-          );
-        }
+        // STOCK CENTRALIZADO
+        await this.stockService.decrement(variant.id, item.quantity, tx);
 
         itemsData.push({
           inventoryVariantId: variant.id,
           quantity: item.quantity,
           price,
-          discount,
+          discount: item.discount ?? 0,
           subtotal,
         });
-      }
 
-      const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-      if (localIds !== null && !localIds.includes(dto.localId)) {
-        throw new ForbiddenException(
-          'No puedes crear ventas en un local que no administras',
-        );
-      }
-
-      if (dto.items.some((i) => i.quantity <= 0)) {
-        throw new BadRequestException('La cantidad debe ser mayor a 0');
+        total += subtotal;
       }
 
       const sale = await tx.sale.create({
@@ -204,19 +135,12 @@ export class SalesService {
           customerId: dto.customerId,
           localId: dto.localId,
           userId: dto.userId,
-
-          items: {
-            create: itemsData,
-          },
+          items: { create: itemsData },
         },
         include: {
           items: {
             include: {
-              variant: {
-                include: {
-                  inventory: true,
-                },
-              },
+              variant: { include: { inventory: true } },
             },
           },
           customer: true,
@@ -225,30 +149,25 @@ export class SalesService {
         },
       });
 
-      return {
-        success: true,
-        message: 'Venta realizada correctamente',
-        data: sale,
-      };
+      return { success: true, data: sale };
     });
   }
 
   async update(id: number, dto: UpdateSaleDto, user: any) {
     return this.prisma.$transaction(async (tx) => {
-      // Buscar la venta actual con sus items
       const sale = await tx.sale.findUnique({
         where: { id },
-        include: {
-          items: true,
-        },
+        include: { items: true },
       });
 
-      if (!sale) {
-        throw new NotFoundException('Venta no encontrada');
+      if (!sale) throw new NotFoundException('Venta no encontrada');
+
+      const localIds = await getAccessibleLocalIds(this.prisma, user);
+      if (localIds !== null && !localIds.includes(sale.localId)) {
+        throw new ForbiddenException('No tienes permiso');
       }
 
-      // Preparar data base a actualizar (sin tocar items aún)
-      const updateData: any = {
+      const baseUpdate = {
         paymentMethod: dto.paymentMethod ?? sale.paymentMethod,
         paymentStatus: dto.paymentStatus ?? sale.paymentStatus,
         saleStatus: dto.saleStatus ?? sale.saleStatus,
@@ -259,22 +178,10 @@ export class SalesService {
         userId: dto.userId ?? sale.userId,
       };
 
-      const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-      if (
-        localIds !== null &&
-        (!sale.localId || !localIds.includes(sale.localId))
-      ) {
-        throw new ForbiddenException(
-          'No tienes permiso para modificar ventas de otro local',
-        );
-      }
-
-      // Si NO vienen items → solo actualizar campos administrativos
-      if (!dto.items || dto.items.length === 0) {
-        const updatedSale = await tx.sale.update({
+      if (!dto.items?.length) {
+        const updated = await tx.sale.update({
           where: { id },
-          data: updateData,
+          data: baseUpdate,
           include: {
             items: {
               include: {
@@ -287,33 +194,20 @@ export class SalesService {
           },
         });
 
-        return {
-          success: true,
-          message: 'Venta actualizada correctamente (sin modificar productos)',
-          data: updatedSale,
-        };
+        return { success: true, data: updated };
       }
 
-      // ==============================
-      // VIENEN ITEMS → REAJUSTAR STOCK
-      // ==============================
-
-      // Devolver stock de los items actuales
+      // DEVOLVER STOCK ANTERIOR
       for (const item of sale.items) {
-        await tx.inventoryVariant.update({
-          where: { id: item.inventoryVariantId },
-          data: {
-            stock: { increment: item.quantity },
-          },
-        });
+        await this.stockService.increment(
+          item.inventoryVariantId,
+          item.quantity,
+          tx,
+        );
       }
 
-      // Eliminar items actuales
-      await tx.saleItem.deleteMany({
-        where: { saleId: id },
-      });
+      await tx.saleItem.deleteMany({ where: { saleId: id } });
 
-      // Procesar nuevos items
       let total = 0;
       const itemsData: {
         inventoryVariantId: number;
@@ -329,62 +223,30 @@ export class SalesService {
           include: { inventory: true },
         });
 
-        if (!variant) {
-          throw new NotFoundException(
-            `Variante ${item.inventoryVariantId} no encontrada`,
-          );
-        }
-
-        if (variant.stock < item.quantity) {
-          throw new BadRequestException(
-            `Stock insuficiente para ${variant.inventory.name} - ${variant.color}. Disponible: ${variant.stock}`,
-          );
-        }
+        if (!variant) throw new NotFoundException('Variante no encontrada');
 
         const price = variant.inventory.salePrice;
-        const base = item.quantity * price;
+        const subtotal = price * item.quantity;
 
-        const discount = Math.max(0, Math.min(item.discount ?? 0, base));
-
-        const subtotal = base - discount;
-
-        total += subtotal;
-
-        // Descontar stock de forma segura
-        const updated = await tx.inventoryVariant.updateMany({
-          where: {
-            id: variant.id,
-            stock: { gte: item.quantity },
-          },
-          data: {
-            stock: { decrement: item.quantity },
-          },
-        });
-
-        if (updated.count === 0) {
-          throw new BadRequestException(
-            `No se pudo descontar stock para ${variant.inventory.name} - ${variant.color}. Otro usuario pudo haber vendido antes.`,
-          );
-        }
+        await this.stockService.decrement(variant.id, item.quantity, tx);
 
         itemsData.push({
           inventoryVariantId: variant.id,
           quantity: item.quantity,
           price,
-          discount,
+          discount: item.discount ?? 0,
           subtotal,
         });
+
+        total += subtotal;
       }
 
-      // Actualizar venta con nuevos items y nuevo total
       const updatedSale = await tx.sale.update({
         where: { id },
         data: {
-          ...updateData,
+          ...baseUpdate,
           totalAmount: total,
-          items: {
-            create: itemsData,
-          },
+          items: { create: itemsData },
         },
         include: {
           items: {
@@ -398,11 +260,7 @@ export class SalesService {
         },
       });
 
-      return {
-        success: true,
-        message: 'Venta actualizada correctamente',
-        data: updatedSale,
-      };
+      return { success: true, data: updatedSale };
     });
   }
 
@@ -412,38 +270,27 @@ export class SalesService {
       include: { items: true },
     });
 
-    if (!sale) {
-      throw new NotFoundException('Venta no encontrada');
-    }
+    if (!sale) throw new NotFoundException('Venta no encontrada');
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-    if (
-      localIds !== null &&
-      (!sale.localId || !localIds.includes(sale.localId))
-    ) {
-      throw new ForbiddenException(
-        'No tienes permiso para eliminar ventas de otro local',
-      );
+    if (localIds !== null && !localIds.includes(sale.localId)) {
+      throw new ForbiddenException('No tienes permiso');
     }
 
     return this.prisma.$transaction(async (tx) => {
       for (const item of sale.items) {
-        await tx.inventoryVariant.update({
-          where: { id: item.inventoryVariantId },
-          data: {
-            stock: { increment: item.quantity },
-          },
-        });
+        await this.stockService.increment(
+          item.inventoryVariantId,
+          item.quantity,
+          tx,
+        );
       }
 
-      await tx.sale.delete({
-        where: { id },
-      });
+      await tx.sale.delete({ where: { id } });
 
       return {
         success: true,
-        message: 'Venta eliminada correctamente y stock restaurado',
+        message: 'Venta eliminada y stock restaurado',
       };
     });
   }

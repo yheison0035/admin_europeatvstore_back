@@ -15,7 +15,7 @@ export class VariantsService {
 
   async syncVariants(
     inventoryId: number,
-    incomingVariants: InventoryVariantSyncInput[],
+    incoming: InventoryVariantSyncInput[],
     user: any,
   ) {
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
@@ -31,54 +31,49 @@ export class VariantsService {
       throw new NotFoundException('Inventario no encontrado');
     }
 
-    const existingVariants = await this.prisma.inventoryVariant.findMany({
+    const existing = await this.prisma.inventoryVariant.findMany({
       where: { inventoryId },
     });
 
-    const incomingIds = incomingVariants.filter((v) => v.id).map((v) => v.id);
+    const incomingIds = incoming.filter((v) => v.id).map((v) => v.id);
 
-    // DESACTIVAR + STOCK = 0
-    const toDeactivate = existingVariants.filter(
-      (v) => v.isActive && !incomingIds.includes(v.id),
-    );
-
-    for (const variant of toDeactivate) {
-      await this.prisma.inventoryVariant.update({
-        where: { id: variant.id },
-        data: {
-          isActive: false,
-        },
-      });
+    /**
+     * DESACTIVAR VARIANTES ELIMINADAS
+     */
+    for (const variant of existing) {
+      if (variant.isActive && !incomingIds.includes(variant.id)) {
+        await this.prisma.inventoryVariant.update({
+          where: { id: variant.id },
+          data: {
+            isActive: false,
+          },
+        });
+      }
     }
 
-    // ACTUALIZAR EXISTENTES
-    for (const v of incomingVariants.filter((v) => v.id)) {
-      const current = existingVariants.find((ev) => ev.id === v.id);
-      if (!current) continue;
-
-      let sku = current.sku;
-
-      if (current.color !== v.color) {
-        sku = generateSku(inventory.name, current.sequence, v.color);
-      }
-
+    /**
+     * ACTUALIZAR EXISTENTES (SIN TOCAR STOCK NI SKU)
+     */
+    for (const v of incoming.filter((v) => v.id)) {
       await this.prisma.inventoryVariant.update({
         where: { id: v.id },
         data: {
           color: v.color,
-          sku,
           isActive: true,
+          ...(typeof v.stock === 'number' && { stock: v.stock }),
         },
       });
     }
 
-    // CREAR NUEVAS
-    for (const v of incomingVariants.filter((v) => !v.id)) {
+    /**
+     * CREAR NUEVAS
+     */
+    for (const v of incoming.filter((v) => !v.id)) {
       const created = await this.prisma.inventoryVariant.create({
         data: {
           inventoryId,
           color: v.color,
-          stock: v.stock,
+          stock: v.stock ?? 0,
           sku: 'PENDING',
         },
       });
