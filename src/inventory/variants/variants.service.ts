@@ -37,37 +37,29 @@ export class VariantsService {
 
     const incomingIds = incoming.filter((v) => v.id).map((v) => v.id);
 
-    /**
-     * DESACTIVAR VARIANTES ELIMINADAS
-     */
     for (const variant of existing) {
-      if (variant.isActive && !incomingIds.includes(variant.id)) {
+      if (!incomingIds.includes(variant.id)) {
         await this.prisma.inventoryVariant.update({
           where: { id: variant.id },
           data: {
             isActive: false,
+            stock: 0,
           },
         });
       }
     }
 
-    /**
-     * ACTUALIZAR EXISTENTES (SIN TOCAR STOCK NI SKU)
-     */
     for (const v of incoming.filter((v) => v.id)) {
       await this.prisma.inventoryVariant.update({
         where: { id: v.id },
         data: {
           color: v.color,
           isActive: true,
-          ...(typeof v.stock === 'number' && { stock: v.stock }),
+          stock: v.stock ?? 0, // 🔥 permitir cero
         },
       });
     }
 
-    /**
-     * CREAR NUEVAS
-     */
     for (const v of incoming.filter((v) => !v.id)) {
       const created = await this.prisma.inventoryVariant.create({
         data: {

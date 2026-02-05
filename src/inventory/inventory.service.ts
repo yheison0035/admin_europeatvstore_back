@@ -291,7 +291,13 @@ export class InventoryService {
       },
     });
 
-    if (dto.variants && dto.variants.length > 0) {
+    /**
+     * REGLA IMPORTANTE:
+     * - variants = []  → DESACTIVAR TODAS
+     * - variants = undefined → NO TOCAR VARIANTES
+     * - variants con datos → SINCRONIZAR
+     */
+    if (Array.isArray(dto.variants)) {
       await this.variantsService.syncVariants(id, dto.variants, user);
     }
 
