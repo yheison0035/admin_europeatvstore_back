@@ -79,7 +79,7 @@ export class UsersService {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {
-      status: { not: Status.ELIMINADO },
+      status: Status.ACTIVO,
     };
 
     if (localIds !== null) {
