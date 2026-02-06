@@ -6,48 +6,101 @@ import {
 import { PrismaService } from 'src/prisma.service';
 import { CreateLocalDto } from './dto/create-local.dto';
 import { UpdateLocalDto } from './dto/update-local.dto';
-import { Role } from '@prisma/client';
+import { Role, Status } from '@prisma/client';
 import { hasRole } from 'src/common/role-check.util';
+import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 
 @Injectable()
 export class LocalsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(user: any) {
-    let where: any = {};
+  async findAllPaginated(user: any, query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    // Roles con acceso total
-    if (
-      [Role.SUPER_ADMIN, Role.COORDINADOR, Role.AUXILIAR].includes(user.role)
-    ) {
-      // sin filtro
-    }
-    // ADMIN → solo locales que administra
-    else if (user.role === Role.ADMIN) {
-      where.managerId = user.id;
-    }
-    // Usuario con local asignado
-    else if (user.localId) {
-      where.id = user.localId;
-    }
-    // Sin acceso
-    else {
-      where.id = -1;
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    const where: any = {
+      status: { not: Status.ELIMINADO },
+    };
+
+    if (localIds !== null) {
+      if (localIds.length === 0) {
+        where.id = -1;
+      } else {
+        where.id = { in: localIds };
+      }
     }
 
-    const locals = await this.prisma.local.findMany({
-      where,
-      include: {
-        users: true,
-        manager: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+    if (query.name) {
+      where.name = {
+        contains: query.name,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.address) {
+      where.address = {
+        contains: query.address,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.city) {
+      where.city = {
+        contains: query.city,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.phone) {
+      where.phone = {
+        contains: query.phone,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.managerId) {
+      where.manager = {
+        name: {
+          contains: query.managerId,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    if (query.status) {
+      const normalizedStatus = query.status.toUpperCase();
+
+      if (Object.values(Status).includes(normalizedStatus as Status)) {
+        where.status = normalizedStatus as Status;
+      }
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.local.findMany({
+        where,
+        include: {
+          users: true,
+          manager: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.local.count({ where }),
+    ]);
 
     return {
       success: true,
-      message: 'Locales obtenidos correctamente',
-      data: locals,
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 

@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   Inject,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Role, Status } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -71,42 +71,122 @@ export class UsersService {
   }
 
   // Obtener todos los usuarios (solo SUPER_ADMIN y ADMIN)
-  async getUsers(user: any) {
+  async findAllPaginated(user: any, query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    let where: any = {};
+    const where: any = {
+      status: { not: Status.ELIMINADO },
+    };
 
-    // Roles globales → todos
-    if (localIds === null) {
-      // sin filtro
+    if (localIds !== null) {
+      if (localIds.length === 0) {
+        // solo él mismo
+        where.id = user.id;
+      } else {
+        where.OR = [{ localId: { in: localIds } }, { id: user.id }];
+      }
     }
-    // Sin acceso a locales → solo él mismo
-    else if (localIds.length === 0) {
-      where = { id: user.id };
+
+    if (query.role) {
+      const normalizedRoles = query.role.toUpperCase();
+
+      if (Object.values(Role).includes(normalizedRoles as Role)) {
+        where.role = normalizedRoles as Role;
+      }
     }
-    // Usuarios de locales permitidos + usuario autenticado
-    else {
-      where = {
-        OR: [
-          { localId: { in: localIds } }, // usuarios del/los local(es)
-          { id: user.id }, // siempre incluir al solicitante
-        ],
+
+    if (query.name) {
+      where.name = {
+        contains: query.name,
+        mode: 'insensitive',
       };
     }
 
-    const users = await this.prisma.user.findMany({
-      where,
-      include: {
-        local: true,
-        managedLocals: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+    if (query.document) {
+      where.document = {
+        contains: query.document,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.email) {
+      where.email = {
+        contains: query.email,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.phone) {
+      where.phone = {
+        contains: query.phone,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.address) {
+      where.address = {
+        contains: query.address,
+        mode: 'insensitive',
+      };
+    }
+
+    // Local asignado (por nombre)
+    if (query.localId) {
+      where.local = {
+        name: {
+          contains: query.localId,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    // Locales administrados (por nombre)
+    if (query.managedLocals) {
+      where.managedLocals = {
+        some: {
+          name: {
+            contains: query.managedLocals,
+            mode: 'insensitive',
+          },
+        },
+      };
+    }
+
+    if (query.status) {
+      const normalizedStatus = query.status.toUpperCase();
+
+      if (Object.values(Status).includes(normalizedStatus as Status)) {
+        where.status = normalizedStatus as Status;
+      }
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        include: {
+          local: true,
+          managedLocals: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
 
     return {
       success: true,
-      message: 'Usuarios obtenidos correctamente',
-      data: users,
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 

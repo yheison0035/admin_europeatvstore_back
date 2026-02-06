@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -26,8 +27,8 @@ export class CategoriesController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
-  findAll(@Req() req) {
-    return this.categoriesService.findAll(req.user);
+  findAll(@Req() req, @Query() query) {
+    return this.categoriesService.findAllPaginated(req.user, query);
   }
 
   // Obtener una categoría

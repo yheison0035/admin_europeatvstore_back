@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -34,8 +35,8 @@ export class CustomersController {
     'BODEGUERO',
   )
   @Get()
-  findAll(@Req() req) {
-    return this.customersService.findAll(req.user);
+  findAll(@Req() req, @Query() query) {
+    return this.customersService.findAllPaginated(req.user, query);
   }
 
   // Ver uno

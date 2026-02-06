@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
   Put,
+  Query,
 } from '@nestjs/common';
 import { LocalsService } from './locals.service';
 import { CreateLocalDto } from './dto/create-local.dto';
@@ -26,8 +27,8 @@ export class LocalsController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get()
-  findAll(@Req() req) {
-    return this.localsService.findAll(req.user);
+  findAll(@Req() req, @Query() query) {
+    return this.localsService.findAllPaginated(req.user, query);
   }
 
   @UseGuards(RolesGuard)

@@ -6,22 +6,91 @@ import {
 import { PrismaService } from 'src/prisma.service';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
-import { Role } from '@prisma/client';
+import { Role, Status } from '@prisma/client';
 import { hasRole } from 'src/common/role-check.util';
 
 @Injectable()
 export class ProvidersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
-    const providers = await this.prisma.provider.findMany({
-      orderBy: { name: 'asc' },
-    });
+  async findAllPaginated(query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      status: { not: Status.ELIMINADO },
+    };
+
+    if (query.name) {
+      where.name = {
+        contains: query.name,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.contactName) {
+      where.contactName = {
+        contains: query.contactName,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.productType) {
+      where.productType = {
+        contains: query.productType,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.address) {
+      where.address = {
+        contains: query.address,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.city) {
+      where.city = {
+        contains: query.city,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.phone) {
+      where.phone = {
+        contains: query.phone,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.status) {
+      const normalizedStatus = query.status.toUpperCase();
+
+      if (Object.values(Status).includes(normalizedStatus as Status)) {
+        where.status = normalizedStatus as Status;
+      }
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.provider.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.provider.count({ where }),
+    ]);
 
     return {
       success: true,
-      message: 'Proveedores obtenidos correctamente',
-      data: providers,
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 

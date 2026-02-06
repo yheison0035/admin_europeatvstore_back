@@ -9,6 +9,7 @@ import {
   Put,
   Req,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
@@ -26,8 +27,8 @@ export class BrandsController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
-  findAll(@Req() req) {
-    return this.brandsService.findAll(req.user);
+  findAll(@Req() req, @Query() query) {
+    return this.brandsService.findAllPaginated(req.user, query);
   }
 
   // VER UNO

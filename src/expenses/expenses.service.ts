@@ -4,7 +4,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
-import { Role, Status } from '@prisma/client';
+import { PaymentMethod, Role, Status } from '@prisma/client';
 import { hasRole } from 'src/common/role-check.util';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { CreateExpenseDto } from './dto/create-expenses.dto';
@@ -14,34 +14,110 @@ import { UpdateExpenseDto } from './dto/update-expenses.dto';
 export class ExpensesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(user: any) {
+  async findAllPaginated(user: any, query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {
       status: { not: Status.ELIMINADO },
     };
 
-    if (localIds === null) {
-      // acceso global
-    } else if (localIds.length === 0) {
-      where.localId = -1;
-    } else {
-      where.localId = { in: localIds };
+    if (localIds !== null) {
+      if (localIds.length === 0) where.localId = -1;
+      else where.localId = { in: localIds };
     }
 
-    const expenses = await this.prisma.expense.findMany({
-      where,
-      include: {
-        provider: true,
-        local: true,
-      },
-      orderBy: { expenseDate: 'desc' },
-    });
+    if (query.concept) {
+      where.concept = { contains: query.concept, mode: 'insensitive' };
+    }
+
+    if (query.type) {
+      where.type = { contains: query.type, mode: 'insensitive' };
+    }
+
+    if (query.paidTo) {
+      where.paidTo = { contains: query.paidTo, mode: 'insensitive' };
+    }
+
+    if (query.amount && !isNaN(Number(query.amount))) {
+      where.amount = Number(query.amount);
+    }
+
+    if (query.paymentMethod) {
+      const normalizedPaymentMethod = query.paymentMethod.toUpperCase();
+
+      if (
+        Object.values(PaymentMethod).includes(
+          normalizedPaymentMethod as PaymentMethod,
+        )
+      ) {
+        where.paymentMethod = normalizedPaymentMethod as PaymentMethod;
+      }
+    }
+
+    if (query.status) {
+      const normalizedStatus = query.status.toUpperCase();
+
+      if (Object.values(Status).includes(normalizedStatus as Status)) {
+        where.status = normalizedStatus as Status;
+      }
+    }
+
+    if (query.localId) {
+      where.local = {
+        name: { contains: query.localId, mode: 'insensitive' },
+      };
+    }
+
+    if (query.providerId) {
+      where.provider = {
+        name: { contains: query.providerId, mode: 'insensitive' },
+      };
+    }
+
+    if (query.expenseDate) {
+      const date = new Date(query.expenseDate);
+
+      if (!isNaN(date.getTime())) {
+        const start = new Date(date);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(date);
+        end.setHours(23, 59, 59, 999);
+
+        where.expenseDate = {
+          gte: start,
+          lte: end,
+        };
+      }
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.expense.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          provider: true,
+          local: true,
+        },
+        orderBy: { expenseDate: 'desc' },
+      }),
+      this.prisma.expense.count({ where }),
+    ]);
 
     return {
       success: true,
-      message: 'Gastos obtenidos correctamente',
-      data: expenses,
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 

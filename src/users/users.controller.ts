@@ -12,6 +12,7 @@ import {
   Req,
   UseInterceptors,
   UploadedFile,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -49,8 +50,8 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get()
-  getAllUsers(@Req() req) {
-    return this.usersService.getUsers(req.user);
+  findAll(@Req() req, @Query() query) {
+    return this.usersService.findAllPaginated(req.user, query);
   }
 
   @UseGuards(JwtAuthGuard)

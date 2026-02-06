@@ -9,7 +9,7 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto';
-import { PaymentMethod } from '@prisma/client';
+import { PaymentMethod, PaymentStatus } from '@prisma/client';
 import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto';
 import { StockService } from 'src/inventory/stock.service';
 
@@ -20,36 +20,121 @@ export class SalesService {
     private stockService: StockService,
   ) {}
 
-  async findAll(user: any) {
+  async findAllPaginated(user: any, query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {};
-    if (localIds === null) {
-      // acceso global
-    } else if (localIds.length === 0) {
-      where.localId = -1;
-    } else {
-      where.localId = { in: localIds };
+
+    if (localIds !== null) {
+      if (localIds.length === 0) {
+        where.localId = -1;
+      } else {
+        where.localId = { in: localIds };
+      }
     }
 
-    const sales = await this.prisma.sale.findMany({
-      where,
-      include: {
-        items: {
-          include: {
-            variant: {
-              include: { inventory: true },
+    if (query.code) {
+      where.code = {
+        contains: query.code,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.customer) {
+      where.customer = {
+        name: { contains: query.customer, mode: 'insensitive' },
+      };
+    }
+
+    if (query.paymentMethod) {
+      const normalizedPaymentMethod = query.paymentMethod.toUpperCase();
+
+      if (
+        Object.values(PaymentMethod).includes(
+          normalizedPaymentMethod as PaymentMethod,
+        )
+      ) {
+        where.paymentMethod = normalizedPaymentMethod as PaymentMethod;
+      }
+    }
+
+    if (query.paymentStatus) {
+      const normalizedPaymentStatus = query.paymentStatus.toUpperCase();
+
+      if (
+        Object.values(PaymentStatus).includes(
+          normalizedPaymentStatus as PaymentStatus,
+        )
+      ) {
+        where.paymentStatus = normalizedPaymentStatus as PaymentStatus;
+      }
+    }
+
+    if (query.localId) {
+      where.local = {
+        name: { contains: query.localId, mode: 'insensitive' },
+      };
+    }
+
+    if (query.userId) {
+      where.user = {
+        name: { contains: query.userId, mode: 'insensitive' },
+      };
+    }
+
+    if (query.saleDate) {
+      const date = new Date(query.saleDate);
+
+      if (!isNaN(date.getTime())) {
+        const start = new Date(date);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(date);
+        end.setHours(23, 59, 59, 999);
+
+        where.saleDate = {
+          gte: start,
+          lte: end,
+        };
+      }
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.sale.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: {
+            include: {
+              variant: {
+                include: { inventory: true },
+              },
             },
           },
+          customer: true,
+          user: true,
+          local: true,
         },
-        customer: true,
-        user: true,
-        local: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+      }),
+      this.prisma.sale.count({ where }),
+    ]);
 
-    return { success: true, data: sales };
+    return {
+      success: true,
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findOne(id: number, user: any) {

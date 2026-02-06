@@ -14,6 +14,7 @@ import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { VariantsService } from './variants/variants.service';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { generateSlug } from 'src/utils/slug.util';
+import { getPagination } from 'src/common/pagination.util';
 
 @Injectable()
 export class InventoryService {
@@ -66,36 +67,75 @@ export class InventoryService {
     return { success: true, data: result };
   }
 
-  async findAll(user: any) {
+  async findAllPaginated(user: any, query: any) {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
+    const { page, limit, skip } = getPagination(query);
+
     const where: any = {};
 
-    if (localIds === null) {
-      // acceso global
-    } else if (localIds.length === 0) {
-      where.localId = -1;
-    } else {
-      where.localId = { in: localIds };
+    if (localIds !== null) {
+      if (localIds.length === 0) {
+        where.localId = -1;
+      } else {
+        where.localId = { in: localIds };
+      }
     }
 
-    const products = await this.prisma.inventory.findMany({
-      where,
-      include: {
-        createdBy: { select: { id: true, name: true } },
-        updatedBy: { select: { id: true, name: true } },
-        images: { orderBy: { position: 'asc' } },
-        variants: {
-          where: { isActive: true },
+    if (query.name) {
+      where.name = {
+        contains: query.name,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.barcode) {
+      where.barcode = {
+        contains: query.barcode,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.localId) {
+      where.local = {
+        name: { contains: query.localId, mode: 'insensitive' },
+      };
+    }
+
+    if (query.providerId) {
+      where.provider = {
+        name: { contains: query.providerId, mode: 'insensitive' },
+      };
+    }
+
+    if (query.salePrice !== undefined && query.salePrice !== '') {
+      const price = Number(query.salePrice);
+
+      if (!isNaN(price)) {
+        where.salePrice = price;
+      }
+    }
+
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.inventory.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          images: { orderBy: { position: 'asc' }, take: 1 },
+          variants: { where: { isActive: true } },
+          brand: true,
+          provider: true,
+          local: true,
+          category: true,
         },
-        brand: true,
-        category: true,
-        provider: true,
-        local: true,
-        features: { orderBy: { order: 'asc' } },
-        specifications: { orderBy: { order: 'asc' } },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+      }),
+      this.prisma.inventory.count({ where }),
+    ]);
 
     const canSeePurchasePrice = hasRole(user.role, [
       Role.SUPER_ADMIN,
@@ -104,7 +144,7 @@ export class InventoryService {
       Role.AUXILIAR,
     ]);
 
-    const data = products.map((product) => {
+    const data = items.map((product) => {
       const stock = product.variants.reduce((sum, v) => sum + v.stock, 0);
 
       if (!canSeePurchasePrice) {
@@ -117,8 +157,13 @@ export class InventoryService {
 
     return {
       success: true,
-      message: 'Inventario obtenido correctamente',
       data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 

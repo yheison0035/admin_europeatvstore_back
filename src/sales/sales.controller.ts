@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   Put,
+  Query,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -28,8 +29,8 @@ export class SalesController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Get()
-  findAll(@Req() req) {
-    return this.salesService.findAll(req.user);
+  findAll(@Req() req, @Query() query) {
+    return this.salesService.findAllPaginated(req.user, query);
   }
 
   @UseGuards(RolesGuard)

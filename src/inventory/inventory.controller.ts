@@ -11,6 +11,7 @@ import {
   Req,
   UseInterceptors,
   UploadedFiles,
+  Query,
 } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
@@ -35,8 +36,8 @@ export class InventoryController {
     'BODEGUERO',
   )
   @Get()
-  findAll(@Req() req) {
-    return this.inventoryService.findAll(req.user);
+  findAll(@Req() req, @Query() query) {
+    return this.inventoryService.findAllPaginated(req.user, query);
   }
 
   @UseGuards(RolesGuard)

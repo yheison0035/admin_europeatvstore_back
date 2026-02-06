@@ -9,6 +9,7 @@ import {
   Put,
   Req,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { CreateProviderDto } from './dto/create-provider.dto';
@@ -26,8 +27,8 @@ export class ProvidersController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
-  findAll() {
-    return this.providersService.findAll();
+  findAll(@Query() query) {
+    return this.providersService.findAllPaginated(query);
   }
 
   // VER UNO

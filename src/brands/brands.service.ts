@@ -14,32 +14,78 @@ import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 export class BrandsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(user: any) {
+  async findAllPaginated(user: any, query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {
       status: { not: Status.ELIMINADO },
     };
 
-    if (localIds === null) {
-    } else if (localIds.length === 0) {
-      where.localId = -1;
-    } else {
-      where.localId = { in: localIds };
+    if (localIds !== null) {
+      if (localIds.length === 0) {
+        where.localId = -1;
+      } else {
+        where.localId = { in: localIds };
+      }
     }
 
-    const brands = await this.prisma.brand.findMany({
-      where,
-      include: {
-        local: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+    if (query.name) {
+      where.name = {
+        contains: query.name,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.description) {
+      where.description = {
+        contains: query.description,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.status) {
+      const normalizedStatus = query.status.toUpperCase();
+
+      if (Object.values(Status).includes(normalizedStatus as Status)) {
+        where.status = normalizedStatus as Status;
+      }
+    }
+
+    if (query.localId) {
+      where.local = {
+        name: {
+          contains: query.localId,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.brand.findMany({
+        where,
+        include: {
+          local: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.brand.count({ where }),
+    ]);
 
     return {
       success: true,
-      message: 'Marcas obtenidas correctamente',
-      data: brands,
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 

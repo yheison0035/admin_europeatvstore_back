@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
   Put,
+  Query,
 } from '@nestjs/common';
 import { ExpensesService } from './expenses.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -29,8 +30,8 @@ export class ExpensesController {
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
-  findAll(@Req() req) {
-    return this.expensesService.findAll(req.user);
+  findAll(@Req() req, @Query() query) {
+    return this.expensesService.findAllPaginated(req.user, query);
   }
 
   /**

@@ -8,55 +8,126 @@ import { PrismaService } from '../prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { Status } from '@prisma/client';
 
 @Injectable()
 export class CustomersService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(user: any) {
+  async findAllPaginated(user: any, query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    let baseWhere: any = {};
+    const where: any = {
+      status: { not: Status.ELIMINADO },
+    };
 
-    // Acceso global
-    if (localIds === null) {
-      baseWhere = {};
+    if (localIds !== null) {
+      if (localIds.length === 0) {
+        where.document = '222222222222';
+      } else {
+        where.localId = { in: localIds };
+      }
     }
-    // Sin locales → solo consumidor final
-    else if (localIds.length === 0) {
-      baseWhere = {};
-    }
-    // Locales asignados
-    else {
-      baseWhere = {
-        localId: { in: localIds },
+
+    if (query.type_document) {
+      where.type_document = {
+        contains: query.type_document,
+        mode: 'insensitive',
       };
     }
 
-    // CONSUMIDOR FINAL (SIN LOCAL)
+    if (query.document) {
+      where.document = {
+        contains: query.document,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.name) {
+      where.name = {
+        contains: query.name,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.email) {
+      where.email = {
+        contains: query.email,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.phone) {
+      where.phone = {
+        contains: query.phone,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.city) {
+      where.city = {
+        contains: query.city,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.localId) {
+      where.local = {
+        name: {
+          contains: query.localId,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    if (query.status) {
+      const normalizedStatus = query.status.toUpperCase();
+
+      if (Object.values(Status).includes(normalizedStatus as Status)) {
+        where.status = normalizedStatus as Status;
+      }
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.customer.findMany({
+        where: {
+          ...where,
+          NOT: { document: '222222222222' },
+        },
+        include: { local: true },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.customer.count({
+        where: {
+          ...where,
+          NOT: { document: '222222222222' },
+        },
+      }),
+    ]);
+
     const consumidorFinal = await this.prisma.customer.findFirst({
-      where: {
-        document: '222222222222',
-      },
+      where: { document: '222222222222' },
       include: { local: true },
     });
 
-    // RESTO DE CLIENTES
-    const others = await this.prisma.customer.findMany({
-      where: {
-        ...baseWhere,
-        NOT: { document: '222222222222' },
-      },
-      include: { local: true },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const customers = consumidorFinal ? [consumidorFinal, ...others] : others;
+    const data =
+      consumidorFinal && page === 1 ? [consumidorFinal, ...items] : items;
 
     return {
       success: true,
-      message: 'Clientes obtenidos correctamente',
-      data: customers,
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
