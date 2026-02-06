@@ -9,7 +9,7 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto';
-import { PaymentMethod, PaymentStatus } from '@prisma/client';
+import { PaymentMethod, PaymentStatus, Status } from '@prisma/client';
 import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto';
 import { StockService } from 'src/inventory/stock.service';
 
@@ -456,7 +456,11 @@ export class SalesService {
           gte: start,
           lte: end,
         },
+        user: {
+          status: Status.ACTIVO,
+        },
       },
+
       include: {
         user: {
           select: { id: true, name: true },
@@ -471,6 +475,7 @@ export class SalesService {
      */
     const linkedUsers = await this.prisma.user.findMany({
       where: {
+        status: Status.ACTIVO,
         OR: [{ localId }, { managedLocals: { some: { id: localId } } }],
       },
       select: { id: true, name: true },
@@ -612,7 +617,12 @@ export class SalesService {
      * Ventas en el rango
      */
     const sales = await this.prisma.sale.findMany({
-      where,
+      where: {
+        ...where,
+        user: {
+          status: Status.ACTIVO,
+        },
+      },
       include: {
         user: {
           select: { id: true, name: true },
@@ -641,6 +651,7 @@ export class SalesService {
     } else {
       const linkedUsers = await this.prisma.user.findMany({
         where: {
+          status: Status.ACTIVO,
           OR: [{ localId }, { managedLocals: { some: { id: localId } } }],
         },
         select: { name: true },
