@@ -78,9 +78,11 @@ export class UsersService {
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    const where: any = {
-      status: Status.ACTIVO,
-    };
+    const where: any = {};
+
+    if (user.role !== Role.SUPER_ADMIN) {
+      where.status = Status.ACTIVO;
+    }
 
     if (localIds !== null) {
       if (localIds.length === 0) {
@@ -156,9 +158,8 @@ export class UsersService {
       };
     }
 
-    if (query.status) {
+    if (query.status && user.role === Role.SUPER_ADMIN) {
       const normalizedStatus = query.status.toUpperCase();
-
       if (Object.values(Status).includes(normalizedStatus as Status)) {
         where.status = normalizedStatus as Status;
       }
