@@ -79,18 +79,15 @@ export class ExpensesService {
     }
 
     if (query.expenseDate) {
-      const date = new Date(query.expenseDate);
+      const [day, month, year] = query.expenseDate.split('/').map(Number);
 
-      if (!isNaN(date.getTime())) {
-        const start = new Date(date);
-        start.setHours(0, 0, 0, 0);
-
-        const end = new Date(date);
-        end.setHours(23, 59, 59, 999);
+      if (day && month && year) {
+        const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+        const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
 
         where.expenseDate = {
-          gte: start,
-          lte: end,
+          gte: startOfDay,
+          lte: endOfDay,
         };
       }
     }

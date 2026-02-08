@@ -12,6 +12,7 @@ import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto'
 import { PaymentMethod, PaymentStatus, Status } from '@prisma/client';
 import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto';
 import { StockService } from 'src/inventory/stock.service';
+import { formatYMD } from 'src/utils/format';
 
 @Injectable()
 export class SalesService {
@@ -87,18 +88,15 @@ export class SalesService {
     }
 
     if (query.saleDate) {
-      const date = new Date(query.saleDate);
+      const [day, month, year] = query.saleDate.split('/').map(Number);
 
-      if (!isNaN(date.getTime())) {
-        const start = new Date(date);
-        start.setHours(0, 0, 0, 0);
-
-        const end = new Date(date);
-        end.setHours(23, 59, 59, 999);
+      if (day && month && year) {
+        const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+        const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
 
         where.saleDate = {
-          gte: start,
-          lte: end,
+          gte: startOfDay,
+          lte: endOfDay,
         };
       }
     }
@@ -163,8 +161,9 @@ export class SalesService {
   }
 
   async create(dto: CreateSaleDto, user: any) {
-    if (!dto.items?.length)
+    if (!dto.items?.length) {
       throw new BadRequestException('La venta debe tener productos');
+    }
 
     if (!dto.customerId || !dto.localId || !dto.paymentMethod) {
       throw new BadRequestException('Faltan datos obligatorios');
@@ -172,6 +171,7 @@ export class SalesService {
 
     return this.prisma.$transaction(async (tx) => {
       let total = 0;
+
       const itemsData: {
         inventoryVariantId: number;
         quantity: number;
@@ -186,22 +186,35 @@ export class SalesService {
           include: { inventory: true },
         });
 
-        if (!variant) throw new NotFoundException('Variante no encontrada');
+        if (!variant) {
+          throw new NotFoundException('Variante no encontrada');
+        }
 
-        if (!variant.isActive)
+        if (!variant.isActive) {
           throw new BadRequestException('Variante inactiva');
+        }
 
         const price = variant.inventory.salePrice;
-        const subtotal = price * item.quantity;
+        const discount = item.discount ?? 0;
 
-        // STOCK CENTRALIZADO
+        const gross = price * item.quantity;
+
+        if (discount > gross) {
+          throw new BadRequestException(
+            'El descuento no puede ser mayor al valor del producto',
+          );
+        }
+
+        const subtotal = Math.max(gross - discount, 0);
+
+        // Descontar stock centralizado
         await this.stockService.decrement(variant.id, item.quantity, tx);
 
         itemsData.push({
           inventoryVariantId: variant.id,
           quantity: item.quantity,
           price,
-          discount: item.discount ?? 0,
+          discount,
           subtotal,
         });
 
@@ -220,12 +233,16 @@ export class SalesService {
           customerId: dto.customerId,
           localId: dto.localId,
           userId: dto.userId,
-          items: { create: itemsData },
+          items: {
+            create: itemsData,
+          },
         },
         include: {
           items: {
             include: {
-              variant: { include: { inventory: true } },
+              variant: {
+                include: { inventory: true },
+              },
             },
           },
           customer: true,
@@ -311,7 +328,17 @@ export class SalesService {
         if (!variant) throw new NotFoundException('Variante no encontrada');
 
         const price = variant.inventory.salePrice;
-        const subtotal = price * item.quantity;
+        const discount = item.discount ?? 0;
+
+        const gross = price * item.quantity;
+
+        if (discount > gross) {
+          throw new BadRequestException(
+            'El descuento no puede ser mayor al valor del producto',
+          );
+        }
+
+        const subtotal = Math.max(gross - discount, 0);
 
         await this.stockService.decrement(variant.id, item.quantity, tx);
 
@@ -319,7 +346,7 @@ export class SalesService {
           inventoryVariantId: variant.id,
           quantity: item.quantity,
           price,
-          discount: item.discount ?? 0,
+          discount,
           subtotal,
         });
 
@@ -442,13 +469,9 @@ export class SalesService {
       throw new ForbiddenException('No tienes permiso para ver este local');
     }
 
-    // Zona horaria Colombia
     const start = new Date(`${date}T00:00:00-05:00`);
     const end = new Date(`${date}T23:59:59-05:00`);
 
-    /**
-     * Ventas del día
-     */
     const sales = await this.prisma.sale.findMany({
       where: {
         localId,
@@ -468,11 +491,6 @@ export class SalesService {
       },
     });
 
-    /**
-     * Usuarios enlazados al local
-     * - usuarios asignados
-     * - managers del local
-     */
     const linkedUsers = await this.prisma.user.findMany({
       where: {
         status: Status.ACTIVO,
@@ -481,11 +499,6 @@ export class SalesService {
       select: { id: true, name: true },
     });
 
-    /**
-     * Unir:
-     * - usuarios enlazados
-     * - usuarios que vendieron
-     */
     const usersMap = new Map<number, string>();
 
     linkedUsers.forEach((u) => {
@@ -500,9 +513,6 @@ export class SalesService {
 
     const users = Array.from(usersMap.values());
 
-    /**
-     * Inicializar métodos desde ENUM
-     */
     const methods: Record<string, any> = {};
     let grandTotal = 0;
 
@@ -517,9 +527,6 @@ export class SalesService {
       });
     });
 
-    /**
-     * Acumulación de ventas
-     */
     for (const sale of sales) {
       const method = sale.paymentMethod;
       const userName = sale.user?.name;
@@ -532,9 +539,6 @@ export class SalesService {
       grandTotal += sale.totalAmount;
     }
 
-    /**
-     * Total general por usuario
-     */
     const totalByUser: Record<string, number> = {};
     users.forEach((u) => (totalByUser[u] = 0));
 
@@ -569,35 +573,29 @@ export class SalesService {
       );
     }
 
-    /**
-     * Validar acceso al local
-     */
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     if (localIds !== null && !localIds.includes(localId)) {
       throw new ForbiddenException('No tienes permiso para ver este local');
     }
 
-    /**
-     * Parseo robusto de fechas
-     * Soporta:
-     * - YYYY-MM-DD
-     * - ISO completo (2026-01-10T22:53:32.270Z)
-     */
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const startRaw = new Date(startDate);
+    const endRaw = new Date(endDate);
 
-    if (isNaN(start.getTime())) {
+    if (isNaN(startRaw.getTime())) {
       throw new BadRequestException('Fecha inválida en fecha inicial');
     }
 
-    if (isNaN(end.getTime())) {
+    if (isNaN(endRaw.getTime())) {
       throw new BadRequestException('Fecha inválida en fecha final');
     }
 
-    /**
-     * Filtro base de ventas
-     */
+    const start = new Date(startRaw);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(endRaw);
+    end.setHours(23, 59, 59, 999);
+
     const where: any = {
       localId,
       saleDate: {
@@ -606,16 +604,10 @@ export class SalesService {
       },
     };
 
-    /**
-     * Filtro opcional por asesor
-     */
     if (userId) {
       where.userId = userId;
     }
 
-    /**
-     * Ventas en el rango
-     */
     const sales = await this.prisma.sale.findMany({
       where: {
         ...where,
@@ -630,11 +622,6 @@ export class SalesService {
       },
     });
 
-    /**
-     * Determinar usuarios a mostrar en el reporte
-     * - Si viene userId → solo ese asesor
-     * - Si no → todos los asesores del local + los que vendieron
-     */
     let users: string[] = [];
 
     if (userId) {
@@ -669,9 +656,6 @@ export class SalesService {
       users = Array.from(usersMap.values());
     }
 
-    /**
-     * Inicializar métodos de pago
-     */
     const methods: Record<string, any> = {};
     let grandTotal = 0;
 
@@ -686,9 +670,6 @@ export class SalesService {
       });
     });
 
-    /**
-     * Acumular ventas
-     */
     for (const sale of sales) {
       const method = sale.paymentMethod;
       const userName = sale.user?.name;
@@ -701,9 +682,6 @@ export class SalesService {
       grandTotal += sale.totalAmount;
     }
 
-    /**
-     * Total general por usuario
-     */
     const totalByUser: Record<string, number> = {};
     users.forEach((u) => (totalByUser[u] = 0));
 
@@ -714,14 +692,41 @@ export class SalesService {
       }
     });
 
+    const dailyMap = new Map<string, number>();
+
+    const cursor = new Date(start);
+    cursor.setHours(0, 0, 0, 0);
+
+    while (cursor <= end) {
+      const key = cursor.toISOString().split('T')[0];
+      dailyMap.set(key, 0);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    for (const sale of sales) {
+      const key = sale.saleDate.toISOString().split('T')[0];
+      if (dailyMap.has(key)) {
+        dailyMap.set(key, dailyMap.get(key)! + sale.totalAmount);
+      }
+    }
+
+    const daily = Array.from(dailyMap.entries()).map(([date, total]) => {
+      const [year, month, day] = date.split('-');
+      return {
+        date: `${year}-${month}-${day}`,
+        total,
+      };
+    });
+
     return {
       success: true,
       message: 'Reporte de ventas por rango',
       data: {
-        startDate,
-        endDate,
+        startDate: formatYMD(start),
+        endDate: formatYMD(end),
         localId,
         userId: userId ?? null,
+        daily,
         methods,
         total: {
           total: grandTotal,

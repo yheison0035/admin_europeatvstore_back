@@ -126,7 +126,7 @@ export class InventoryService {
         take: limit,
         orderBy: { updatedAt: 'desc' },
         include: {
-          images: { orderBy: { position: 'asc' }, take: 1 },
+          images: { orderBy: { position: 'asc' } },
           variants: { where: { isActive: true } },
           brand: true,
           provider: true,
