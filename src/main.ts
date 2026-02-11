@@ -29,21 +29,11 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document); // Ruta => http://localhost:3000/api-docs
 
-  app.enableCors({
-    origin: (origin, callback) => {
-      const allowed = [
-        'http://localhost:3000',
-        'https://admineuropeatvstoreback-production.up.railway.app/',
-        'https://admin.europeatvstore.com',
-        'https://www.europeatvstore.com',
-      ];
-      if (!origin || allowed.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+   app.enableCors({
+    origin: true,
     credentials: true,
+    methods: '*',
+    allowedHeaders: '*',
   });
 
   await app.listen(process.env.PORT || 3002);
