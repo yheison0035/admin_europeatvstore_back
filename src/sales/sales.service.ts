@@ -10,6 +10,7 @@ import { UpdateSaleDto } from './dto/update-sale.dto';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { PaymentMethod, PaymentStatus, Status } from '@prisma/client';
 import { StockService } from 'src/inventory/stock.service';
+import { getDayRange, getRangeDates } from 'src/common/date-range.util';
 
 @Injectable()
 export class SalesService {
@@ -176,7 +177,7 @@ export class SalesService {
           paymentMethod: dto.paymentMethod,
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',
-          saleDate: dto.saleDate ? new Date(dto.saleDate) : undefined,
+          saleDate: new Date(),
           notes: dto.notes,
           customerId: dto.customerId,
           localId: dto.localId,
@@ -367,6 +368,7 @@ export class SalesService {
     };
   }
 
+  // Reportes por dia
   async dailySalesReport(dto: any, user: any) {
     const { date, localId } = dto;
 
@@ -381,33 +383,74 @@ export class SalesService {
       throw new ForbiddenException('No tienes permiso');
     }
 
-    const start = new Date(`${date}T00:00:00`);
-    const end = new Date(`${date}T23:59:59`);
+    const { start, end } = getDayRange(date);
 
     const sales = await this.prisma.sale.findMany({
       where: {
         localId,
-        saleDate: { gte: start, lte: end },
+        saleDate: {
+          gte: start,
+          lte: end,
+        },
+      },
+      include: {
+        user: {
+          select: { id: true, name: true },
+        },
       },
     });
 
-    const total = sales.reduce((acc, s) => acc + s.totalAmount, 0);
+    let totalGeneral = 0;
+
+    const usersMap: Record<string, number> = {};
+    const methodsMap: Record<
+      string,
+      { total: number; users: Record<string, number> }
+    > = {};
+
+    for (const sale of sales) {
+      const amount = sale.totalAmount;
+      const userName = sale.user?.name || 'SIN ASESOR';
+      const method = sale.paymentMethod || 'OTROS';
+
+      totalGeneral += amount;
+
+      usersMap[userName] = (usersMap[userName] || 0) + amount;
+
+      if (!methodsMap[method]) {
+        methodsMap[method] = { total: 0, users: {} };
+      }
+
+      methodsMap[method].total += amount;
+      methodsMap[method].users[userName] =
+        (methodsMap[method].users[userName] || 0) + amount;
+    }
 
     return {
       success: true,
       data: {
-        total,
-        count: sales.length,
+        date,
+        localId,
+        total: {
+          total: totalGeneral,
+          users: usersMap,
+        },
+        methods: methodsMap,
       },
     };
   }
 
+  // Reporte por rango de fechas
   async rangeSalesReport(dto: any, user: any) {
-    const { startDate, endDate, localId } = dto;
+    const { startDate, endDate, localId, userId } = dto;
+
+    if (!startDate || !endDate) {
+      throw new BadRequestException('Fechas requeridas');
+    }
 
     const local = await this.prisma.local.findFirst({
       where: {
-        id: localId,
+        id: Number(localId),
         companyId: user.companyId,
       },
     });
@@ -416,26 +459,84 @@ export class SalesService {
       throw new ForbiddenException('No tienes permiso');
     }
 
-    const start = new Date(`${startDate}T00:00:00`);
-    const end = new Date(`${endDate}T23:59:59`);
+    const { start, end } = getRangeDates(startDate, endDate);
 
     const sales = await this.prisma.sale.findMany({
       where: {
-        localId,
+        localId: Number(localId),
+        userId: Number(userId),
         saleDate: {
-          gte: new Date(start),
-          lte: new Date(end),
+          gte: start,
+          lte: end,
+        },
+      },
+      include: {
+        user: {
+          select: { id: true, name: true },
         },
       },
     });
 
-    const total = sales.reduce((acc, s) => acc + s.totalAmount, 0);
+    let totalGeneral = 0;
+
+    const usersMap: Record<string, number> = {};
+    const methodsMap: Record<string, { total: number }> = {};
+    const dailyMap: Record<string, number> = {};
+
+    for (const sale of sales) {
+      const amount = sale.totalAmount;
+      const userName = sale.user?.name || 'SIN ASESOR';
+      const method = sale.paymentMethod || 'OTROS';
+
+      totalGeneral += amount;
+
+      usersMap[userName] = (usersMap[userName] || 0) + amount;
+
+      if (!methodsMap[method]) {
+        methodsMap[method] = { total: 0 };
+      }
+
+      methodsMap[method].total += amount;
+
+      // 🔥 CLAVE: forzar fecha Colombia SIN UTC
+      const dateKey = new Date(sale.saleDate.getTime() - 5 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
+
+      dailyMap[dateKey] = (dailyMap[dateKey] || 0) + amount;
+    }
+
+    const daily: { date: string; total: number }[] = [];
+
+    let current = new Date(`${startDate}T00:00:00-05:00`);
+    const last = new Date(`${endDate}T00:00:00-05:00`);
+
+    while (current <= last) {
+      const dateKey = new Date(current.getTime() - 5 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
+
+      daily.push({
+        date: dateKey,
+        total: dailyMap[dateKey] || 0,
+      });
+
+      current.setDate(current.getDate() + 1);
+    }
 
     return {
       success: true,
       data: {
-        total,
-        count: sales.length,
+        startDate,
+        endDate,
+        localId,
+        userId,
+        total: {
+          total: totalGeneral,
+          users: usersMap,
+        },
+        methods: methodsMap,
+        daily,
       },
     };
   }
