@@ -36,4 +36,9 @@ export class EnumsController {
   getTypeExpenses() {
     return { success: true, data: this.enumsService.getTypeExpenses() };
   }
+
+  @Get('type-companies')
+  getTypeCompanies() {
+    return { success: true, data: this.enumsService.getTypeCompanies() };
+  }
 }

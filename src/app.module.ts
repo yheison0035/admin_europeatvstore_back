@@ -16,6 +16,7 @@ import { VariantsModule } from './inventory/variants/variants.module';
 import { EnumsModule } from './enums/enums.module';
 import { EcommerceModule } from './ecommerce/ecommerce.module';
 import { WompiModule } from './wompi/wompi.module';
+import { CompaniesModule } from './companies/companies.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { WompiModule } from './wompi/wompi.module';
     EnumsModule,
     EcommerceModule,
     WompiModule,
+    CompaniesModule,
   ],
 })
 export class AppModule {}

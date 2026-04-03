@@ -6,6 +6,7 @@ import {
   PaymentStatus,
   SaleStatus,
   ExpenseType,
+  BusinessType,
 } from '@prisma/client';
 
 @Injectable()
@@ -39,5 +40,9 @@ export class EnumsService {
 
   getTypeExpenses() {
     return this.mapEnumToOptions(ExpenseType);
+  }
+
+  getTypeCompanies() {
+    return this.mapEnumToOptions(BusinessType);
   }
 }

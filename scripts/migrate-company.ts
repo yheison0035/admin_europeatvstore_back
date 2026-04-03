@@ -15,7 +15,7 @@ async function main() {
       data: {
         name: 'EUROPEATVSTORE',
         logo: '/images/europeatvstore.png',
-        type: 'RETAIL',
+        type: 'COMERCIO',
       },
     });
 

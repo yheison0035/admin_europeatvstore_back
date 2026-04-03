@@ -91,6 +91,17 @@ enum ShippingStatus {
   FALLIDO
 }
 
+enum BusinessType {
+  COMERCIO
+  FERIA
+  TELEVENTAS
+  RESTAURANTE
+  SERVICIOS
+  ECOMMERCE
+  DISTRIBUCION
+  ZORVEX
+}
+
 //////////////////////////////////////////////////
 // MODELOS
 //////////////////////////////////////////////////
@@ -99,8 +110,10 @@ model Company {
   id          Int     @id @default(autoincrement())
   name        String
   logo        String?
-  type        String? // retail, barberia, etc
+  type        BusinessType @default(COMERCIO)
   status      Status  @default(ACTIVO)
+  phone       String?
+  manager     String?
 
   users   User[]
   locals  Local[]

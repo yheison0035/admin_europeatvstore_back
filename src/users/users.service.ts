@@ -152,6 +152,7 @@ export class UsersService {
             name: true,
             logo: true,
             status: true,
+            type: true,
           },
         },
         local: true,

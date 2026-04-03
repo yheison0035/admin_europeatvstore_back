@@ -29,6 +29,7 @@ export class AuthService {
             id: true,
             name: true,
             status: true,
+            type: true,
           },
         },
       },
