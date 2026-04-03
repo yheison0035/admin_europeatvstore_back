@@ -23,6 +23,15 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -33,20 +42,33 @@ export class AuthService {
       throw new UnauthorizedException('Tu usuario está inactivo');
     }
 
+    if (!user.companyId && user.role !== 'SUPER_PLATFORM_ADMIN') {
+      throw new UnauthorizedException('Usuario sin empresa asignada');
+    }
+
     const isValid = await bcrypt.compare(dto.password, user.password);
     if (!isValid) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      companyId: user.companyId,
+    };
 
-    const { password, ...safeData } = user;
+    const { password, ...safeUser } = user;
+
     return {
       success: true,
       message: 'Login exitoso',
       data: {
         access_token: await this.jwtService.signAsync(payload),
-        safeData,
+        user: {
+          ...safeUser,
+          company: user.company ?? null,
+        },
       },
     };
   }

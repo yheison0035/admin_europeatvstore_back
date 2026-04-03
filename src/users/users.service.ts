@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
-  Inject,
 } from '@nestjs/common';
 import { Role, Status } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
@@ -21,12 +20,20 @@ export class UsersService {
     private cloudinaryService: CloudinaryService,
   ) {}
 
-  // Actualizar avatar
-  async updateAvatar(userId: number, file: Express.Multer.File) {
+  async updateAvatar(userId: number, file: Express.Multer.File, user?: any) {
+    const found = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        companyId: user.companyId,
+      },
+    });
+
+    if (!found) throw new NotFoundException('Usuario no encontrado');
+
     const upload = await this.cloudinaryService.uploadImage(
       file,
-      'avatars', // carpeta
-      `user_${userId}`, // publicId fijo
+      'avatars',
+      `user_${userId}`,
     );
 
     const updatedUser = await this.prisma.user.update({
@@ -41,22 +48,18 @@ export class UsersService {
     };
   }
 
-  // Eliminar Avatar
-  async deleteAvatar(userId: number) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+  async deleteAvatar(userId: number, user?: any) {
+    const found = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        companyId: user.companyId,
+      },
+    });
 
-    if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
-    }
+    if (!found) throw new NotFoundException('Usuario no encontrado');
 
-    if (user.avatar) {
-      try {
-        // Eliminamos directamente con el publicId que usamos al subir
-        await this.cloudinaryService.deleteImage(`avatars/user_${userId}`);
-      } catch (err) {
-        console.error('Error eliminando imagen de Cloudinary:', err);
-        throw new Error('No se pudo eliminar la imagen en Cloudinary');
-      }
+    if (found.avatar) {
+      await this.cloudinaryService.deleteImage(`avatars/user_${userId}`);
 
       await this.prisma.user.update({
         where: { id: userId },
@@ -70,7 +73,6 @@ export class UsersService {
     };
   }
 
-  // Obtener todos los usuarios (solo SUPER_ADMIN y ADMIN)
   async findAllPaginated(user: any, query: any) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
@@ -78,7 +80,9 @@ export class UsersService {
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    const where: any = {};
+    const where: any = {
+      companyId: user.companyId,
+    };
 
     if (user.role !== Role.SUPER_ADMIN) {
       where.status = Status.ACTIVO;
@@ -86,7 +90,6 @@ export class UsersService {
 
     if (localIds !== null) {
       if (localIds.length === 0) {
-        // solo él mismo
         where.id = user.id;
       } else {
         where.OR = [{ localId: { in: localIds } }, { id: user.id }];
@@ -94,75 +97,18 @@ export class UsersService {
     }
 
     if (query.role) {
-      const normalizedRoles = query.role.toUpperCase();
-
-      if (Object.values(Role).includes(normalizedRoles as Role)) {
-        where.role = normalizedRoles as Role;
+      const role = query.role.toUpperCase();
+      if (Object.values(Role).includes(role)) {
+        where.role = role;
       }
     }
 
     if (query.name) {
-      where.name = {
-        contains: query.name,
-        mode: 'insensitive',
-      };
-    }
-
-    if (query.document) {
-      where.document = {
-        contains: query.document,
-        mode: 'insensitive',
-      };
+      where.name = { contains: query.name, mode: 'insensitive' };
     }
 
     if (query.email) {
-      where.email = {
-        contains: query.email,
-        mode: 'insensitive',
-      };
-    }
-
-    if (query.phone) {
-      where.phone = {
-        contains: query.phone,
-        mode: 'insensitive',
-      };
-    }
-
-    if (query.address) {
-      where.address = {
-        contains: query.address,
-        mode: 'insensitive',
-      };
-    }
-
-    // Local asignado (por nombre)
-    if (query.localId) {
-      where.local = {
-        name: {
-          contains: query.localId,
-          mode: 'insensitive',
-        },
-      };
-    }
-
-    // Locales administrados (por nombre)
-    if (query.managedLocals) {
-      where.managedLocals = {
-        some: {
-          name: {
-            contains: query.managedLocals,
-            mode: 'insensitive',
-          },
-        },
-      };
-    }
-
-    if (query.status && user.role === Role.SUPER_ADMIN) {
-      const normalizedStatus = query.status.toUpperCase();
-      if (Object.values(Status).includes(normalizedStatus as Status)) {
-        where.status = normalizedStatus as Status;
-      }
+      where.email = { contains: query.email, mode: 'insensitive' };
     }
 
     const [items, total] = await this.prisma.$transaction([
@@ -191,144 +137,106 @@ export class UsersService {
     };
   }
 
-  async getUserId(
-    id: number,
-    requester?: { role: Role; id: number; localId?: number },
-  ) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
+  async getUserId(id: number, requester?: any) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id,
+        ...(requester?.companyId && {
+          companyId: requester.companyId,
+        }),
+      },
       include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+            logo: true,
+            status: true,
+          },
+        },
         local: true,
         managedLocals: true,
       },
     });
 
     if (!user) {
-      throw new NotFoundException(`Usuario con id ${id} no fue encontrado`);
+      throw new NotFoundException('Usuario no encontrado');
     }
 
-    /**
-     * SIEMPRE permitir que el usuario se vea a sí mismo
-     */
-    if (requester && requester.id === user.id) {
+    if (requester?.id === user.id) {
       return {
         success: true,
-        message: 'Usuario obtenido',
         data: sanitizeUser(user),
       };
     }
 
     const localIds = await getAccessibleLocalIds(this.prisma, requester);
 
-    /**
-     * Roles con acceso global
-     */
     if (localIds === null) {
       return {
         success: true,
-        message: 'Usuario obtenido',
         data: sanitizeUser(user),
       };
     }
 
-    /**
-     * Validar acceso por local
-     */
     if (!user.localId || !localIds.includes(user.localId)) {
-      throw new ForbiddenException('No tienes permiso para ver este usuario');
+      throw new ForbiddenException('No tienes permiso');
     }
 
     return {
       success: true,
-      message: 'Usuario obtenido',
       data: sanitizeUser(user),
     };
   }
 
-  // Crear usuario (solo SUPER_ADMIN y ADMIN)
   async createUser(dto: CreateUserDto, user?: any) {
     if (user && !hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const existing = await this.prisma.user.findUnique({
+    const exists = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
-    if (existing) {
-      throw new ConflictException(`El email ${dto.email} ya está registrado`);
-    }
+
+    if (exists) throw new ConflictException('Email ya registrado');
 
     if (dto.localId) {
-      const local = await this.prisma.local.findUnique({
-        where: { id: dto.localId },
+      const local = await this.prisma.local.findFirst({
+        where: {
+          id: dto.localId,
+          companyId: user.companyId,
+        },
       });
-      if (!local) {
-        throw new NotFoundException('El local asignado no existe');
-      }
+
+      if (!local) throw new ForbiddenException('Local inválido');
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    if (dto.localId) {
-      const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-      if (localIds !== null && !localIds.includes(dto.localId)) {
-        throw new ForbiddenException(
-          'No puedes crear usuarios en un local que no administras',
-        );
-      }
-    }
-
     const created = await this.prisma.user.create({
       data: {
-        email: dto.email,
+        ...dto,
         password: hashedPassword,
-        name: dto.name?.trim(),
-        birthdate: dto.birthdate ? new Date(dto.birthdate) : null,
-        phone: dto.phone?.trim(),
-        address: dto.address?.trim(),
-        city: dto.city?.trim(),
-        department: dto.department?.trim(),
-        document: dto.document?.trim(),
-        role: dto.role ?? Role.ASESOR,
-        status: dto.status ?? 'ACTIVO',
-        localId: dto.localId ?? null,
+        companyId: user.companyId,
       },
     });
 
     return {
       success: true,
-      message: 'Usuario creado exitosamente',
+      message: 'Usuario creado',
       data: created,
     };
   }
 
-  // Actualizar usuario (propio o ADMIN)
   async updateUser(id: number, dto: UpdateUserDto, user?: any) {
-    const found = await this.prisma.user.findUnique({ where: { id } });
-    if (!found) {
-      throw new NotFoundException(`Usuario con id ${id} no fue encontrado`);
-    }
+    const found = await this.prisma.user.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+    });
 
-    if (user && hasRole(user.role, [Role.ASESOR]) && user.userId !== id) {
-      throw new ForbiddenException(
-        'No tienes permiso para modificar este usuario',
-      );
-    }
-
-    if (dto.birthdate) dto.birthdate = new Date(dto.birthdate as any) as any;
-
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-    if (
-      localIds !== null &&
-      found.localId &&
-      !localIds.includes(found.localId)
-    ) {
-      throw new ForbiddenException(
-        'No tienes permiso para modificar usuarios de otro local',
-      );
-    }
+    if (!found) throw new NotFoundException('Usuario no encontrado');
 
     const updated = await this.prisma.user.update({
       where: { id },
@@ -337,57 +245,33 @@ export class UsersService {
         password: dto.password
           ? await bcrypt.hash(dto.password, 10)
           : found.password,
-        avatar: dto.avatar ?? found.avatar,
       },
     });
 
-    return { success: true, message: 'Usuario actualizado', data: updated };
+    return { success: true, data: updated };
   }
 
-  // Eliminar usuario (solo ADMIN)
   async deleteUser(id: number, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
-      throw new ForbiddenException('No tienes permisos');
-    }
+    const found = await this.prisma.user.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+    });
 
-    const found = await this.prisma.user.findUnique({ where: { id } });
-    if (!found) {
-      throw new NotFoundException(`Usuario con id ${id} no fue encontrado`);
-    }
+    if (!found) throw new NotFoundException('Usuario no encontrado');
 
     await this.prisma.user.delete({ where: { id } });
 
-    return { success: true, message: 'Usuario eliminado correctamente' };
-  }
-
-  // Alternar rol (solo ADMIN)
-  async updateUserSegment(id: number, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
-      throw new ForbiddenException('No tienes permisos');
-    }
-
-    const found = await this.prisma.user.findUnique({ where: { id } });
-    if (!found) {
-      throw new NotFoundException(`Usuario con id ${id} no fue encontrado`);
-    }
-
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data: {
-        role: found.role === Role.SUPER_ADMIN ? Role.ASESOR : Role.SUPER_ADMIN,
-      },
-    });
-
-    return { success: true, message: 'Rol actualizado', data: updated };
+    return { success: true, message: 'Usuario eliminado' };
   }
 }
 
-function sanitizeUser(user: any) {
-  const { password, ...safe } = user;
+export function sanitizeUser(user: any) {
+  const { password, ...rest } = user;
+
   return {
-    ...safe,
-    birthdate: user.birthdate
-      ? user.birthdate.toISOString().split('T')[0]
-      : null,
+    ...rest,
+    company: user.company ?? null,
   };
 }

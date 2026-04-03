@@ -23,6 +23,7 @@ export class LocalsService {
 
     const where: any = {
       status: { not: Status.ELIMINADO },
+      companyId: user.companyId,
     };
 
     if (localIds !== null) {
@@ -34,45 +35,29 @@ export class LocalsService {
     }
 
     if (query.name) {
-      where.name = {
-        contains: query.name,
-        mode: 'insensitive',
-      };
+      where.name = { contains: query.name, mode: 'insensitive' };
     }
 
     if (query.address) {
-      where.address = {
-        contains: query.address,
-        mode: 'insensitive',
-      };
+      where.address = { contains: query.address, mode: 'insensitive' };
     }
 
     if (query.city) {
-      where.city = {
-        contains: query.city,
-        mode: 'insensitive',
-      };
+      where.city = { contains: query.city, mode: 'insensitive' };
     }
 
     if (query.phone) {
-      where.phone = {
-        contains: query.phone,
-        mode: 'insensitive',
-      };
+      where.phone = { contains: query.phone, mode: 'insensitive' };
     }
 
     if (query.managerId) {
       where.manager = {
-        name: {
-          contains: query.managerId,
-          mode: 'insensitive',
-        },
+        name: { contains: query.managerId, mode: 'insensitive' },
       };
     }
 
     if (query.status) {
       const normalizedStatus = query.status.toUpperCase();
-
       if (Object.values(Status).includes(normalizedStatus as Status)) {
         where.status = normalizedStatus as Status;
       }
@@ -105,8 +90,11 @@ export class LocalsService {
   }
 
   async findOne(id: number, user: any) {
-    const local = await this.prisma.local.findUnique({
-      where: { id },
+    const local = await this.prisma.local.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
       include: {
         users: true,
         manager: true,
@@ -156,8 +144,15 @@ export class LocalsService {
 
     const local = await this.prisma.local.create({
       data: {
-        ...dto,
+        name: dto.name,
+        address: dto.address,
+        city: dto.city,
+        department: dto.department,
+        phone: dto.phone,
+        status: dto.status ?? Status.ACTIVO,
         managerId: dto.managerId ?? null,
+
+        companyId: user.companyId,
       },
     });
 
@@ -169,7 +164,13 @@ export class LocalsService {
   }
 
   async update(id: number, dto: UpdateLocalDto, user: any) {
-    const found = await this.prisma.local.findUnique({ where: { id } });
+    const found = await this.prisma.local.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+    });
+
     if (!found) {
       throw new NotFoundException(`Local con ID ${id} no encontrado`);
     }
@@ -178,7 +179,6 @@ export class LocalsService {
     if (
       ![Role.SUPER_ADMIN, Role.COORDINADOR, Role.AUXILIAR].includes(user.role)
     ) {
-      // ADMIN → solo sus locales
       if (user.role === Role.ADMIN && found.managerId !== user.id) {
         throw new ForbiddenException('No puedes modificar este local');
       }
@@ -194,14 +194,15 @@ export class LocalsService {
     };
 
     if (dto.managerId !== undefined) {
-      const manager = await this.prisma.user.findUnique({
-        where: { id: dto.managerId },
+      const manager = await this.prisma.user.findFirst({
+        where: {
+          id: dto.managerId,
+          companyId: user.companyId,
+        },
       });
 
       if (!manager) {
-        throw new NotFoundException(
-          'El usuario asignado como encargado no existe',
-        );
+        throw new NotFoundException('El manager no pertenece a la empresa');
       }
 
       data.manager = { connect: { id: dto.managerId } };
@@ -228,7 +229,13 @@ export class LocalsService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const found = await this.prisma.local.findUnique({ where: { id } });
+    const found = await this.prisma.local.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+    });
+
     if (!found) {
       throw new NotFoundException(`Local con ID ${id} no encontrado`);
     }

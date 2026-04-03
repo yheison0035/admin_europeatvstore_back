@@ -13,20 +13,18 @@ import { hasRole } from 'src/common/role-check.util';
 export class ProvidersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAllPaginated(query: any) {
+  async findAllPaginated(query: any, user: any) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
 
     const where: any = {
       status: { not: Status.ELIMINADO },
+      companyId: user.companyId,
     };
 
     if (query.name) {
-      where.name = {
-        contains: query.name,
-        mode: 'insensitive',
-      };
+      where.name = { contains: query.name, mode: 'insensitive' };
     }
 
     if (query.contactName) {
@@ -44,29 +42,19 @@ export class ProvidersService {
     }
 
     if (query.address) {
-      where.address = {
-        contains: query.address,
-        mode: 'insensitive',
-      };
+      where.address = { contains: query.address, mode: 'insensitive' };
     }
 
     if (query.city) {
-      where.city = {
-        contains: query.city,
-        mode: 'insensitive',
-      };
+      where.city = { contains: query.city, mode: 'insensitive' };
     }
 
     if (query.phone) {
-      where.phone = {
-        contains: query.phone,
-        mode: 'insensitive',
-      };
+      where.phone = { contains: query.phone, mode: 'insensitive' };
     }
 
     if (query.status) {
       const normalizedStatus = query.status.toUpperCase();
-
       if (Object.values(Status).includes(normalizedStatus as Status)) {
         where.status = normalizedStatus as Status;
       }
@@ -94,9 +82,12 @@ export class ProvidersService {
     };
   }
 
-  async findOne(id: number) {
-    const provider = await this.prisma.provider.findUnique({
-      where: { id },
+  async findOne(id: number, user: any) {
+    const provider = await this.prisma.provider.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
     });
 
     if (!provider) {
@@ -116,7 +107,19 @@ export class ProvidersService {
     }
 
     const provider = await this.prisma.provider.create({
-      data: dto,
+      data: {
+        name: dto.name,
+        contactName: dto.contactName,
+        phone: dto.phone,
+        email: dto.email,
+        city: dto.city,
+        department: dto.department,
+        address: dto.address,
+        productType: dto.productType,
+        status: dto.status ?? Status.ACTIVO,
+
+        companyId: user.companyId,
+      },
     });
 
     return {
@@ -131,8 +134,11 @@ export class ProvidersService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const found = await this.prisma.provider.findUnique({
-      where: { id },
+    const found = await this.prisma.provider.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
     });
 
     if (!found) {
@@ -141,7 +147,23 @@ export class ProvidersService {
 
     const updated = await this.prisma.provider.update({
       where: { id },
-      data: dto,
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.contactName !== undefined && {
+          contactName: dto.contactName,
+        }),
+        ...(dto.phone !== undefined && { phone: dto.phone }),
+        ...(dto.email !== undefined && { email: dto.email }),
+        ...(dto.city !== undefined && { city: dto.city }),
+        ...(dto.department !== undefined && {
+          department: dto.department,
+        }),
+        ...(dto.address !== undefined && { address: dto.address }),
+        ...(dto.productType !== undefined && {
+          productType: dto.productType,
+        }),
+        ...(dto.status !== undefined && { status: dto.status }),
+      },
     });
 
     return {
@@ -156,8 +178,11 @@ export class ProvidersService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const found = await this.prisma.provider.findUnique({
-      where: { id },
+    const found = await this.prisma.provider.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
     });
 
     if (!found) {

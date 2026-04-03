@@ -19,12 +19,11 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 
 @Controller('brands')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 
   // LISTAR
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
   findAll(@Req() req, @Query() query) {
@@ -32,7 +31,6 @@ export class BrandsController {
   }
 
   // VER UNO
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
@@ -40,7 +38,6 @@ export class BrandsController {
   }
 
   // CREAR
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post()
   create(@Body() dto: CreateBrandDto, @Req() req) {
@@ -48,7 +45,6 @@ export class BrandsController {
   }
 
   // ACTUALIZAR
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id')
   update(
@@ -60,7 +56,6 @@ export class BrandsController {
   }
 
   // ELIMINAR
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {

@@ -19,28 +19,25 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 
 @Controller('providers')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
   // LISTAR
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
-  findAll(@Query() query) {
-    return this.providersService.findAllPaginated(query);
+  findAll(@Query() query, @Req() req) {
+    return this.providersService.findAllPaginated(query, req.user);
   }
 
   // VER UNO
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.providersService.findOne(id);
+  findOne(@Param('id') id: number, @Req() req) {
+    return this.providersService.findOne(id, req.user);
   }
 
   // CREAR
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post()
   create(@Body() dto: CreateProviderDto, @Req() req) {
@@ -48,7 +45,6 @@ export class ProvidersController {
   }
 
   // ACTUALIZAR
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id')
   update(
@@ -60,7 +56,6 @@ export class ProvidersController {
   }
 
   // ELIMINAR
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {

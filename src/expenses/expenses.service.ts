@@ -23,6 +23,10 @@ export class ExpensesService {
 
     const where: any = {
       status: { not: Status.ELIMINADO },
+
+      local: {
+        companyId: user.companyId,
+      },
     };
 
     if (localIds !== null) {
@@ -69,6 +73,7 @@ export class ExpensesService {
     if (query.localId) {
       where.local = {
         name: { contains: query.localId, mode: 'insensitive' },
+        companyId: user.companyId,
       };
     }
 
@@ -125,6 +130,12 @@ export class ExpensesService {
       where: {
         id,
         status: { not: Status.ELIMINADO },
+
+        // 🔥 MULTIEMPRESA
+        local: {
+          companyId: user.companyId,
+        },
+
         ...(localIds !== null && { localId: { in: localIds } }),
       },
       include: {
@@ -147,6 +158,18 @@ export class ExpensesService {
   async create(dto: CreateExpenseDto, user: any) {
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
       throw new ForbiddenException('No tienes permisos');
+    }
+
+    // 🔥 VALIDAR QUE EL LOCAL SEA DE LA EMPRESA
+    const local = await this.prisma.local.findFirst({
+      where: {
+        id: dto.localId,
+        companyId: user.companyId,
+      },
+    });
+
+    if (!local) {
+      throw new ForbiddenException('Local no pertenece a tu empresa');
     }
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
@@ -182,8 +205,13 @@ export class ExpensesService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const found = await this.prisma.expense.findUnique({
-      where: { id },
+    const found = await this.prisma.expense.findFirst({
+      where: {
+        id,
+        local: {
+          companyId: user.companyId,
+        },
+      },
     });
 
     if (!found || found.status === Status.ELIMINADO) {
@@ -210,8 +238,13 @@ export class ExpensesService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const found = await this.prisma.expense.findUnique({
-      where: { id },
+    const found = await this.prisma.expense.findFirst({
+      where: {
+        id,
+        local: {
+          companyId: user.companyId,
+        },
+      },
     });
 
     if (!found || found.status === Status.ELIMINADO) {

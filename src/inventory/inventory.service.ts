@@ -29,6 +29,9 @@ export class InventoryService {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {
+      local: {
+        companyId: user.companyId,
+      },
       OR: [
         { name: { contains: term, mode: 'insensitive' } },
         { barcode: term },
@@ -36,18 +39,14 @@ export class InventoryService {
     };
 
     if (localIds !== null) {
-      if (localIds.length === 0) {
-        return { success: true, data: [] };
-      }
+      if (localIds.length === 0) return { success: true, data: [] };
       where.localId = { in: localIds };
     }
 
     const products = await this.prisma.inventory.findMany({
       where,
       include: {
-        variants: {
-          where: { isActive: true },
-        },
+        variants: { where: { isActive: true } },
       },
       take: 10,
     });
@@ -71,7 +70,11 @@ export class InventoryService {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
     const { page, limit, skip } = getPagination(query);
 
-    const where: any = {};
+    const where: any = {
+      local: {
+        companyId: user.companyId,
+      },
+    };
 
     if (localIds !== null) {
       if (localIds.length === 0) {
@@ -82,37 +85,11 @@ export class InventoryService {
     }
 
     if (query.name) {
-      where.name = {
-        contains: query.name,
-        mode: 'insensitive',
-      };
+      where.name = { contains: query.name, mode: 'insensitive' };
     }
 
     if (query.barcode) {
-      where.barcode = {
-        contains: query.barcode,
-        mode: 'insensitive',
-      };
-    }
-
-    if (query.localId) {
-      where.local = {
-        name: { contains: query.localId, mode: 'insensitive' },
-      };
-    }
-
-    if (query.providerId) {
-      where.provider = {
-        name: { contains: query.providerId, mode: 'insensitive' },
-      };
-    }
-
-    if (query.salePrice !== undefined && query.salePrice !== '') {
-      const price = Number(query.salePrice);
-
-      if (!isNaN(price)) {
-        where.salePrice = price;
-      }
+      where.barcode = { contains: query.barcode, mode: 'insensitive' };
     }
 
     if (query.status) {
@@ -168,47 +145,28 @@ export class InventoryService {
   }
 
   async findOne(id: number, user: any) {
-    const product = await this.prisma.inventory.findUnique({
-      where: { id },
+    const product = await this.prisma.inventory.findFirst({
+      where: {
+        id,
+        local: {
+          companyId: user.companyId,
+        },
+      },
       include: {
-        createdBy: { select: { id: true, name: true } },
-        updatedBy: { select: { id: true, name: true } },
-        images: { orderBy: { position: 'asc' } },
+        images: true,
         variants: { where: { isActive: true } },
         brand: true,
         category: true,
         provider: true,
         local: true,
-        features: { orderBy: { order: 'asc' } },
-        specifications: { orderBy: { order: 'asc' } },
+        features: true,
+        specifications: true,
       },
     });
 
-    if (!product) {
-      throw new NotFoundException('Producto no encontrado');
-    }
-
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-    if (
-      localIds !== null &&
-      (product.localId === null || !localIds.includes(product.localId))
-    ) {
-      throw new ForbiddenException('Acceso denegado');
-    }
+    if (!product) throw new NotFoundException('Producto no encontrado');
 
     const stock = product.variants.reduce((sum, v) => sum + v.stock, 0);
-
-    const canSeePurchasePrice = hasRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.ADMIN,
-      Role.COORDINADOR,
-      Role.AUXILIAR,
-    ]);
-
-    if (!canSeePurchasePrice) {
-      const { purchasePrice, ...rest } = product;
-      return { success: true, data: { ...rest, stock } };
-    }
 
     return { success: true, data: { ...product, stock } };
   }
@@ -218,9 +176,15 @@ export class InventoryService {
       throw new ForbiddenException('No autorizado');
     }
 
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-    if (dto.localId && localIds !== null && !localIds.includes(dto.localId)) {
-      throw new ForbiddenException('Local no permitido');
+    if (dto.localId) {
+      const local = await this.prisma.local.findFirst({
+        where: {
+          id: dto.localId,
+          companyId: user.companyId,
+        },
+      });
+
+      if (!local) throw new ForbiddenException('Local no permitido');
     }
 
     const baseSlug = generateSlug(dto.name);
@@ -231,44 +195,39 @@ export class InventoryService {
       slug = `${baseSlug}-${counter++}`;
     }
 
-    const barcode =
-      dto.barcode && dto.barcode.trim() !== '' ? dto.barcode.trim() : null;
-
-    if (barcode) {
-      const exists = await this.prisma.inventory.findUnique({
-        where: { barcode },
-      });
-
-      if (exists) {
-        throw new BadRequestException('Este código de barras ya existe');
-      }
-    }
-
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.inventory.create({
         data: {
           name: dto.name,
-          slug,
           description: dto.description,
-          barcode,
+          barcode: dto.barcode ?? null,
           purchasePrice: dto.purchasePrice,
-          oldPrice: dto.oldPrice,
+          oldPrice: dto.oldPrice ?? null,
           salePrice: dto.salePrice,
           status: dto.status,
-          ...(dto.brandId && { brand: { connect: { id: dto.brandId } } }),
+          slug,
+
+          ...(dto.localId && {
+            local: { connect: { id: dto.localId } },
+          }),
+
           ...(dto.categoryId && {
             category: { connect: { id: dto.categoryId } },
           }),
+
+          ...(dto.brandId && {
+            brand: { connect: { id: dto.brandId } },
+          }),
+
           ...(dto.providerId && {
             provider: { connect: { id: dto.providerId } },
           }),
-          ...(dto.localId && { local: { connect: { id: dto.localId } } }),
+
           createdBy: { connect: { id: user.id } },
           updatedBy: { connect: { id: user.id } },
         },
       });
 
-      // Variantes → SOLO creación inicial
       const variants: InventoryVariant[] = [];
 
       for (const v of dto.variants ?? []) {
@@ -306,42 +265,39 @@ export class InventoryService {
 
     await this.findOne(id, user);
 
-    const barcode =
-      dto.barcode && dto.barcode.trim() !== '' ? dto.barcode.trim() : null;
-
-    if (barcode) {
-      const exists = await this.prisma.inventory.findFirst({
-        where: {
-          barcode,
-          NOT: { id },
-        },
-      });
-
-      if (exists) {
-        throw new BadRequestException('Este código de barras ya existe');
-      }
-    }
-
-    const updatedProduct = await this.prisma.inventory.update({
+    const updated = await this.prisma.inventory.update({
       where: { id },
       data: {
-        name: dto.name,
-        description: dto.description,
-        barcode,
-        purchasePrice: dto.purchasePrice,
-        oldPrice: dto.oldPrice,
-        salePrice: dto.salePrice,
-        status: dto.status,
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.barcode !== undefined && { barcode: dto.barcode }),
+        ...(dto.purchasePrice !== undefined && {
+          purchasePrice: dto.purchasePrice,
+        }),
+        ...(dto.oldPrice !== undefined && { oldPrice: dto.oldPrice }),
+        ...(dto.salePrice !== undefined && { salePrice: dto.salePrice }),
+        ...(dto.status !== undefined && { status: dto.status }),
+
+        ...(dto.localId && {
+          local: { connect: { id: dto.localId } },
+        }),
+
+        ...(dto.categoryId && {
+          category: { connect: { id: dto.categoryId } },
+        }),
+
+        ...(dto.brandId && {
+          brand: { connect: { id: dto.brandId } },
+        }),
+
+        ...(dto.providerId && {
+          provider: { connect: { id: dto.providerId } },
+        }),
+
         updatedBy: { connect: { id: user.id } },
       },
     });
 
-    /**
-     * REGLA IMPORTANTE:
-     * - variants = []  → DESACTIVAR TODAS
-     * - variants = undefined → NO TOCAR VARIANTES
-     * - variants con datos → SINCRONIZAR
-     */
     if (Array.isArray(dto.variants)) {
       await this.variantsService.syncVariants(id, dto.variants, user);
     }
@@ -349,17 +305,18 @@ export class InventoryService {
     return {
       success: true,
       message: 'Producto actualizado correctamente',
-      data: updatedProduct,
+      data: updated,
     };
   }
 
   async remove(id: number, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
-      throw new ForbiddenException('No autorizado');
-    }
-
-    const product = await this.prisma.inventory.findUnique({
-      where: { id },
+    const product = await this.prisma.inventory.findFirst({
+      where: {
+        id,
+        local: {
+          companyId: user.companyId,
+        },
+      },
       include: { images: true },
     });
 
@@ -371,25 +328,22 @@ export class InventoryService {
 
     await this.prisma.inventory.delete({ where: { id } });
 
-    return {
-      success: true,
-      message: 'Producto eliminado correctamente',
-    };
+    return { success: true, message: 'Producto eliminado' };
   }
 
-  // Endpoint para sincronizar imágenes de un producto
   async syncProductImages(
     inventoryId: number,
     files: Express.Multer.File[],
     keepImageIds: number[],
     user: any,
   ) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.ASESOR])) {
-      throw new ForbiddenException('No tienes permisos');
-    }
-
-    const product = await this.prisma.inventory.findUnique({
-      where: { id: inventoryId },
+    const product = await this.prisma.inventory.findFirst({
+      where: {
+        id: inventoryId,
+        local: {
+          companyId: user.companyId,
+        },
+      },
       include: {
         images: true,
         category: true,
@@ -397,57 +351,29 @@ export class InventoryService {
       },
     });
 
-    if (!product) {
-      throw new NotFoundException('Producto no encontrado');
-    }
+    if (!product) throw new NotFoundException('Producto no encontrado');
 
-    const categoryFolder = product.category?.name
-      ? product.category.name.toLowerCase().replace(/\s+/g, '-')
-      : 'sin-categoria';
-
-    const brandFolder = product.brand?.name
-      ? product.brand.name.toLowerCase().replace(/\s+/g, '-')
-      : 'sin-marca';
-
-    const folderPath = `inventory/${categoryFolder}/${brandFolder}`;
+    const folder = `inventory/${product.category?.name || 'general'}`;
 
     await this.prisma.$transaction(async (tx) => {
-      /** ELIMINAR IMÁGENES QUE NO SE CONSERVAN */
       if (Array.isArray(keepImageIds)) {
-        const imagesToDelete = product.images.filter(
+        const toDelete = product.images.filter(
           (img) => !keepImageIds.includes(img.id),
         );
 
-        for (const img of imagesToDelete) {
-          await this.cloudinaryService
-            .deleteImage(img.publicId)
-            .catch(() => null);
-
-          await tx.inventoryImage.delete({
-            where: { id: img.id },
-          });
+        for (const img of toDelete) {
+          await this.cloudinaryService.deleteImage(img.publicId);
+          await tx.inventoryImage.delete({ where: { id: img.id } });
         }
       }
 
-      /** REORDENAR IMÁGENES EXISTENTES (ORDEN VIENE DEL FRONT) */
-      if (Array.isArray(keepImageIds)) {
-        for (let i = 0; i < keepImageIds.length; i++) {
-          await tx.inventoryImage.update({
-            where: { id: keepImageIds[i] },
-            data: { position: i },
-          });
-        }
-      }
+      let start = keepImageIds?.length ?? 0;
 
-      /** SUBIR NUEVAS IMÁGENES AL FINAL */
-      let startPosition = keepImageIds?.length ?? 0;
-
-      if (Array.isArray(files)) {
+      if (files) {
         for (let i = 0; i < files.length; i++) {
-          const file = files[i];
           const upload = await this.cloudinaryService.uploadImage(
-            file,
-            folderPath,
+            files[i],
+            folder,
           );
 
           await tx.inventoryImage.create({
@@ -455,23 +381,13 @@ export class InventoryService {
               inventoryId,
               url: upload.url,
               publicId: upload.publicId,
-              position: startPosition + i,
+              position: start + i,
             },
           });
         }
       }
     });
 
-    /** DEVOLVER IMÁGENES ORDENADAS */
-    const finalImages = await this.prisma.inventoryImage.findMany({
-      where: { inventoryId },
-      orderBy: { position: 'asc' },
-    });
-
-    return {
-      success: true,
-      message: 'Imágenes sincronizadas correctamente',
-      data: finalImages,
-    };
+    return { success: true, message: 'Imágenes sincronizadas' };
   }
 }

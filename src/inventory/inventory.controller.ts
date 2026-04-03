@@ -22,11 +22,10 @@ import { Roles } from 'src/auth/roles.decorator';
 import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('inventory')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
-  @UseGuards(RolesGuard)
   @Roles(
     'SUPER_ADMIN',
     'ADMIN',
@@ -40,7 +39,6 @@ export class InventoryController {
     return this.inventoryService.findAllPaginated(req.user, query);
   }
 
-  @UseGuards(RolesGuard)
   @Roles(
     'SUPER_ADMIN',
     'ADMIN',
@@ -54,14 +52,12 @@ export class InventoryController {
     return this.inventoryService.findOne(id, req.user);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post()
   create(@Body() dto: CreateInventoryDto, @Req() req) {
     return this.inventoryService.create(dto, req.user);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id')
   update(
@@ -72,7 +68,6 @@ export class InventoryController {
     return this.inventoryService.update(id, dto, req.user);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
@@ -80,7 +75,6 @@ export class InventoryController {
   }
 
   // Endpoint para sincronizar imágenes de un producto
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id/images')
   @UseInterceptors(FilesInterceptor('images', 10))
@@ -95,7 +89,6 @@ export class InventoryController {
     return this.inventoryService.syncProductImages(id, files, ids, req.user);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(
     'SUPER_ADMIN',
     'ADMIN',

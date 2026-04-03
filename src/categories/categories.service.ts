@@ -23,13 +23,14 @@ export class CategoriesService {
 
     const where: any = {
       status: { not: Status.ELIMINADO },
+      companyId: user.companyId,
     };
 
     if (localIds !== null) {
       if (localIds.length === 0) {
-        where.localId = -1;
+        where.id = -1;
       } else {
-        where.localId = { in: localIds };
+        where.OR = [{ localId: null }, { localId: { in: localIds } }];
       }
     }
 
@@ -49,19 +50,9 @@ export class CategoriesService {
 
     if (query.status) {
       const normalizedStatus = query.status.toUpperCase();
-
       if (Object.values(Status).includes(normalizedStatus as Status)) {
         where.status = normalizedStatus as Status;
       }
-    }
-
-    if (query.localId) {
-      where.local = {
-        name: {
-          contains: query.localId,
-          mode: 'insensitive',
-        },
-      };
     }
 
     const [items, total] = await this.prisma.$transaction([
@@ -94,14 +85,12 @@ export class CategoriesService {
 
     const where: any = {
       id,
+      companyId: user.companyId,
       status: { not: Status.ELIMINADO },
     };
 
-    if (localIds === null) {
-    } else if (localIds.length === 0) {
-      where.localId = -1;
-    } else {
-      where.localId = { in: localIds };
+    if (localIds !== null) {
+      where.OR = [{ localId: null }, { localId: { in: localIds } }];
     }
 
     const category = await this.prisma.category.findFirst({
@@ -127,14 +116,29 @@ export class CategoriesService {
       throw new ForbiddenException('No tienes permisos');
     }
 
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    if (dto.localId) {
+      if (localIds !== null && !localIds.includes(dto.localId)) {
+        throw new ForbiddenException('No puedes usar este local');
+      }
+    }
+
     const category = await this.prisma.category.create({
       data: {
         name: dto.name,
         description: dto.description,
         status: dto.status ?? Status.ACTIVO,
-        local: {
-          connect: { id: dto.localId },
+
+        company: {
+          connect: { id: user.companyId },
         },
+
+        ...(dto.localId && {
+          local: {
+            connect: { id: dto.localId },
+          },
+        }),
       },
     });
 
@@ -150,21 +154,22 @@ export class CategoriesService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const found = await this.prisma.category.findUnique({
-      where: { id },
+    const found = await this.prisma.category.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
     });
 
     if (!found || found.status === Status.ELIMINADO) {
       throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
     }
 
-    if (dto.localId) {
-      const localExists = await this.prisma.local.findUnique({
-        where: { id: dto.localId },
-      });
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-      if (!localExists) {
-        throw new NotFoundException(`Local con ID ${dto.localId} no existe`);
+    if (dto.localId) {
+      if (localIds !== null && !localIds.includes(dto.localId)) {
+        throw new ForbiddenException('No puedes asignar este local');
       }
     }
 
@@ -175,10 +180,10 @@ export class CategoriesService {
         ...(dto.description && { description: dto.description }),
         ...(dto.status && { status: dto.status }),
 
-        ...(dto.localId && {
-          local: {
-            connect: { id: dto.localId },
-          },
+        ...(dto.localId !== undefined && {
+          local: dto.localId
+            ? { connect: { id: dto.localId } }
+            : { disconnect: true },
         }),
       },
     });
@@ -195,8 +200,11 @@ export class CategoriesService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const found = await this.prisma.category.findUnique({
-      where: { id },
+    const found = await this.prisma.category.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
     });
 
     if (!found || found.status === Status.ELIMINADO) {

@@ -23,21 +23,15 @@ export class CustomersService {
 
     const where: any = {
       status: { not: Status.ELIMINADO },
+      companyId: user.companyId,
     };
 
     if (localIds !== null) {
       if (localIds.length === 0) {
-        where.document = '222222222222';
+        where.id = -1;
       } else {
-        where.localId = { in: localIds };
+        where.OR = [{ localId: null }, { localId: { in: localIds } }];
       }
-    }
-
-    if (query.type_document) {
-      where.type_document = {
-        contains: query.type_document,
-        mode: 'insensitive',
-      };
     }
 
     if (query.document) {
@@ -131,27 +125,17 @@ export class CustomersService {
     };
   }
 
-  // OBTENER UNO
   async findOne(id: number, user: any) {
-    const customer = await this.prisma.customer.findUnique({
-      where: { id },
+    const customer = await this.prisma.customer.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
       include: { local: true },
     });
 
     if (!customer) {
       throw new NotFoundException('Cliente no encontrado');
-    }
-
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-    if (
-      customer.document !== '222222222222' &&
-      localIds !== null &&
-      (!customer.localId || !localIds.includes(customer.localId))
-    ) {
-      throw new ForbiddenException(
-        'No tienes permiso para ver clientes de otro local',
-      );
     }
 
     return {
@@ -161,50 +145,47 @@ export class CustomersService {
     };
   }
 
-  // CREAR CLIENTE (SE ASIGNA AUTOMÁTICAMENTE AL LOCAL DEL USUARIO)
   async create(dto: CreateCustomerDto, user: any) {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     let localId: number | null = null;
 
-    // Roles globales → deben enviar localId
     if (localIds === null) {
       if (!dto.localId) {
         throw new BadRequestException('Debes indicar el local del cliente');
       }
       localId = dto.localId;
-    }
-    // Usuario con un solo local accesible
-    else if (localIds.length === 1) {
+    } else if (localIds.length === 1) {
       localId = localIds[0];
-    }
-    // Usuario con varios locales → debe elegir uno válido
-    else if (localIds.length > 1) {
+    } else if (localIds.length > 1) {
       if (!dto.localId) {
         throw new BadRequestException('Debes indicar el local del cliente');
       }
 
       if (!localIds.includes(dto.localId)) {
-        throw new ForbiddenException(
-          'No puedes crear clientes en un local que no administras',
-        );
+        throw new ForbiddenException('Local no permitido');
       }
 
       localId = dto.localId;
-    }
-    // Sin locales
-    else {
-      throw new ForbiddenException(
-        'No tienes locales asignados para crear clientes',
-      );
+    } else {
+      throw new ForbiddenException('No tienes locales');
     }
 
-    const { localId: _ignored, ...cleanDto } = dto;
+    const { localId: _, ...rest } = dto;
 
     const customer = await this.prisma.customer.create({
       data: {
-        ...cleanDto,
-        local: { connect: { id: localId } },
+        ...rest,
+
+        company: {
+          connect: { id: user.companyId },
+        },
+
+        ...(localId && {
+          local: {
+            connect: { id: localId },
+          },
+        }),
       },
     });
 
@@ -215,7 +196,6 @@ export class CustomersService {
     };
   }
 
-  // ACTUALIZAR CLIENTE
   async update(id: number, dto: UpdateCustomerDto, user: any) {
     const customer = await this.prisma.customer.findUnique({ where: { id } });
 
@@ -229,16 +209,20 @@ export class CustomersService {
       localIds !== null &&
       (!customer.localId || !localIds.includes(customer.localId))
     ) {
-      throw new ForbiddenException(
-        'No tienes permiso para modificar clientes de otro local',
-      );
+      throw new ForbiddenException('No tienes permiso');
     }
 
-    const { localId: _ignored, ...cleanDto } = dto;
+    const { localId, ...rest } = dto;
 
     const updated = await this.prisma.customer.update({
       where: { id },
-      data: cleanDto,
+      data: {
+        ...rest,
+
+        ...(localId !== undefined && {
+          local: localId ? { connect: { id: localId } } : { disconnect: true },
+        }),
+      },
     });
 
     return {
@@ -248,26 +232,22 @@ export class CustomersService {
     };
   }
 
-  // ELIMINAR
   async remove(id: number, user: any) {
-    const customer = await this.prisma.customer.findUnique({ where: { id } });
+    const customer = await this.prisma.customer.findFirst({
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+    });
 
     if (!customer) {
       throw new NotFoundException('Cliente no encontrado');
     }
 
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-    if (
-      localIds !== null &&
-      (!customer.localId || !localIds.includes(customer.localId))
-    ) {
-      throw new ForbiddenException(
-        'No tienes permiso para eliminar clientes de otro local',
-      );
-    }
-
-    await this.prisma.customer.delete({ where: { id } });
+    await this.prisma.customer.update({
+      where: { id },
+      data: { status: Status.ELIMINADO },
+    });
 
     return {
       success: true,

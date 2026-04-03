@@ -22,32 +22,28 @@ import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto'
 import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto';
 
 @Controller('sales')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.salesService.findAllPaginated(req.user, query);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.salesService.findOne(id, req.user);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Post()
   create(@Body() dto: CreateSaleDto, @Req() req) {
     return this.salesService.create(dto, req.user);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id')
   update(
@@ -58,7 +54,6 @@ export class SalesController {
     return this.salesService.update(id, dto, req.user);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
@@ -71,14 +66,12 @@ export class SalesController {
     return this.salesService.verifySale(code);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post('reports/daily')
   dailyReport(@Body() dto: DailySalesReportDto, @Req() req) {
     return this.salesService.dailySalesReport(dto, req.user);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post('reports/range')
   rangeReport(@Body() dto: RangeSalesReportDto, @Req() req) {

@@ -19,19 +19,17 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 
 @Controller('locals')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class LocalsController {
   constructor(private readonly localsService: LocalsService) {}
 
   // ADMIN / COORDINADOR / SUPER_ADMIN
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.localsService.findAllPaginated(req.user, query);
   }
 
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
@@ -39,7 +37,6 @@ export class LocalsController {
   }
 
   // Crear local (ADMIN / SUPER_ADMIN)
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
   @Post()
   create(@Body() dto: CreateLocalDto, @Req() req) {
@@ -47,7 +44,6 @@ export class LocalsController {
   }
 
   // Actualizar local
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
   @Put(':id')
   update(
@@ -59,7 +55,6 @@ export class LocalsController {
   }
 
   // Eliminar local
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {

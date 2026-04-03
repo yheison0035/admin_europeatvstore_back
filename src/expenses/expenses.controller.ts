@@ -19,7 +19,7 @@ import { CreateExpenseDto } from './dto/create-expenses.dto';
 import { UpdateExpenseDto } from './dto/update-expenses.dto';
 
 @Controller('expenses')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 
@@ -27,7 +27,6 @@ export class ExpensesController {
    * Obtener todos los gastos
    * SUPER_ADMIN / ADMIN / COORDINADOR / ASESOR
    */
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get()
   findAll(@Req() req, @Query() query) {
@@ -38,7 +37,6 @@ export class ExpensesController {
    * Obtener un gasto por ID
    * SUPER_ADMIN / ADMIN / COORDINADOR
    */
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
@@ -49,7 +47,6 @@ export class ExpensesController {
    * Crear gasto
    * SUPER_ADMIN / ADMIN
    */
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post()
   create(@Body() dto: CreateExpenseDto, @Req() req) {
@@ -60,7 +57,6 @@ export class ExpensesController {
    * Actualizar gasto
    * SUPER_ADMIN / ADMIN
    */
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id')
   update(
@@ -75,7 +71,6 @@ export class ExpensesController {
    * Eliminar gasto (soft delete)
    * SOLO SUPER_ADMIN
    */
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {

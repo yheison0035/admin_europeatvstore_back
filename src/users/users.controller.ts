@@ -27,34 +27,27 @@ import { v2 as Cloudinary } from 'cloudinary';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // Endpoint para subir avatar
-  // Autenticación requerida
-  // Usa Multer para manejar la subida de archivos
-  // El archivo se espera en el campo 'file' del formulario
-  // El avatar se asocia al usuario autenticado (req.user.id)
-  // El servicio maneja la lógica de subir a Cloudinary y actualizar la URL en la base de datos
   @UseGuards(JwtAuthGuard)
   @Post('upload-avatar')
   @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Req() req) {
-    return this.usersService.updateAvatar(req.user.id, file);
+    return this.usersService.updateAvatar(req.user.id, file, req.user);
   }
 
-  // Endpoint para eliminar avatar
   @UseGuards(JwtAuthGuard)
   @Delete('avatar')
   async deleteAvatar(@Req() req) {
-    return this.usersService.deleteAvatar(req.user.id);
+    return this.usersService.deleteAvatar(req.user.id, req.user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.usersService.findAllPaginated(req.user, query);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get('/:id')
   getUser(@Param('id', ParseIntPipe) id: number, @Req() req) {
@@ -62,14 +55,14 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Post()
   createUser(@Body() user: CreateUserDto, @Req() req) {
     return this.usersService.createUser(user, req.user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Put('/:id')
   updateUser(
     @Param('id', ParseIntPipe) id: number,
@@ -80,16 +73,9 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Delete('/:id')
   deleteUser(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.usersService.deleteUser(id, req.user);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN')
-  @Patch('/:id/toggle-role')
-  updateUserSegment(@Param('id', ParseIntPipe) id: number, @Req() req) {
-    return this.usersService.updateUserSegment(id, req.user);
   }
 }

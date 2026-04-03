@@ -19,12 +19,11 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 
 @Controller('customers')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   // Ver clientes
-  @UseGuards(RolesGuard)
   @Roles(
     'SUPER_ADMIN',
     'ADMIN',
@@ -40,7 +39,6 @@ export class CustomersController {
   }
 
   // Ver uno
-  @UseGuards(RolesGuard)
   @Roles(
     'SUPER_ADMIN',
     'ADMIN',
@@ -56,7 +54,6 @@ export class CustomersController {
   }
 
   // Crear
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Post()
   create(@Body() dto: CreateCustomerDto, @Req() req) {
@@ -64,7 +61,6 @@ export class CustomersController {
   }
 
   // Actualizar
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id')
   update(
@@ -76,7 +72,6 @@ export class CustomersController {
   }
 
   // Eliminar
-  @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
