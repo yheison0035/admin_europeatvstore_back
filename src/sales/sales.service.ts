@@ -498,7 +498,6 @@ export class SalesService {
 
       methodsMap[method].total += amount;
 
-      // 🔥 CLAVE: forzar fecha Colombia SIN UTC
       const dateKey = new Date(sale.saleDate.getTime() - 5 * 60 * 60 * 1000)
         .toISOString()
         .split('T')[0];
@@ -531,6 +530,103 @@ export class SalesService {
         endDate,
         localId,
         userId,
+        total: {
+          total: totalGeneral,
+          users: usersMap,
+        },
+        methods: methodsMap,
+        daily,
+      },
+    };
+  }
+
+  // Reporte general por rango de fechas (sin filtrar por usuario)
+  async rangeSalesGeneralReport(dto: any, user: any) {
+    const { startDate, endDate, localId } = dto;
+
+    if (!startDate || !endDate) {
+      throw new BadRequestException('Fechas requeridas');
+    }
+
+    const local = await this.prisma.local.findFirst({
+      where: {
+        id: Number(localId),
+        companyId: user.companyId,
+      },
+    });
+
+    if (!local) {
+      throw new ForbiddenException('No tienes permiso');
+    }
+
+    const { start, end } = getRangeDates(startDate, endDate);
+
+    const sales = await this.prisma.sale.findMany({
+      where: {
+        localId: Number(localId),
+        saleDate: {
+          gte: start,
+          lte: end,
+        },
+      },
+      include: {
+        user: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    let totalGeneral = 0;
+
+    const usersMap: Record<string, number> = {};
+    const methodsMap: Record<string, { total: number }> = {};
+    const dailyMap: Record<string, number> = {};
+
+    for (const sale of sales) {
+      const amount = sale.totalAmount;
+      const userName = sale.user?.name || 'SIN ASESOR';
+      const method = sale.paymentMethod || 'OTROS';
+
+      totalGeneral += amount;
+
+      usersMap[userName] = (usersMap[userName] || 0) + amount;
+
+      if (!methodsMap[method]) {
+        methodsMap[method] = { total: 0 };
+      }
+      methodsMap[method].total += amount;
+
+      const dateKey = new Date(sale.saleDate.getTime() - 5 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
+
+      dailyMap[dateKey] = (dailyMap[dateKey] || 0) + amount;
+    }
+
+    const daily: { date: string; total: number }[] = [];
+
+    let current = new Date(`${startDate}T00:00:00-05:00`);
+    const last = new Date(`${endDate}T00:00:00-05:00`);
+
+    while (current <= last) {
+      const dateKey = new Date(current.getTime() - 5 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
+
+      daily.push({
+        date: dateKey,
+        total: dailyMap[dateKey] || 0,
+      });
+
+      current.setDate(current.getDate() + 1);
+    }
+
+    return {
+      success: true,
+      data: {
+        startDate,
+        endDate,
+        localId,
         total: {
           total: totalGeneral,
           users: usersMap,
