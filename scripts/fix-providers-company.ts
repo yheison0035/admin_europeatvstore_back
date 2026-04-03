@@ -12,7 +12,7 @@ async function main() {
 
   await prisma.provider.updateMany({
     where: {
-      companyId: null as any,
+      companyId: undefined,
     },
     data: {
       companyId: defaultCompany.id,

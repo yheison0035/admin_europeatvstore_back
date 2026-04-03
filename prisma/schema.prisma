@@ -131,8 +131,8 @@ model User {
   localId Int?
   local   Local? @relation("LocalUsers", fields: [localId], references: [id], onDelete: SetNull)
 
-  companyId Int?
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   managedLocals      Local[]     @relation("LocalManager")
   createdInventories Inventory[] @relation("InventoryCreatedBy")
@@ -161,8 +161,8 @@ model Customer {
   localId Int?
   local   Local? @relation(fields: [localId], references: [id], onDelete: SetNull)
 
-  companyId Int?
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   sales Sale[] @relation("CustomerSales")
 
@@ -186,8 +186,8 @@ model Provider {
   productType String?
   status      Status  @default(ACTIVO)
 
-  companyId Int?
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   inventories Inventory[] @relation("ProviderProducts")
   expenses    Expense[]   @relation("ProviderExpenses")
@@ -210,8 +210,8 @@ model Local {
   managerId Int?
   manager   User? @relation("LocalManager", fields: [managerId], references: [id])
 
-  companyId Int?
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   users       User[]      @relation("LocalUsers")
   inventories Inventory[] @relation("LocalInventory")
@@ -234,8 +234,8 @@ model Category {
   status      Status  @default(ACTIVO)
   localId     Int?
 
-  companyId Int?
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   inventories Inventory[] @relation("CategoryProducts")
   local       Local?      @relation("LocalCategory", fields: [localId], references: [id], onDelete: SetNull)
@@ -253,8 +253,8 @@ model Brand {
   status      Status  @default(ACTIVO)
   localId     Int?
 
-  companyId Int?
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   inventories Inventory[] @relation("BrandProducts")
   local       Local?      @relation("LocalBrand", fields: [localId], references: [id], onDelete: SetNull)

@@ -3,7 +3,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  // ✅ TRAER LOCAL (FIX ERROR)
+  console.log('🚀 Migrando categories y brands...');
+
   const categories = await prisma.category.findMany({
     include: { local: true },
   });
@@ -15,7 +16,7 @@ async function main() {
       where: { id: c.localId },
     });
 
-    if (!local) continue;
+    if (!local || !local.companyId) continue;
 
     await prisma.category.update({
       where: { id: c.id },
@@ -27,7 +28,6 @@ async function main() {
 
   console.log('✅ Categories migradas');
 
-  // 🔥 BRANDS
   const brands = await prisma.brand.findMany({
     include: { local: true },
   });
@@ -39,7 +39,7 @@ async function main() {
       where: { id: b.localId },
     });
 
-    if (!local) continue;
+    if (!local || !local.companyId) continue;
 
     await prisma.brand.update({
       where: { id: b.id },
@@ -53,5 +53,9 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect());
+  .catch((e) => {
+    console.error('❌ Error:', e);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

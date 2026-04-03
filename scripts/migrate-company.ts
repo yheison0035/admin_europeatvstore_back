@@ -27,7 +27,7 @@ async function main() {
   // 2. Actualizar usuarios SIN empresa
   const usersUpdated = await prisma.user.updateMany({
     where: {
-      companyId: null as any,
+      companyId: undefined,
     },
     data: {
       companyId: company.id,
@@ -39,7 +39,7 @@ async function main() {
   // 3. Actualizar locales SIN empresa
   const localsUpdated = await prisma.local.updateMany({
     where: {
-      companyId: null as any,
+      companyId: undefined,
     },
     data: {
       companyId: company.id,
