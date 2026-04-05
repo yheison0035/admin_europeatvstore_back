@@ -145,7 +145,13 @@ export class SalesService {
   return this.prisma.$transaction(async (tx) => {
     let total = 0;
 
-    const itemsData = [];
+    const itemsData: {
+      inventoryVariantId: number;
+      quantity: number;
+      price: number;
+      discount: number;
+      subtotal: number;
+    }[] = [];
 
     for (const item of dto.items) {
       const variant = await tx.inventoryVariant.findFirst({
