@@ -19,6 +19,22 @@ export class SalesService {
     private stockService: StockService,
   ) {}
 
+  private calculateSubtotal(price: number, quantity: number, discount = 0) {
+  if (discount < 0) {
+    throw new BadRequestException('El descuento no puede ser negativo');
+  }
+
+  const subtotal = price * quantity;
+
+  if (discount > subtotal) {
+    throw new BadRequestException(
+      'El descuento no puede ser mayor al subtotal',
+    );
+  }
+
+  return subtotal - discount;
+}
+
   async findAllPaginated(user: any, query: any) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
@@ -96,110 +112,113 @@ export class SalesService {
   }
 
   async create(dto: CreateSaleDto, user: any) {
-    if (!dto.items?.length) {
-      throw new BadRequestException('La venta debe tener productos');
-    }
-
-    if (!dto.customerId || !dto.localId || !dto.paymentMethod) {
-      throw new BadRequestException('Faltan datos obligatorios');
-    }
-
-    const local = await this.prisma.local.findFirst({
-      where: {
-        id: dto.localId,
-        companyId: user.companyId,
-      },
-    });
-
-    if (!local) {
-      throw new ForbiddenException('Local no pertenece a tu empresa');
-    }
-
-    const saleUser = await this.prisma.user.findFirst({
-      where: {
-        id: dto.userId,
-        companyId: user.companyId,
-      },
-    });
-
-    if (!saleUser) {
-      throw new ForbiddenException('Usuario no pertenece a tu empresa');
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      let total = 0;
-      const itemsData: {
-        inventoryVariantId: number;
-        quantity: number;
-        price: number;
-        discount: number;
-        subtotal: number;
-      }[] = [];
-
-      for (const item of dto.items) {
-        const variant = await tx.inventoryVariant.findFirst({
-          where: {
-            id: item.inventoryVariantId,
-            inventory: {
-              local: {
-                companyId: user.companyId,
-              },
-            },
-          },
-          include: { inventory: true },
-        });
-
-        if (!variant) {
-          throw new NotFoundException('Variante no válida');
-        }
-
-        const price = variant.inventory.salePrice;
-        const discount = item.discount ?? 0;
-        const subtotal = Math.max(price * item.quantity - discount, 0);
-
-        await this.stockService.decrement(variant.id, item.quantity, tx);
-
-        itemsData.push({
-          inventoryVariantId: variant.id,
-          quantity: item.quantity,
-          price,
-          discount,
-          subtotal,
-        });
-
-        total += subtotal;
-      }
-
-      const sale = await tx.sale.create({
-        data: {
-          code: `SALE-${Date.now()}`,
-          totalAmount: total,
-          paymentMethod: dto.paymentMethod,
-          paymentStatus: dto.paymentStatus ?? 'PAGADA',
-          saleStatus: 'NUEVA',
-          saleDate: new Date(),
-          notes: dto.notes,
-          customerId: dto.customerId,
-          localId: dto.localId,
-          userId: dto.userId,
-          items: { create: itemsData },
-        },
-        include: {
-          items: {
-            include: {
-              variant: { include: { inventory: true } },
-            },
-          },
-          customer: true,
-          user: true,
-          local: true,
-        },
-      });
-
-      return { success: true, data: sale };
-    });
+  if (!dto.items?.length) {
+    throw new BadRequestException('La venta debe tener productos');
   }
 
+  if (!dto.customerId || !dto.localId || !dto.paymentMethod) {
+    throw new BadRequestException('Faltan datos obligatorios');
+  }
+
+  const local = await this.prisma.local.findFirst({
+    where: {
+      id: dto.localId,
+      companyId: user.companyId,
+    },
+  });
+
+  if (!local) {
+    throw new ForbiddenException('Local no pertenece a tu empresa');
+  }
+
+  const saleUser = await this.prisma.user.findFirst({
+    where: {
+      id: dto.userId,
+      companyId: user.companyId,
+    },
+  });
+
+  if (!saleUser) {
+    throw new ForbiddenException('Usuario no pertenece a tu empresa');
+  }
+
+  return this.prisma.$transaction(async (tx) => {
+    let total = 0;
+
+    const itemsData = [];
+
+    for (const item of dto.items) {
+      const variant = await tx.inventoryVariant.findFirst({
+        where: {
+          id: item.inventoryVariantId,
+          inventory: {
+            local: {
+              companyId: user.companyId,
+            },
+          },
+        },
+        include: { inventory: true },
+      });
+
+      if (!variant) {
+        throw new NotFoundException('Variante no válida');
+      }
+
+      const price = variant.inventory.salePrice;
+      const discount = item.discount ?? 0;
+
+      const subtotal = this.calculateSubtotal(
+        price,
+        item.quantity,
+        discount,
+      );
+
+      await this.stockService.decrement(
+        variant.id,
+        item.quantity,
+        tx,
+      );
+
+      itemsData.push({
+        inventoryVariantId: variant.id,
+        quantity: item.quantity,
+        price,
+        discount,
+        subtotal,
+      });
+
+      total += subtotal;
+    }
+
+    const sale = await tx.sale.create({
+      data: {
+        code: `SALE-${Date.now()}`,
+        totalAmount: total,
+        paymentMethod: dto.paymentMethod,
+        paymentStatus: dto.paymentStatus ?? 'PAGADA',
+        saleStatus: 'NUEVA',
+        saleDate: new Date(),
+        notes: dto.notes,
+        customerId: dto.customerId,
+        localId: dto.localId,
+        userId: dto.userId,
+        items: { create: itemsData },
+      },
+      include: {
+        items: {
+          include: {
+            variant: { include: { inventory: true } },
+          },
+        },
+        customer: true,
+        user: true,
+        local: true,
+      },
+    });
+
+    return { success: true, data: sale };
+  });
+}
   async update(id: number, dto: UpdateSaleDto, user: any) {
     return this.prisma.$transaction(async (tx) => {
       const sale = await tx.sale.findUnique({
@@ -266,22 +285,28 @@ export class SalesService {
           },
           include: { inventory: true },
         });
-
+      
         if (!variant) throw new NotFoundException('Variante inválida');
-
+      
         const price = variant.inventory.salePrice;
-        const subtotal = price * item.quantity;
-
+        const discount = item.discount ?? 0;
+      
+        const subtotal = this.calculateSubtotal(
+          price,
+          item.quantity,
+          discount,
+        );
+      
         await this.stockService.decrement(variant.id, item.quantity, tx);
-
+      
         itemsData.push({
           inventoryVariantId: variant.id,
           quantity: item.quantity,
           price,
-          discount: 0,
+          discount,
           subtotal,
         });
-
+      
         total += subtotal;
       }
 
