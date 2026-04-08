@@ -102,25 +102,36 @@ enum BusinessType {
   ZORVEX
 }
 
+enum AppointmentStatus {
+  PENDIENTE
+  CONFIRMADA
+  EN_PROCESO
+  COMPLETADA
+  CANCELADA
+  NO_ASISTIO
+}
+
 //////////////////////////////////////////////////
 // MODELOS
 //////////////////////////////////////////////////
 
 model Company {
-  id          Int     @id @default(autoincrement())
-  name        String
-  logo        String?
-  type        BusinessType @default(COMERCIO)
-  status      Status  @default(ACTIVO)
-  phone       String?
-  manager     String?
+  id      Int          @id @default(autoincrement())
+  name    String
+  logo    String?
+  type    BusinessType @default(COMERCIO)
+  status  Status       @default(ACTIVO)
+  phone   String?
+  manager String?
 
-  users   User[]
-  locals  Local[]
-  provider  Provider[]
-  categories  Category[]  
-  brand       Brand[]
-  customer    Customer[]
+  users        User[]
+  locals       Local[]
+  provider     Provider[]
+  categories   Category[]
+  brand        Brand[]
+  customers    Customer[]
+  services     Service[]
+  appointments Appointment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -147,9 +158,11 @@ model User {
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  managedLocals      Local[]     @relation("LocalManager")
-  createdInventories Inventory[] @relation("InventoryCreatedBy")
-  updatedInventories Inventory[] @relation("InventoryUpdatedBy")
+  managedLocals      Local[]       @relation("LocalManager")
+  createdInventories Inventory[]   @relation("InventoryCreatedBy")
+  updatedInventories Inventory[]   @relation("InventoryUpdatedBy")
+  services           Service[]     @relation("BarberServices")
+  appointments       Appointment[] @relation("BarberAppointments")
 
   sales Sale[] @relation("UserSales")
 
@@ -177,7 +190,8 @@ model Customer {
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  sales Sale[] @relation("CustomerSales")
+  sales        Sale[]        @relation("CustomerSales")
+  appointments Appointment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -226,16 +240,18 @@ model Local {
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  users       User[]      @relation("LocalUsers")
-  inventories Inventory[] @relation("LocalInventory")
-  expenses    Expense[]   @relation("LocalExpenses")
-  sales       Sale[]      @relation("LocalSales")
-  categories  Category[]  @relation("LocalCategory")
-  brand       Brand[]     @relation("LocalBrand")
+  users        User[]        @relation("LocalUsers")
+  inventories  Inventory[]   @relation("LocalInventory")
+  expenses     Expense[]     @relation("LocalExpenses")
+  sales        Sale[]        @relation("LocalSales")
+  categories   Category[]    @relation("LocalCategory")
+  brand        Brand[]       @relation("LocalBrand")
+  services     Service[]     @relation("ServiceLocals")
+  appointments Appointment[]
+  customers    Customer[]
 
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  Customer  Customer[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //////////////////////////////////////////////////
@@ -304,8 +320,8 @@ model Inventory {
   category  Category? @relation("CategoryProducts", fields: [categoryId], references: [id], onDelete: SetNull)
   brand     Brand?    @relation("BrandProducts", fields: [brandId], references: [id], onDelete: SetNull)
 
-  variants InventoryVariant[]
-  images   InventoryImage[]
+  variants       InventoryVariant[]
+  images         InventoryImage[]
   features       InventoryFeature[]
   specifications InventorySpecification[]
 
@@ -314,14 +330,14 @@ model Inventory {
 }
 
 model InventoryVariant {
-  id          Int    @id @default(autoincrement())
-  sequence    Int    @unique @default(autoincrement())
-  color       String
-  stock       Int    @default(0)
-  sku         String @unique
+  id       Int    @id @default(autoincrement())
+  sequence Int    @unique @default(autoincrement())
+  color    String
+  stock    Int    @default(0)
+  sku      String @unique
 
-  isActive    Boolean  @default(true)
-  
+  isActive Boolean @default(true)
+
   inventoryId Int
 
   inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
@@ -384,7 +400,7 @@ model Expense {
   localId    Int
 
   provider Provider? @relation("ProviderExpenses", fields: [providerId], references: [id], onDelete: SetNull)
-  local    Local    @relation("LocalExpenses", fields: [localId], references: [id], onDelete: Cascade)
+  local    Local     @relation("LocalExpenses", fields: [localId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -402,7 +418,7 @@ model Sale {
   saleDate      DateTime      @default(now())
   notes         String?
 
-  source        OrderSource   @default(CRM)
+  source              OrderSource @default(CRM)
   ecommerceCustomerId Int?
 
   shippingStatus ShippingStatus @default(PENDIENTE)
@@ -412,15 +428,17 @@ model Sale {
   wompiStatus        String?
   wompiPayload       Json?
 
-  customerId Int
-  localId    Int
-  userId     Int
+  customerId    Int?
+  localId       Int
+  userId        Int?
+  appointmentId Int?
 
   ecommerceCustomer EcommerceCustomer? @relation("EcommerceOrders", fields: [ecommerceCustomerId], references: [id])
 
-  local    Local    @relation("LocalSales", fields: [localId], references: [id], onDelete: Cascade)
-  user     User     @relation("UserSales", fields: [userId], references: [id], onDelete: SetNull)
-  customer Customer @relation("CustomerSales", fields: [customerId], references: [id], onDelete: SetNull)
+  local       Local        @relation("LocalSales", fields: [localId], references: [id], onDelete: Cascade)
+  user        User?        @relation("UserSales", fields: [userId], references: [id], onDelete: SetNull)
+  customer    Customer?    @relation("CustomerSales", fields: [customerId], references: [id], onDelete: SetNull)
+  appointment Appointment? @relation("AppointmentSales", fields: [appointmentId], references: [id])
 
   items SaleItem[] @relation("SaleItems")
 
@@ -428,6 +446,10 @@ model Sale {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([localId])
+  @@index([userId])
+  @@index([saleDate])
 }
 
 //////////////////////////////////////////////////
@@ -457,24 +479,24 @@ model SaleItem {
 model EcommerceCustomer {
   id Int @id @default(autoincrement())
 
-  email String @unique
+  email     String @unique
   firstName String
-  lastName String
-  phone String
+  lastName  String
+  phone     String
 
   documentNumber String?
 
-  department String
-  city String
-  address String
+  department    String
+  city          String
+  address       String
   addressDetail String?
-  neighborhood String?
+  neighborhood  String?
 
   billingSameAsShipping Boolean @default(true)
-  billingFirstName String?
-  billingLastName String?
-  billingPhone String?
-  billingAddress String?
+  billingFirstName      String?
+  billingLastName       String?
+  billingPhone          String?
+  billingAddress        String?
 
   isHardToAccess Boolean @default(false)
 
@@ -489,18 +511,78 @@ model EcommerceCustomer {
 model Shipment {
   id Int @id @default(autoincrement())
 
-  saleId Int @unique
+  saleId Int            @unique
   status ShippingStatus @default(PENDIENTE)
 
-  carrier String?
+  carrier        String?
   trackingNumber String?
 
-  shippedAt DateTime?
+  shippedAt   DateTime?
   deliveredAt DateTime?
-  notes String?
+  notes       String?
 
   sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// BARBERIA
+
+model Service {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+  price       Float
+  duration    Int
+  status      Status  @default(ACTIVO)
+
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  appointments Appointment[]
+  barbers      User[]        @relation("BarberServices")
+  locals       Local[]       @relation("ServiceLocals")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+model Appointment {
+  id Int @id @default(autoincrement())
+
+  date      DateTime
+  startTime DateTime
+  endTime   DateTime
+
+  status AppointmentStatus @default(PENDIENTE)
+  notes  String?
+
+  serviceId Int
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  barberId Int
+  barber   User @relation("BarberAppointments", fields: [barberId], references: [id])
+
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  localId Int
+  local   Local @relation(fields: [localId], references: [id])
+
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales Sale[] @relation("AppointmentSales")
+
+  @@index([serviceId])
+  @@index([companyId])
+  @@index([localId])
+  @@index([barberId])
+  @@index([date])
 }
