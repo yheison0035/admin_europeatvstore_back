@@ -673,6 +673,10 @@ export class SalesService {
       current.setDate(current.getDate() + 1);
     }
 
+    const usersSorted = Object.entries(usersMap)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+
     return {
       success: true,
       data: {
@@ -681,7 +685,7 @@ export class SalesService {
         localId,
         total: {
           total: totalGeneral,
-          users: usersMap,
+          users: usersSorted,
         },
         methods: methodsMap,
         daily,
