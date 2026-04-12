@@ -61,7 +61,7 @@ export class CustomersController {
   }
 
   // Actualizar
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,

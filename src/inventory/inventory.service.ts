@@ -187,6 +187,16 @@ export class InventoryService {
       if (!local) throw new ForbiddenException('Local no permitido');
     }
 
+    if (dto.barcode) {
+      const existing = await this.prisma.inventory.findFirst({
+        where: { barcode: dto.barcode },
+      });
+
+      if (existing) {
+        throw new BadRequestException('El código de barras ya existe');
+      }
+    }
+
     const baseSlug = generateSlug(dto.name);
     let slug = baseSlug;
     let counter = 1;
@@ -200,7 +210,7 @@ export class InventoryService {
         data: {
           name: dto.name,
           description: dto.description,
-          barcode: dto.barcode ?? null,
+          barcode: dto.barcode?.trim() ? dto.barcode : null,
           purchasePrice: dto.purchasePrice,
           oldPrice: dto.oldPrice ?? null,
           salePrice: dto.salePrice,

@@ -9,15 +9,14 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { Role, Status } from '@prisma/client';
 import { hasRole } from 'src/common/role-check.util';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { applyLocalFilter } from 'src/common/local-filter.util';
 
 @Injectable()
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAllPaginated(user: any, query: any) {
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const isAll = query.all === 'true' || query.all === true;
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
@@ -26,13 +25,7 @@ export class CategoriesService {
       companyId: user.companyId,
     };
 
-    if (localIds !== null) {
-      if (localIds.length === 0) {
-        where.id = -1;
-      } else {
-        where.OR = [{ localId: null }, { localId: { in: localIds } }];
-      }
-    }
+    applyLocalFilter(where, user, localIds);
 
     if (query.name) {
       where.name = {
@@ -54,6 +47,26 @@ export class CategoriesService {
         where.status = normalizedStatus as Status;
       }
     }
+
+    if (isAll) {
+      const items = await this.prisma.category.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      return {
+        success: true,
+        data: items,
+      };
+    }
+
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.category.findMany({
@@ -89,9 +102,7 @@ export class CategoriesService {
       status: { not: Status.ELIMINADO },
     };
 
-    if (localIds !== null) {
-      where.OR = [{ localId: null }, { localId: { in: localIds } }];
-    }
+    applyLocalFilter(where, user, localIds);
 
     const category = await this.prisma.category.findFirst({
       where,

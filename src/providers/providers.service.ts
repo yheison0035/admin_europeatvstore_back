@@ -14,9 +14,7 @@ export class ProvidersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAllPaginated(query: any, user: any) {
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const isAll = query.all === 'true' || query.all === true;
 
     const where: any = {
       status: { not: Status.ELIMINADO },
@@ -59,6 +57,26 @@ export class ProvidersService {
         where.status = normalizedStatus as Status;
       }
     }
+
+    if (isAll) {
+      const items = await this.prisma.provider.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      return {
+        success: true,
+        data: items,
+      };
+    }
+
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.provider.findMany({

@@ -31,7 +31,7 @@ export class BrandsController {
   }
 
   // VER UNO
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.brandsService.findOne(id, req.user);

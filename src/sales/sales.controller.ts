@@ -26,13 +26,13 @@ import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto'
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.salesService.findAllPaginated(req.user, query);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.salesService.findOne(id, req.user);
@@ -66,19 +66,19 @@ export class SalesController {
     return this.salesService.verifySale(code);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Post('reports/daily')
   dailyReport(@Body() dto: DailySalesReportDto, @Req() req) {
     return this.salesService.dailySalesReport(dto, req.user);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Post('reports/range')
   rangeReport(@Body() dto: RangeSalesReportDto, @Req() req) {
     return this.salesService.rangeSalesReport(dto, req.user);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Post('reports/range/general')
   rangeGeneralReport(@Body() dto: any, @Req() req) {
     return this.salesService.rangeSalesGeneralReport(dto, req.user);

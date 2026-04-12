@@ -11,6 +11,7 @@ import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { PaymentMethod, PaymentStatus, Status } from '@prisma/client';
 import { StockService } from 'src/inventory/stock.service';
 import { getDayRange, getRangeDates } from 'src/common/date-range.util';
+import { applyLocalFilter } from 'src/common/local-filter.util';
 
 @Injectable()
 export class SalesService {
@@ -46,17 +47,13 @@ export class SalesService {
 
     if (user.role !== 'SUPER_PLATFORM_ADMIN') {
       where.local = {
-        companyId: user.companyId,
+        is: {
+          companyId: user.companyId,
+        },
       };
     }
 
-    if (localIds !== null) {
-      if (localIds.length === 0) {
-        where.localId = -1; // no ve nada
-      } else {
-        where.localId = { in: localIds };
-      }
-    }
+    applyLocalFilter(where, user, localIds, 'sale');
 
     if (query.customerId) {
       where.customerId = Number(query.customerId);
@@ -478,6 +475,10 @@ export class SalesService {
         (methodsMap[method].users[userName] || 0) + amount;
     }
 
+    const usersSorted = Object.entries(usersMap)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+
     return {
       success: true,
       data: {
@@ -485,7 +486,7 @@ export class SalesService {
         localId,
         total: {
           total: totalGeneral,
-          users: usersMap,
+          users: usersSorted,
         },
         methods: methodsMap,
       },

@@ -9,15 +9,14 @@ import { UpdateBrandDto } from './dto/update-brand.dto';
 import { Role, Status } from '@prisma/client';
 import { hasRole } from 'src/common/role-check.util';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { applyLocalFilter } from 'src/common/local-filter.util';
 
 @Injectable()
 export class BrandsService {
   constructor(private prisma: PrismaService) {}
 
   async findAllPaginated(user: any, query: any) {
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const isAll = query.all === 'true' || query.all === true;
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
@@ -26,13 +25,7 @@ export class BrandsService {
       companyId: user.companyId,
     };
 
-    if (localIds !== null) {
-      if (localIds.length === 0) {
-        where.id = -1;
-      } else {
-        where.OR = [{ localId: null }, { localId: { in: localIds } }];
-      }
-    }
+    applyLocalFilter(where, user, localIds);
 
     if (query.name) {
       where.name = {
@@ -41,26 +34,30 @@ export class BrandsService {
       };
     }
 
-    if (query.description) {
-      where.description = {
-        contains: query.description,
-        mode: 'insensitive',
+    if (isAll) {
+      const items = await this.prisma.brand.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      return {
+        success: true,
+        data: items,
       };
     }
 
-    if (query.status) {
-      const normalizedStatus = query.status.toUpperCase();
-      if (Object.values(Status).includes(normalizedStatus as Status)) {
-        where.status = normalizedStatus as Status;
-      }
-    }
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.brand.findMany({
         where,
-        include: {
-          local: true,
-        },
+        include: { local: true },
         skip,
         take: limit,
         orderBy: { name: 'asc' },
@@ -89,9 +86,7 @@ export class BrandsService {
       status: { not: Status.ELIMINADO },
     };
 
-    if (localIds !== null) {
-      where.OR = [{ localId: null }, { localId: { in: localIds } }];
-    }
+    applyLocalFilter(where, user, localIds);
 
     const brand = await this.prisma.brand.findFirst({
       where,

@@ -9,6 +9,7 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { Status } from '@prisma/client';
+import { applyLocalFilter } from 'src/common/local-filter.util';
 
 @Injectable()
 export class CustomersService {
@@ -26,13 +27,7 @@ export class CustomersService {
       companyId: user.companyId,
     };
 
-    if (localIds !== null) {
-      if (localIds.length === 0) {
-        where.id = -1;
-      } else {
-        where.OR = [{ localId: null }, { localId: { in: localIds } }];
-      }
-    }
+    applyLocalFilter(where, user, localIds);
 
     if (query.document) {
       where.document = {

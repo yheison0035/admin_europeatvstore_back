@@ -57,6 +57,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       companyId: user.companyId,
+      localId: user.localId,
     };
 
     const { password, ...safeUser } = user;

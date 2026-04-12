@@ -35,9 +35,9 @@ export class ExpensesController {
 
   /**
    * Obtener un gasto por ID
-   * SUPER_ADMIN / ADMIN / COORDINADOR
+   * SUPER_ADMIN / ADMIN / COORDINADOR / ASESOR
    */
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.expensesService.findOne(id, req.user);
@@ -47,7 +47,7 @@ export class ExpensesController {
    * Crear gasto
    * SUPER_ADMIN / ADMIN
    */
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Post()
   create(@Body() dto: CreateExpenseDto, @Req() req) {
     return this.expensesService.create(dto, req.user);
@@ -57,7 +57,7 @@ export class ExpensesController {
    * Actualizar gasto
    * SUPER_ADMIN / ADMIN
    */
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,

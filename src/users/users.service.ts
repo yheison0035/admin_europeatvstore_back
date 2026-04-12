@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { hasRole } from 'src/common/role-check.util';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { applyLocalFilter } from 'src/common/local-filter.util';
 
 @Injectable()
 export class UsersService {
@@ -88,13 +89,7 @@ export class UsersService {
       where.status = Status.ACTIVO;
     }
 
-    if (localIds !== null) {
-      if (localIds.length === 0) {
-        where.id = user.id;
-      } else {
-        where.OR = [{ localId: { in: localIds } }, { id: user.id }];
-      }
-    }
+    applyLocalFilter(where, user, localIds);
 
     if (query.role) {
       const role = query.role.toUpperCase();

@@ -9,6 +9,7 @@ import { UpdateLocalDto } from './dto/update-local.dto';
 import { Role, Status } from '@prisma/client';
 import { hasRole } from 'src/common/role-check.util';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { applyLocalFilter } from 'src/common/local-filter.util';
 
 @Injectable()
 export class LocalsService {
@@ -26,13 +27,7 @@ export class LocalsService {
       companyId: user.companyId,
     };
 
-    if (localIds !== null) {
-      if (localIds.length === 0) {
-        where.id = -1;
-      } else {
-        where.id = { in: localIds };
-      }
-    }
+    applyLocalFilter(where, user, localIds, 'local');
 
     if (query.name) {
       where.name = { contains: query.name, mode: 'insensitive' };

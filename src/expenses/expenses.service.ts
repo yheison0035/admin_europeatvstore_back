@@ -9,6 +9,7 @@ import { hasRole } from 'src/common/role-check.util';
 import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 import { CreateExpenseDto } from './dto/create-expenses.dto';
 import { UpdateExpenseDto } from './dto/update-expenses.dto';
+import { applyLocalFilter } from 'src/common/local-filter.util';
 
 @Injectable()
 export class ExpensesService {
@@ -29,10 +30,7 @@ export class ExpensesService {
       },
     };
 
-    if (localIds !== null) {
-      if (localIds.length === 0) where.localId = -1;
-      else where.localId = { in: localIds };
-    }
+    applyLocalFilter(where, user, localIds, 'expense');
 
     if (query.concept) {
       where.concept = { contains: query.concept, mode: 'insensitive' };
@@ -131,7 +129,7 @@ export class ExpensesService {
         id,
         status: { not: Status.ELIMINADO },
 
-        // 🔥 MULTIEMPRESA
+        // MULTIEMPRESA
         local: {
           companyId: user.companyId,
         },

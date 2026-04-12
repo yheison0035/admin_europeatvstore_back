@@ -31,7 +31,7 @@ export class ProvidersController {
   }
 
   // VER UNO
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
   @Get(':id')
   findOne(@Param('id') id: number, @Req() req) {
     return this.providersService.findOne(id, req.user);
