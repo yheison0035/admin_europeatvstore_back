@@ -1,4 +1,22 @@
-import { IsString, IsNumber, IsOptional, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsInt,
+  IsArray,
+  ValidateNested,
+  ArrayMinSize,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { Status } from '@prisma/client';
+
+class ServiceLocalDto {
+  @IsInt()
+  localId: number;
+
+  @IsNumber()
+  price: number;
+}
 
 export class CreateServiceDto {
   @IsString()
@@ -8,17 +26,19 @@ export class CreateServiceDto {
   @IsString()
   description?: string;
 
-  @IsNumber()
-  price: number;
-
-  @IsNumber()
+  @IsInt()
   duration: number;
 
-  @IsArray()
   @IsOptional()
-  barberIds?: number[];
+  status?: Status;
 
   @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => ServiceLocalDto)
+  locals: ServiceLocalDto[];
+
   @IsOptional()
-  localIds?: number[];
+  @IsArray()
+  barberIds?: number[];
 }

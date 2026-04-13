@@ -240,15 +240,15 @@ model Local {
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  users        User[]        @relation("LocalUsers")
-  inventories  Inventory[]   @relation("LocalInventory")
-  expenses     Expense[]     @relation("LocalExpenses")
-  sales        Sale[]        @relation("LocalSales")
-  categories   Category[]    @relation("LocalCategory")
-  brand        Brand[]       @relation("LocalBrand")
-  services     Service[]     @relation("ServiceLocals")
-  appointments Appointment[]
-  customers    Customer[]
+  users         User[]         @relation("LocalUsers")
+  inventories   Inventory[]    @relation("LocalInventory")
+  expenses      Expense[]      @relation("LocalExpenses")
+  sales         Sale[]         @relation("LocalSales")
+  categories    Category[]     @relation("LocalCategory")
+  brand         Brand[]        @relation("LocalBrand")
+  appointments  Appointment[]
+  customers     Customer[]
+  serviceLocals ServiceLocal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -533,21 +533,35 @@ model Service {
   id          Int     @id @default(autoincrement())
   name        String
   description String?
-  price       Float
   duration    Int
   status      Status  @default(ACTIVO)
 
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  appointments Appointment[]
+  serviceLocals ServiceLocal[]
+
   barbers      User[]        @relation("BarberServices")
-  locals       Local[]       @relation("ServiceLocals")
+  appointments Appointment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
 
-  @@index([companyId])
+model ServiceLocal {
+  id Int @id @default(autoincrement())
+
+  price Float
+
+  serviceId Int
+  localId   Int
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  local   Local   @relation(fields: [localId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([serviceId, localId])
 }
 
 model Appointment {

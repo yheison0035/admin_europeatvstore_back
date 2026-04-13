@@ -17,6 +17,8 @@ import { EnumsModule } from './enums/enums.module';
 import { EcommerceModule } from './ecommerce/ecommerce.module';
 import { WompiModule } from './wompi/wompi.module';
 import { CompaniesModule } from './companies/companies.module';
+import { ServicesModule } from './services/services.module';
+import { AppointmentsModule } from './appointments/appointments.module';
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { CompaniesModule } from './companies/companies.module';
     EcommerceModule,
     WompiModule,
     CompaniesModule,
+    ServicesModule,
+    AppointmentsModule,
   ],
 })
 export class AppModule {}

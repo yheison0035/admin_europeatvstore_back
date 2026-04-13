@@ -4,88 +4,155 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
+import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { applyLocalFilter } from 'src/common/local-filter.util';
+import { getAccessibleLocalIds } from 'src/common/access-locals.util';
 
 @Injectable()
 export class AppointmentsService {
   constructor(private prisma: PrismaService) {}
 
-  private async validateAvailability(dto: any, tx) {
-    const exists = await tx.appointment.findFirst({
+  async findAllPaginated(user: any, query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    const where: any = {
+      companyId: user.companyId,
+    };
+
+    applyLocalFilter(where, user, localIds);
+
+    if (query.barberId) {
+      where.barberId = Number(query.barberId);
+    }
+
+    if (query.serviceId) {
+      where.serviceId = Number(query.serviceId);
+    }
+
+    if (query.localId) {
+      where.localId = Number(query.localId);
+    }
+
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    if (query.startDate && query.endDate) {
+      where.date = {
+        gte: new Date(query.startDate),
+        lte: new Date(query.endDate),
+      };
+    }
+
+    const isAll = query.all === 'true' || query.all === true;
+
+    if (isAll) {
+      const items = await this.prisma.appointment.findMany({
+        where,
+        include: {
+          service: true,
+          barber: true,
+        },
+        orderBy: { date: 'asc' },
+      });
+
+      return {
+        success: true,
+        data: items,
+      };
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.appointment.findMany({
+        where,
+        include: {
+          service: true,
+          barber: true,
+          customer: true,
+          local: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.appointment.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async create(dto: CreateAppointmentDto, user: any) {
+    const conflict = await this.prisma.appointment.findFirst({
       where: {
         barberId: dto.barberId,
-        localId: dto.localId,
-        date: dto.date,
+        date: new Date(dto.date),
         OR: [
           {
-            startTime: { lt: dto.endTime },
-            endTime: { gt: dto.startTime },
+            startTime: { lte: new Date(dto.endTime) },
+            endTime: { gte: new Date(dto.startTime) },
           },
         ],
       },
     });
 
-    if (exists) {
-      throw new BadRequestException('Horario ocupado');
-    }
-  }
-
-  async create(dto: any, user: any) {
-    return this.prisma.$transaction(async (tx) => {
-      const service = await tx.service.findFirst({
-        where: {
-          id: dto.serviceId,
-          companyId: user.companyId,
-        },
-      });
-
-      if (!service) throw new NotFoundException();
-
-      const startTime = new Date(dto.startTime);
-      const endTime = new Date(startTime.getTime() + service.duration * 60000);
-
-      await this.validateAvailability(
-        {
-          ...dto,
-          startTime,
-          endTime,
-        },
-        tx,
+    if (conflict) {
+      throw new BadRequestException(
+        'El barbero ya tiene una cita en ese horario',
       );
+    }
 
-      const appointment = await tx.appointment.create({
-        data: {
-          date: new Date(dto.date),
-          startTime,
-          endTime,
-          serviceId: dto.serviceId,
-          barberId: dto.barberId,
-          customerId: dto.customerId,
-          localId: dto.localId,
-          companyId: user.companyId,
-          notes: dto.notes,
-        },
-        include: {
-          service: true,
-          barber: true,
-          customer: true,
-        },
-      });
-
-      return { success: true, data: appointment };
-    });
-  }
-
-  async findAll(user: any) {
-    return this.prisma.appointment.findMany({
-      where: {
+    return this.prisma.appointment.create({
+      data: {
+        date: new Date(dto.date),
+        startTime: new Date(dto.startTime),
+        endTime: new Date(dto.endTime),
+        notes: dto.notes,
+        serviceId: dto.serviceId,
+        barberId: dto.barberId,
+        customerId: dto.customerId,
+        localId: dto.localId,
         companyId: user.companyId,
       },
-      include: {
-        service: true,
-        barber: true,
-        customer: true,
-      },
-      orderBy: { date: 'desc' },
     });
+  }
+
+  async update(id: number, dto: any, user: any) {
+    const appt = await this.prisma.appointment.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    if (!appt) throw new NotFoundException();
+
+    return this.prisma.appointment.update({
+      where: { id },
+      data: {
+        ...dto,
+      },
+    });
+  }
+
+  async remove(id: number, user: any) {
+    const appt = await this.prisma.appointment.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    if (!appt) throw new NotFoundException();
+
+    await this.prisma.appointment.delete({ where: { id } });
+
+    return { success: true };
   }
 }

@@ -28,7 +28,10 @@ export class InventoryService {
   async search(term: string, user: any) {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    const where: any = {
+    // -----------------------
+    // INVENTORY
+    // -----------------------
+    const inventoryWhere: any = {
       local: {
         companyId: user.companyId,
       },
@@ -40,19 +43,20 @@ export class InventoryService {
 
     if (localIds !== null) {
       if (localIds.length === 0) return { success: true, data: [] };
-      where.localId = { in: localIds };
+      inventoryWhere.localId = { in: localIds };
     }
 
     const products = await this.prisma.inventory.findMany({
-      where,
+      where: inventoryWhere,
       include: {
         variants: { where: { isActive: true } },
       },
-      take: 10,
+      take: 5,
     });
 
-    const result = products.flatMap((p) =>
+    const productResults = products.flatMap((p) =>
       p.variants.map((v) => ({
+        type: 'product',
         id: v.id,
         name: p.name,
         color: v.color,
@@ -63,7 +67,43 @@ export class InventoryService {
       })),
     );
 
-    return { success: true, data: result };
+    // -----------------------
+    // SERVICES
+    // -----------------------
+    const serviceWhere: any = {
+      companyId: user.companyId,
+      name: { contains: term, mode: 'insensitive' },
+    };
+
+    const services = await this.prisma.service.findMany({
+      where: serviceWhere,
+      include: {
+        serviceLocals: true,
+      },
+      take: 5,
+    });
+
+    const serviceResults = services.flatMap((s) =>
+      s.serviceLocals
+        .filter((sl) =>
+          localIds === null ? true : localIds.includes(sl.localId),
+        )
+        .map((sl) => ({
+          type: 'service',
+          id: s.id,
+          name: s.name,
+          duration: s.duration,
+          price: sl.price,
+          localId: sl.localId,
+        })),
+    );
+
+    const data = [...productResults, ...serviceResults];
+
+    return {
+      success: true,
+      data,
+    };
   }
 
   async findAllPaginated(user: any, query: any) {

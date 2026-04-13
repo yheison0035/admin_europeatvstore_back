@@ -1,4 +1,4 @@
-import { IsNumber, IsDateString, IsOptional, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsDateString, IsString } from 'class-validator';
 
 export class CreateAppointmentDto {
   @IsDateString()
@@ -7,18 +7,21 @@ export class CreateAppointmentDto {
   @IsDateString()
   startTime: string;
 
-  @IsNumber()
+  @IsDateString()
+  endTime: string;
+
+  @IsInt()
   serviceId: number;
 
-  @IsNumber()
+  @IsInt()
   barberId: number;
 
-  @IsNumber()
-  localId: number;
-
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   customerId?: number;
+
+  @IsInt()
+  localId: number;
 
   @IsOptional()
   @IsString()
