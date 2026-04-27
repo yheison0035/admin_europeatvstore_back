@@ -24,28 +24,40 @@ export class LocalsService {
       status: { not: Status.ELIMINADO },
     };
 
-    // MODO CRM (SOLO si hay usuario)
     if (user?.companyId) {
+      // CRM (usuario autenticado)
       where.companyId = user.companyId;
 
       const localIds = await getAccessibleLocalIds(this.prisma, user);
       applyLocalFilter(where, user, localIds, 'local');
+    } else {
+      // PUBLICO (booking)
+      if (!query.companyId) {
+        // seguridad: no devolver nada
+        where.id = -1;
+      } else {
+        where.companyId = Number(query.companyId);
+      }
     }
 
-    // FILTROS NORMALES
     if (query.name) {
-      where.name = { contains: query.name, mode: 'insensitive' };
+      where.name = {
+        contains: query.name,
+        mode: 'insensitive',
+      };
     }
 
     if (query.city) {
-      where.city = { contains: query.city, mode: 'insensitive' };
+      where.city = {
+        contains: query.city,
+        mode: 'insensitive',
+      };
     }
 
     if (query.status) {
       where.status = query.status;
     }
 
-    // MODO PUBLICO (SIN PAGINACIÓN)
     const isAll = query.all === 'true' || query.all === true;
 
     if (isAll) {
@@ -66,7 +78,6 @@ export class LocalsService {
       };
     }
 
-    // MODO CRM (PAGINADO)
     const [items, total] = await this.prisma.$transaction([
       this.prisma.local.findMany({
         where,
