@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { Role, Status } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
@@ -268,36 +269,24 @@ export class UsersService {
       status: Status.ACTIVO,
     };
 
+    // OBLIGATORIO: localId
+    const localId = Number(query.localId);
+
+    if (!localId || isNaN(localId)) {
+      throw new BadRequestException('localId es obligatorio');
+    }
+
+    // =========================
+    // FILTRO PRINCIPAL
+    // =========================
+    where.localId = localId;
+
     if (user?.companyId) {
       where.companyId = user.companyId;
     }
 
-    if (!user?.companyId) {
-      // seguridad: obligar filtro mínimo
-      if (!query.localId) {
-        where.id = -1;
-      }
-    }
-
     if (query.role) {
       where.role = query.role.toUpperCase();
-    }
-
-    if (query.localId !== undefined) {
-      const localId = Number(query.localId);
-      if (!isNaN(localId)) {
-        where.localId = localId;
-      }
-    }
-
-    if (query.serviceId) {
-      const serviceId = Number(query.serviceId);
-
-      where.services = {
-        some: {
-          id: serviceId,
-        },
-      };
     }
 
     return this.prisma.user.findMany({
