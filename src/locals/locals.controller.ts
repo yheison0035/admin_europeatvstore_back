@@ -17,14 +17,15 @@ import { UpdateLocalDto } from './dto/update-local.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('locals')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LocalsController {
   constructor(private readonly localsService: LocalsService) {}
 
-  // ADMIN / COORDINADOR / SUPER_ADMIN
   @Get()
+  @Public()
   findAll(@Req() req, @Query() query) {
     return this.localsService.findAllPaginated(req.user, query);
   }
