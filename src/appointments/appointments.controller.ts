@@ -15,6 +15,7 @@ import { AppointmentsService } from './appointments.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('appointments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -45,6 +46,7 @@ export class AppointmentsController {
     return this.service.remove(id, req.user);
   }
 
+  @Public()
   @Get('availability')
   getAvailability(@Query() query) {
     return this.service.getAvailability(query);
