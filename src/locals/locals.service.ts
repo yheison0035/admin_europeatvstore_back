@@ -20,44 +20,53 @@ export class LocalsService {
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
     const where: any = {
       status: { not: Status.ELIMINADO },
-      companyId: user.companyId,
     };
 
-    applyLocalFilter(where, user, localIds, 'local');
+    // MODO CRM (SOLO si hay usuario)
+    if (user?.companyId) {
+      where.companyId = user.companyId;
 
-    if (query.name) {
-      where.name = { contains: query.name, mode: 'insensitive' };
+      const localIds = await getAccessibleLocalIds(this.prisma, user);
+      applyLocalFilter(where, user, localIds, 'local');
     }
 
-    if (query.address) {
-      where.address = { contains: query.address, mode: 'insensitive' };
+    // FILTROS NORMALES
+    if (query.name) {
+      where.name = { contains: query.name, mode: 'insensitive' };
     }
 
     if (query.city) {
       where.city = { contains: query.city, mode: 'insensitive' };
     }
 
-    if (query.phone) {
-      where.phone = { contains: query.phone, mode: 'insensitive' };
+    if (query.status) {
+      where.status = query.status;
     }
 
-    if (query.managerId) {
-      where.manager = {
-        name: { contains: query.managerId, mode: 'insensitive' },
+    // MODO PUBLICO (SIN PAGINACIÓN)
+    const isAll = query.all === 'true' || query.all === true;
+
+    if (isAll) {
+      const items = await this.prisma.local.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          city: true,
+        },
+        orderBy: { name: 'asc' },
+      });
+
+      return {
+        success: true,
+        data: items,
       };
     }
 
-    if (query.status) {
-      const normalizedStatus = query.status.toUpperCase();
-      if (Object.values(Status).includes(normalizedStatus as Status)) {
-        where.status = normalizedStatus as Status;
-      }
-    }
-
+    // MODO CRM (PAGINADO)
     const [items, total] = await this.prisma.$transaction([
       this.prisma.local.findMany({
         where,
