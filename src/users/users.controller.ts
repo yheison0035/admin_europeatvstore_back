@@ -22,6 +22,7 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { v2 as Cloudinary } from 'cloudinary';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('users')
 export class UsersController {
@@ -47,7 +48,7 @@ export class UsersController {
     return this.usersService.findAllPaginated(req.user, query);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Public()
   @Get('/by-role')
   getUsersByRole(@Req() req, @Query() query) {
     return this.usersService.getUsersByRole(req.user, query);
