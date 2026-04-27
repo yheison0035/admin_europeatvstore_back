@@ -17,34 +17,56 @@ export class ServicesService {
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
     const where: any = {
-      companyId: user.companyId,
       status: { not: 'ELIMINADO' },
     };
 
-    if (localIds !== null) {
-      if (localIds.length === 0) {
-        where.id = -1;
+    if (user?.companyId) {
+      where.companyId = user.companyId;
+
+      const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+      if (localIds !== null) {
+        if (localIds.length === 0) {
+          where.id = -1;
+        } else {
+          where.serviceLocals = {
+            some: {
+              localId: { in: localIds },
+            },
+          };
+        }
+      }
+    }
+
+    if (!user?.companyId) {
+      if (!query.localId) {
+        where.id = -1; // seguridad
       } else {
         where.serviceLocals = {
           some: {
-            localId: { in: localIds },
+            localId: Number(query.localId),
           },
         };
       }
     }
 
-    if (query.name) {
-      where.name = {
-        contains: query.name,
-        mode: 'insensitive',
+    // filtro por local SIEMPRE (refuerza ambos casos)
+    if (query.localId) {
+      where.serviceLocals = {
+        some: {
+          localId: Number(query.localId),
+        },
       };
     }
 
-    if (query.status) {
-      where.status = query.status;
+    // opcional: filtrar por barbero
+    if (query.barberId) {
+      where.barbers = {
+        some: {
+          id: Number(query.barberId),
+        },
+      };
     }
 
     const isAll = query.all === 'true' || query.all === true;
@@ -62,7 +84,6 @@ export class ServicesService {
         id: s.id,
         name: s.name,
         duration: s.duration,
-        status: s.status,
         priceFrom:
           s.serviceLocals.length > 0
             ? Math.min(...s.serviceLocals.map((l) => l.price))
@@ -122,20 +143,8 @@ export class ServicesService {
       throw new NotFoundException('Servicio no encontrado');
     }
 
-    if (service.companyId !== user.companyId) {
+    if (user?.companyId && service.companyId !== user.companyId) {
       throw new ForbiddenException('No tienes acceso a este servicio');
-    }
-
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-    if (localIds !== null) {
-      const hasAccess = service.serviceLocals.some((sl) =>
-        localIds.includes(sl.localId),
-      );
-
-      if (!hasAccess) {
-        throw new ForbiddenException('No tienes acceso a este servicio');
-      }
     }
 
     return {

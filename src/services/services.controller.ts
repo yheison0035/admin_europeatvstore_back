@@ -16,12 +16,14 @@ import { ServicesService } from './services.service';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('services')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ServicesController {
   constructor(private readonly service: ServicesService) {}
 
+  @Public()
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.service.findAllPaginated(req.user, query);
