@@ -265,9 +265,19 @@ export class UsersService {
   // Nuevo método para obtener usuarios por rol
   async getUsersByRole(user: any, query: any) {
     const where: any = {
-      companyId: user.companyId,
       status: Status.ACTIVO,
     };
+
+    if (user?.companyId) {
+      where.companyId = user.companyId;
+    }
+
+    if (!user?.companyId) {
+      // seguridad: obligar filtro mínimo
+      if (!query.localId) {
+        where.id = -1;
+      }
+    }
 
     if (query.role) {
       where.role = query.role.toUpperCase();
@@ -275,10 +285,19 @@ export class UsersService {
 
     if (query.localId !== undefined) {
       const localId = Number(query.localId);
-
       if (!isNaN(localId)) {
         where.localId = localId;
       }
+    }
+
+    if (query.serviceId) {
+      const serviceId = Number(query.serviceId);
+
+      where.services = {
+        some: {
+          id: serviceId,
+        },
+      };
     }
 
     return this.prisma.user.findMany({
@@ -289,6 +308,7 @@ export class UsersService {
         role: true,
         avatar: true,
       },
+      orderBy: { name: 'asc' },
     });
   }
 }
