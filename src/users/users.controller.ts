@@ -47,6 +47,12 @@ export class UsersController {
     return this.usersService.findAllPaginated(req.user, query);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('/by-role')
+  getUsersByRole(@Req() req, @Query() query) {
+    return this.usersService.getUsersByRole(req.user, query);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get('/:id')

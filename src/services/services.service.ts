@@ -61,6 +61,8 @@ export class ServicesService {
       const data = items.map((s) => ({
         id: s.id,
         name: s.name,
+        duration: s.duration,
+        status: s.status,
         priceFrom:
           s.serviceLocals.length > 0
             ? Math.min(...s.serviceLocals.map((l) => l.price))

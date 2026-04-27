@@ -44,4 +44,9 @@ export class AppointmentsController {
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.remove(id, req.user);
   }
+
+  @Get('availability')
+  getAvailability(@Query() query) {
+    return this.service.getAvailability(query);
+  }
 }

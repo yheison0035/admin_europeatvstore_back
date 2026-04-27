@@ -20,6 +20,8 @@ enum Role {
   BODEGUERO
   VENTAS
   SUPER_PLATFORM_ADMIN
+  BARBERO
+  CAJA
 }
 
 enum Status {
@@ -568,8 +570,7 @@ model Appointment {
   id Int @id @default(autoincrement())
 
   date      DateTime
-  startTime DateTime
-  endTime   DateTime
+  startTime String
 
   status AppointmentStatus @default(PENDIENTE)
   notes  String?

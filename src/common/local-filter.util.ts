@@ -36,7 +36,6 @@ export function applyLocalFilter(
   // CASO 3: MODELOS GENERALES (category, brand, inventory, etc.)
   where.AND.push({
     OR: [
-      { localId: null }, // globales
       { localId: { in: localIds } }, // locales permitidos
     ],
   });

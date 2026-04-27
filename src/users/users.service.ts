@@ -261,6 +261,36 @@ export class UsersService {
 
     return { success: true, message: 'Usuario eliminado' };
   }
+
+  // Nuevo método para obtener usuarios por rol
+  async getUsersByRole(user: any, query: any) {
+    const where: any = {
+      companyId: user.companyId,
+      status: Status.ACTIVO,
+    };
+
+    if (query.role) {
+      where.role = query.role.toUpperCase();
+    }
+
+    if (query.localId !== undefined) {
+      const localId = Number(query.localId);
+
+      if (!isNaN(localId)) {
+        where.localId = localId;
+      }
+    }
+
+    return this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        avatar: true,
+      },
+    });
+  }
 }
 
 export function sanitizeUser(user: any) {

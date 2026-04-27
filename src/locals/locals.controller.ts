@@ -24,7 +24,6 @@ export class LocalsController {
   constructor(private readonly localsService: LocalsService) {}
 
   // ADMIN / COORDINADOR / SUPER_ADMIN
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.localsService.findAllPaginated(req.user, query);

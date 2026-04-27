@@ -1,14 +1,18 @@
-import { IsInt, IsOptional, IsDateString, IsString } from 'class-validator';
+import { AppointmentStatus, SaleStatus } from '@prisma/client';
+import {
+  IsInt,
+  IsOptional,
+  IsDateString,
+  IsString,
+  IsEnum,
+} from 'class-validator';
 
 export class CreateAppointmentDto {
   @IsDateString()
   date: string;
 
-  @IsDateString()
+  @IsString()
   startTime: string;
-
-  @IsDateString()
-  endTime: string;
 
   @IsInt()
   serviceId: number;
@@ -16,14 +20,18 @@ export class CreateAppointmentDto {
   @IsInt()
   barberId: number;
 
-  @IsOptional()
-  @IsInt()
-  customerId?: number;
-
   @IsInt()
   localId: number;
 
   @IsOptional()
+  @IsInt()
+  customerId?: number;
+
+  @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsEnum(AppointmentStatus)
+  status?: AppointmentStatus;
 }
