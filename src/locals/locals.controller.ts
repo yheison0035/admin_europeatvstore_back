@@ -25,26 +25,20 @@ export class LocalsController {
   constructor(private readonly localsService: LocalsService) {}
 
   @Get()
-  @Public()
   findAll(@Req() req, @Query() query) {
     return this.localsService.findAllPaginated(req.user, query);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.localsService.findOne(id, req.user);
   }
 
-  // Crear local (ADMIN / SUPER_ADMIN)
-  @Roles('SUPER_ADMIN')
   @Post()
   create(@Body() dto: CreateLocalDto, @Req() req) {
     return this.localsService.create(dto, req.user);
   }
 
-  // Actualizar local
-  @Roles('SUPER_ADMIN')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -54,8 +48,6 @@ export class LocalsController {
     return this.localsService.update(id, dto, req.user);
   }
 
-  // Eliminar local
-  @Roles('SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.localsService.remove(id, req.user);

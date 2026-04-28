@@ -16,96 +16,85 @@ export class LocalsService {
   constructor(private prisma: PrismaService) {}
 
   async findAllPaginated(user: any, query: any) {
-  const page = Number(query.page) || 1;
-  const limit = Number(query.limit) || 10;
-  const skip = (page - 1) * limit;
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-  const where: any = {
-    status: { not: Status.ELIMINADO },
-  };
+    if (!user || !user.companyId) {
+      throw new ForbiddenException('No autorizado');
+    }
 
-  if (user && user.companyId) {
-    where.companyId = user.companyId;
+    const where: any = {
+      companyId: user.companyId,
+      status: { not: Status.ELIMINADO },
+    };
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
     applyLocalFilter(where, user, localIds, 'local');
-  }
 
-  
-  else {
-    const companyId = Number(query.companyId);
-
-    if (!companyId || isNaN(companyId)) {
-      // seguridad: no devolver nada
-      where.id = -1;
-    } else {
-      where.companyId = companyId;
+    if (query.name) {
+      where.name = {
+        contains: query.name,
+        mode: 'insensitive',
+      };
     }
-  }
 
-  if (query.name) {
-    where.name = {
-      contains: query.name,
-      mode: 'insensitive',
-    };
-  }
+    if (query.city) {
+      where.city = {
+        contains: query.city,
+        mode: 'insensitive',
+      };
+    }
 
-  if (query.city) {
-    where.city = {
-      contains: query.city,
-      mode: 'insensitive',
-    };
-  }
+    if (query.status) {
+      where.status = query.status;
+    }
 
-  if (query.status) {
-    where.status = query.status;
-  }
+    const isAll = query.all === 'true' || query.all === true;
 
-  const isAll = query.all === 'true' || query.all === true;
+    if (isAll) {
+      const items = await this.prisma.local.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          city: true,
+        },
+        orderBy: { name: 'asc' },
+      });
 
-  if (isAll) {
-    const items = await this.prisma.local.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        city: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+      return {
+        success: true,
+        data: items,
+      };
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.local.findMany({
+        where,
+        include: {
+          users: true,
+          manager: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.local.count({ where }),
+    ]);
 
     return {
       success: true,
       data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
-
-  const [items, total] = await this.prisma.$transaction([
-    this.prisma.local.findMany({
-      where,
-      include: {
-        users: true,
-        manager: true,
-      },
-      skip,
-      take: limit,
-      orderBy: { name: 'asc' },
-    }),
-    this.prisma.local.count({ where }),
-  ]);
-
-  return {
-    success: true,
-    data: items,
-    meta: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
-}
 
   async findOne(id: number, user: any) {
     const local = await this.prisma.local.findFirst({
@@ -263,6 +252,37 @@ export class LocalsService {
     return {
       success: true,
       message: 'Local eliminado correctamente',
+    };
+  }
+
+  // Método público para obtener locales activos de una empresa
+  async findAllPublic(query: any) {
+    const where: any = {
+      status: Status.ACTIVO,
+    };
+
+    const companyId = Number(query.companyId);
+
+    if (!companyId || isNaN(companyId)) {
+      where.id = -1;
+    } else {
+      where.companyId = companyId;
+    }
+
+    const items = await this.prisma.local.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        city: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return {
+      success: true,
+      data: items,
     };
   }
 }
