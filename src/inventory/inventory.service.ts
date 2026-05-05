@@ -4,17 +4,17 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
-import { hasRole } from 'src/common/role-check.util';
+import { hasRole } from '@/common/role-check.util';
 import { InventoryVariant, Role } from '@prisma/client';
-import { generateSku } from 'utils/sku.util';
-import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { CloudinaryService } from '@/cloudinary/cloudinary.service';
 import { VariantsService } from './variants/variants.service';
-import { getAccessibleLocalIds } from 'src/common/access-locals.util';
-import { generateSlug } from 'src/utils/slug.util';
-import { getPagination } from 'src/common/pagination.util';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
+import { generateSlug } from '@/utils/slug.util';
+import { getPagination } from '@/common/pagination.util';
+import { generateSku } from '../../utils/sku.util';
 
 @Injectable()
 export class InventoryService {

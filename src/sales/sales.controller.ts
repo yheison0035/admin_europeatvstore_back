@@ -13,11 +13,11 @@ import {
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { Roles } from 'src/auth/roles.decorator';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+import { RolesGuard } from '@/auth/guards/roles.guard';
+import { Roles } from '@/auth/roles.decorator';
 import { UpdateSaleDto } from './dto/update-sale.dto';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { Public } from '@/auth/decorators/public.decorator';
 import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto';
 import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto';
 

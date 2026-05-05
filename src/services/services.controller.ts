@@ -11,19 +11,18 @@ import {
   ParseIntPipe,
   Query,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { ServicesService } from './services.service';
-import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { RolesGuard } from '@/auth/guards/roles.guard';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { Public } from '@/auth/decorators/public.decorator';
 
 @Controller('services')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ServicesController {
   constructor(private readonly service: ServicesService) {}
 
-  @Public()
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.service.findAllPaginated(req.user, query);

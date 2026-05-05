@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { EcommerceService } from './ecommerce.service';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { Public } from '@/auth/decorators/public.decorator';
 import { CreateEcommerceOrderDto } from './dto/create-ecommerce-order.dto';
 
 @Controller('ecommerce')

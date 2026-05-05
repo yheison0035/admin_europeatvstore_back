@@ -4,14 +4,14 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
-import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { PaymentMethod, PaymentStatus, Status } from '@prisma/client';
-import { StockService } from 'src/inventory/stock.service';
-import { getDayRange, getRangeDates } from 'src/common/date-range.util';
-import { applyLocalFilter } from 'src/common/local-filter.util';
+import { StockService } from '@/inventory/stock.service';
+import { getDayRange, getRangeDates } from '@/common/date-range.util';
+import { applyLocalFilter } from '@/common/local-filter.util';
 
 @Injectable()
 export class SalesService {
@@ -247,6 +247,7 @@ export class SalesService {
       return { success: true, data: sale };
     });
   }
+
   async update(id: number, dto: UpdateSaleDto, user: any) {
     return this.prisma.$transaction(async (tx) => {
       const sale = await tx.sale.findUnique({

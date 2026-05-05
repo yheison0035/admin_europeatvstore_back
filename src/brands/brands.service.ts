@@ -3,13 +3,13 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { Role, Status } from '@prisma/client';
-import { hasRole } from 'src/common/role-check.util';
-import { getAccessibleLocalIds } from 'src/common/access-locals.util';
-import { applyLocalFilter } from 'src/common/local-filter.util';
+import { hasRole } from '@/common/role-check.util';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
+import { applyLocalFilter } from '@/common/local-filter.util';
 
 @Injectable()
 export class BrandsService {

@@ -7,9 +7,9 @@ import {
 import { PrismaService } from '../prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
-import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { Status } from '@prisma/client';
-import { applyLocalFilter } from 'src/common/local-filter.util';
+import { applyLocalFilter } from '@/common/local-filter.util';
 
 @Injectable()
 export class CustomersService {

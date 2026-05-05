@@ -1,5 +1,5 @@
 // src/common/access-locals.util.ts
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { Role } from '@prisma/client';
 
 export async function getAccessibleLocalIds(

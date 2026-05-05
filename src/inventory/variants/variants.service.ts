@@ -3,11 +3,11 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { Role } from '@prisma/client';
-import { hasRole } from 'src/common/role-check.util';
-import { generateSku } from 'utils/sku.util';
+import { hasRole } from '@/common/role-check.util';
 import { InventoryVariantSyncInput } from './dto/sync-inventory-variants.dto';
+import { generateSku } from '../../../utils/sku.util';
 
 @Injectable()
 export class VariantsService {

@@ -3,11 +3,11 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { Role, Status } from '@prisma/client';
-import { hasRole } from 'src/common/role-check.util';
+import { hasRole } from '@/common/role-check.util';
 
 @Injectable()
 export class ProvidersService {

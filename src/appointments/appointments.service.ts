@@ -3,11 +3,11 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
-import { applyLocalFilter } from 'src/common/local-filter.util';
-import { getAccessibleLocalIds } from 'src/common/access-locals.util';
-import { minutesToColombiaHour, timeToMinutes } from 'src/utils/format';
+import { applyLocalFilter } from '@/common/local-filter.util';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
+import { minutesToColombiaHour, timeToMinutes } from '@/utils/format';
 
 @Injectable()
 export class AppointmentsService {

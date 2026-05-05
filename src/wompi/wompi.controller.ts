@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { Public } from '@/auth/decorators/public.decorator';
 import { WompiService } from './wompi.service';
 import { CreateSignatureDto } from './dto/create-signature.dto';
 

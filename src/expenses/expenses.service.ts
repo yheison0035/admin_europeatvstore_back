@@ -3,13 +3,13 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { PaymentMethod, Role, Status } from '@prisma/client';
-import { hasRole } from 'src/common/role-check.util';
-import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { hasRole } from '@/common/role-check.util';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { CreateExpenseDto } from './dto/create-expenses.dto';
 import { UpdateExpenseDto } from './dto/update-expenses.dto';
-import { applyLocalFilter } from 'src/common/local-filter.util';
+import { applyLocalFilter } from '@/common/local-filter.util';
 
 @Injectable()
 export class ExpensesService {

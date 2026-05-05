@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { CreateEcommerceOrderDto } from './dto/create-ecommerce-order.dto';
 import { PaymentMethod } from '@prisma/client';
 

@@ -9,9 +9,9 @@ import {
 } from '@nestjs/common';
 import { SyncInventoryVariantsDto } from './dto/sync-inventory-variants.dto';
 import { VariantsService } from './variants.service';
-import { Roles } from 'src/auth/roles.decorator';
-import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Roles } from '@/auth/roles.decorator';
+import { RolesGuard } from '@/auth/guards/roles.guard';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard)

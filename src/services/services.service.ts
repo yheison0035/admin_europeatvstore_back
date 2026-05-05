@@ -3,10 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { CreateServiceDto } from './dto/create-service.dto';
-import { getAccessibleLocalIds } from 'src/common/access-locals.util';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
 
 @Injectable()
 export class ServicesService {
@@ -220,5 +220,48 @@ export class ServicesService {
     });
 
     return { success: true };
+  }
+
+  async findAllPublic(query: any) {
+    const localId = Number(query.localId);
+
+    if (!localId || isNaN(localId)) {
+      return {
+        success: true,
+        data: [],
+      };
+    }
+
+    const where: any = {
+      status: 'ACTIVO',
+      serviceLocals: {
+        some: {
+          localId,
+        },
+      },
+    };
+
+    const items = await this.prisma.service.findMany({
+      where,
+      include: {
+        serviceLocals: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const data = items.map((s) => ({
+      id: s.id,
+      name: s.name,
+      duration: s.duration,
+      priceFrom:
+        s.serviceLocals.length > 0
+          ? Math.min(...s.serviceLocals.map((l) => l.price))
+          : 0,
+    }));
+
+    return {
+      success: true,
+      data,
+    };
   }
 }

@@ -6,14 +6,14 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Role, Status } from '@prisma/client';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from '@/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
-import { hasRole } from 'src/common/role-check.util';
-import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
-import { getAccessibleLocalIds } from 'src/common/access-locals.util';
-import { applyLocalFilter } from 'src/common/local-filter.util';
+import { hasRole } from '@/common/role-check.util';
+import { CloudinaryService } from '@/cloudinary/cloudinary.service';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
+import { applyLocalFilter } from '@/common/local-filter.util';
 
 @Injectable()
 export class UsersService {
