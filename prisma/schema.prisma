@@ -466,10 +466,12 @@ model SaleItem {
   discount Float @default(0)
 
   saleId             Int
-  inventoryVariantId Int
+  inventoryVariantId Int?
+  serviceId Int?
 
-  sale    Sale             @relation("SaleItems", fields: [saleId], references: [id], onDelete: Cascade)
-  variant InventoryVariant @relation(fields: [inventoryVariantId], references: [id])
+  sale    Sale              @relation("SaleItems", fields: [saleId], references: [id], onDelete: Cascade)
+  variant InventoryVariant? @relation(fields: [inventoryVariantId], references: [id])
+  service Service?          @relation(fields: [serviceId], references: [id])
 
   createdAt DateTime @default(now())
 }
@@ -545,6 +547,7 @@ model Service {
 
   barbers      User[]        @relation("BarberServices")
   appointments Appointment[]
+  saleItems    SaleItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

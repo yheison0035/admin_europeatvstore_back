@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma.service';
-import { CreateSaleDto } from './dto/create-sale.dto';
+import { CreateSaleDto, CreateSaleItemDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { PaymentMethod, PaymentStatus, Status } from '@prisma/client';
@@ -34,6 +34,17 @@ export class SalesService {
     }
 
     return subtotal - discount;
+  }
+
+  private validateItem(item: CreateSaleItemDto) {
+    if (
+      (!item.inventoryVariantId && !item.serviceId) ||
+      (item.inventoryVariantId && item.serviceId)
+    ) {
+      throw new BadRequestException(
+        'Cada item debe ser producto o servicio, no ambos ni ninguno',
+      );
+    }
   }
 
   async findAllPaginated(user: any, query: any) {
@@ -88,6 +99,7 @@ export class SalesService {
           items: {
             include: {
               variant: { include: { inventory: true } },
+              service: true,
             },
           },
           customer: true,
@@ -143,7 +155,7 @@ export class SalesService {
 
   async create(dto: CreateSaleDto, user: any) {
     if (!dto.items?.length) {
-      throw new BadRequestException('La venta debe tener productos');
+      throw new BadRequestException('La venta debe tener items');
     }
 
     if (!dto.customerId || !dto.localId || !dto.paymentMethod) {
@@ -176,7 +188,8 @@ export class SalesService {
       let total = 0;
 
       const itemsData: {
-        inventoryVariantId: number;
+        inventoryVariantId: number | null;
+        serviceId: number | null;
         quantity: number;
         price: number;
         discount: number;
@@ -184,38 +197,99 @@ export class SalesService {
       }[] = [];
 
       for (const item of dto.items) {
-        const variant = await tx.inventoryVariant.findFirst({
-          where: {
-            id: item.inventoryVariantId,
-            inventory: {
-              local: {
-                companyId: user.companyId,
+        this.validateItem(item);
+
+        // =========================
+        // PRODUCTO
+        // =========================
+        if (item.inventoryVariantId) {
+          const variant = await tx.inventoryVariant.findFirst({
+            where: {
+              id: item.inventoryVariantId,
+              inventory: {
+                local: {
+                  companyId: user.companyId,
+                },
               },
             },
-          },
-          include: { inventory: true },
-        });
+            include: { inventory: true },
+          });
 
-        if (!variant) {
-          throw new NotFoundException('Variante no válida');
+          if (!variant) {
+            throw new NotFoundException('Producto no válido');
+          }
+
+          const price = variant.inventory.salePrice;
+          const discount = item.discount ?? 0;
+
+          const subtotal = this.calculateSubtotal(
+            price,
+            item.quantity,
+            discount,
+          );
+
+          await this.stockService.decrement(variant.id, item.quantity, tx);
+
+          itemsData.push({
+            inventoryVariantId: variant.id,
+            serviceId: null,
+            quantity: item.quantity,
+            price,
+            discount,
+            subtotal,
+          });
+
+          total += subtotal;
         }
 
-        const price = variant.inventory.salePrice;
-        const discount = item.discount ?? 0;
+        // =========================
+        // SERVICIO
+        // =========================
+        else if (item.serviceId) {
+          const service = await tx.service.findFirst({
+            where: {
+              id: item.serviceId,
+              companyId: user.companyId,
+            },
+            include: {
+              serviceLocals: true,
+            },
+          });
 
-        const subtotal = this.calculateSubtotal(price, item.quantity, discount);
+          if (!service) {
+            throw new NotFoundException('Servicio no válido');
+          }
 
-        await this.stockService.decrement(variant.id, item.quantity, tx);
+          const serviceLocal = service.serviceLocals.find(
+            (sl) => sl.localId === dto.localId,
+          );
 
-        itemsData.push({
-          inventoryVariantId: variant.id,
-          quantity: item.quantity,
-          price,
-          discount,
-          subtotal,
-        });
+          if (!serviceLocal) {
+            throw new BadRequestException(
+              'Servicio no disponible en este local',
+            );
+          }
 
-        total += subtotal;
+          const price = serviceLocal.price;
+          const discount = item.discount ?? 0;
+
+          const subtotal = this.calculateSubtotal(
+            price,
+            item.quantity,
+            discount,
+          );
+
+          itemsData.push({
+            inventoryVariantId: null,
+            serviceId: service.id,
+            quantity: item.quantity,
+            price,
+            discount,
+            subtotal,
+          });
+
+          total += subtotal;
+        }
       }
 
       const sale = await tx.sale.create({
@@ -225,7 +299,7 @@ export class SalesService {
           paymentMethod: dto.paymentMethod,
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',
-          saleDate: new Date(),
+          saleDate: dto.saleDate ? new Date(dto.saleDate) : new Date(),
           notes: dto.notes,
           customerId: dto.customerId,
           localId: dto.localId,
@@ -236,6 +310,7 @@ export class SalesService {
           items: {
             include: {
               variant: { include: { inventory: true } },
+              service: true,
             },
           },
           customer: true,
@@ -284,18 +359,21 @@ export class SalesService {
 
       // devolver stock
       for (const item of sale.items) {
-        await this.stockService.increment(
-          item.inventoryVariantId,
-          item.quantity,
-          tx,
-        );
+        if (item.inventoryVariantId) {
+          await this.stockService.increment(
+            item.inventoryVariantId,
+            item.quantity,
+            tx,
+          );
+        }
       }
 
       await tx.saleItem.deleteMany({ where: { saleId: id } });
 
       let total = 0;
       const itemsData: {
-        inventoryVariantId: number;
+        inventoryVariantId: number | null;
+        serviceId: number | null;
         quantity: number;
         price: number;
         discount: number;
@@ -303,36 +381,89 @@ export class SalesService {
       }[] = [];
 
       for (const item of dto.items) {
-        const variant = await tx.inventoryVariant.findFirst({
-          where: {
-            id: item.inventoryVariantId,
-            inventory: {
-              local: {
-                companyId: user.companyId,
+        this.validateItem(item);
+
+        // PRODUCTO
+        if (item.inventoryVariantId) {
+          const variant = await tx.inventoryVariant.findFirst({
+            where: {
+              id: item.inventoryVariantId,
+              inventory: {
+                local: {
+                  companyId: user.companyId,
+                },
               },
             },
-          },
-          include: { inventory: true },
-        });
+            include: { inventory: true },
+          });
 
-        if (!variant) throw new NotFoundException('Variante inválida');
+          if (!variant) throw new NotFoundException('Producto inválido');
 
-        const price = variant.inventory.salePrice;
-        const discount = item.discount ?? 0;
+          const price = variant.inventory.salePrice;
+          const discount = item.discount ?? 0;
 
-        const subtotal = this.calculateSubtotal(price, item.quantity, discount);
+          const subtotal = this.calculateSubtotal(
+            price,
+            item.quantity,
+            discount,
+          );
 
-        await this.stockService.decrement(variant.id, item.quantity, tx);
+          await this.stockService.decrement(variant.id, item.quantity, tx);
 
-        itemsData.push({
-          inventoryVariantId: variant.id,
-          quantity: item.quantity,
-          price,
-          discount,
-          subtotal,
-        });
+          itemsData.push({
+            inventoryVariantId: variant.id,
+            serviceId: null,
+            quantity: item.quantity,
+            price,
+            discount,
+            subtotal,
+          });
 
-        total += subtotal;
+          total += subtotal;
+        }
+
+        // SERVICIO
+        else if (item.serviceId) {
+          const service = await tx.service.findFirst({
+            where: {
+              id: item.serviceId,
+              companyId: user.companyId,
+            },
+            include: { serviceLocals: true },
+          });
+
+          if (!service) throw new NotFoundException('Servicio inválido');
+
+          const serviceLocal = service.serviceLocals.find(
+            (sl) => sl.localId === sale.localId,
+          );
+
+          if (!serviceLocal) {
+            throw new BadRequestException(
+              'Servicio no disponible en este local',
+            );
+          }
+
+          const price = serviceLocal.price;
+          const discount = item.discount ?? 0;
+
+          const subtotal = this.calculateSubtotal(
+            price,
+            item.quantity,
+            discount,
+          );
+
+          itemsData.push({
+            inventoryVariantId: null,
+            serviceId: service.id,
+            quantity: item.quantity,
+            price,
+            discount,
+            subtotal,
+          });
+
+          total += subtotal;
+        }
       }
 
       const updatedSale = await tx.sale.update({
@@ -367,11 +498,13 @@ export class SalesService {
 
     return this.prisma.$transaction(async (tx) => {
       for (const item of sale.items) {
-        await this.stockService.increment(
-          item.inventoryVariantId,
-          item.quantity,
-          tx,
-        );
+        if (item.inventoryVariantId) {
+          await this.stockService.increment(
+            item.inventoryVariantId,
+            item.quantity,
+            tx,
+          );
+        }
       }
 
       await tx.sale.delete({ where: { id } });
@@ -389,9 +522,8 @@ export class SalesService {
       include: {
         items: {
           include: {
-            variant: {
-              include: { inventory: true },
-            },
+            variant: { include: { inventory: true } },
+            service: true,
           },
         },
         customer: true,
@@ -411,7 +543,7 @@ export class SalesService {
       customer: sale.customer?.name || 'CONSUMIDOR FINAL',
       totalAmount: sale.totalAmount,
       items: sale.items.map((item) => ({
-        product: item.variant.inventory.name,
+        product: item.variant?.inventory?.name || item.service?.name || 'ITEM',
         quantity: item.quantity,
         subtotal: item.subtotal,
       })),

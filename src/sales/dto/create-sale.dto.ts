@@ -10,8 +10,13 @@ import {
 import { PaymentMethod, PaymentStatus, SaleStatus } from '@prisma/client';
 
 export class CreateSaleItemDto {
+  @IsOptional()
   @IsInt()
-  inventoryVariantId: number;
+  inventoryVariantId?: number;
+
+  @IsOptional()
+  @IsInt()
+  serviceId?: number;
 
   @IsInt()
   quantity: number;
