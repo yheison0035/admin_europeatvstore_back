@@ -83,4 +83,10 @@ export class SalesController {
   rangeGeneralReport(@Body() dto: any, @Req() req) {
     return this.salesService.rangeSalesGeneralReport(dto, req.user);
   }
+
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
+  @Post('reports/service-performance')
+  servicePerformanceReport(@Body() dto: any, @Req() req) {
+    return this.salesService.servicePerformanceReport(dto, req.user);
+  }
 }

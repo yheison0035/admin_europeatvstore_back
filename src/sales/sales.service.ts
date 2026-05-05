@@ -826,4 +826,124 @@ export class SalesService {
       },
     };
   }
+
+  // Reporte de desempeño por servicio
+  async servicePerformanceReport(dto: any, user: any) {
+    const { startDate, endDate, localId } = dto;
+
+    if (!startDate || !endDate || !localId) {
+      throw new BadRequestException('Fechas y local requeridos');
+    }
+
+    const local = await this.prisma.local.findFirst({
+      where: {
+        id: Number(localId),
+        companyId: user.companyId,
+      },
+    });
+
+    if (!local) {
+      throw new ForbiddenException('No tienes permiso sobre este local');
+    }
+
+    const { start, end } = getRangeDates(startDate, endDate);
+
+    const sales = await this.prisma.sale.findMany({
+      where: {
+        localId: Number(localId),
+        createdAt: {
+          gte: start,
+          lte: end,
+        },
+      },
+      include: {
+        user: { select: { id: true, name: true } },
+        items: {
+          include: {
+            service: true,
+            variant: {
+              include: { inventory: true },
+            },
+          },
+        },
+      },
+    });
+
+    const usersMap: any = {};
+
+    let globalTotal = 0;
+
+    for (const sale of sales) {
+      const userName = sale.user?.name || 'SIN USUARIO';
+
+      if (!usersMap[userName]) {
+        usersMap[userName] = {
+          services: {},
+          products: {},
+          totals: {
+            servicesTotal: 0,
+            productsTotal: 0,
+            total: 0,
+            commission: 0,
+          },
+        };
+      }
+
+      for (const item of sale.items) {
+        // ======================
+        // SERVICIOS
+        // ======================
+        if (item.serviceId && item.service) {
+          const name = item.service.name;
+
+          if (!usersMap[userName].services[name]) {
+            usersMap[userName].services[name] = {
+              price: item.price,
+              count: 0,
+              total: 0,
+              commission: 0,
+            };
+          }
+
+          usersMap[userName].services[name].count += item.quantity;
+          usersMap[userName].services[name].total += item.subtotal;
+
+          const commission = item.subtotal * 0.4;
+
+          usersMap[userName].services[name].commission += commission;
+
+          usersMap[userName].totals.servicesTotal += item.subtotal;
+          usersMap[userName].totals.commission += commission;
+        }
+
+        // ======================
+        // PRODUCTOS
+        // ======================
+        if (item.inventoryVariantId && item.variant) {
+          const name = item.variant.inventory.name;
+
+          if (!usersMap[userName].products[name]) {
+            usersMap[userName].products[name] = {
+              count: 0,
+              total: 0,
+            };
+          }
+
+          usersMap[userName].products[name].count += item.quantity;
+          usersMap[userName].products[name].total += item.subtotal;
+
+          usersMap[userName].totals.productsTotal += item.subtotal;
+        }
+
+        usersMap[userName].totals.total += item.subtotal;
+        globalTotal += item.subtotal;
+      }
+    }
+
+    return {
+      success: true,
+      globalTotal,
+      data: usersMap,
+    };
+  }
 }
