@@ -296,6 +296,17 @@ export class SalesService {
         }
       }
 
+      const date = dto.saleDate
+          ? new Date(dto.saleDate)
+          : new Date();
+        
+        const colombiaDate = new Date(
+          date.toLocaleString('en-US', { timeZone: 'America/Bogota' }),
+        );
+        
+        // dejarla a medianoche Colombia
+        colombiaDate.setHours(0, 0, 0, 0);
+      
       const sale = await tx.sale.create({
         data: {
           code: `SALE-${Date.now()}`,
@@ -303,7 +314,7 @@ export class SalesService {
           paymentMethod: dto.paymentMethod,
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',
-          saleDate: dto.saleDate,
+          saleDate: colombiaDate,
           notes: dto.notes,
           customerId: dto.customerId,
           localId: dto.localId,
