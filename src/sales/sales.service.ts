@@ -303,9 +303,7 @@ export class SalesService {
           paymentMethod: dto.paymentMethod,
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',
-          saleDate: dto.saleDate
-            ? new Date(`${dto.saleDate}T12:00:00-05:00`)
-            : new Date(),
+          saleDate: dto.saleDate ? new Date(dto.saleDate) : new Date(),
           notes: dto.notes,
           customerId: dto.customerId,
           localId: dto.localId,
