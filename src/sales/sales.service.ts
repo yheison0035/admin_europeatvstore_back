@@ -585,7 +585,7 @@ export class SalesService {
     const sales = await this.prisma.sale.findMany({
       where: {
         localId: Number(localId),
-        saleDate: {
+        createdAt: {
           gte: start,
           lte: end,
         },
@@ -599,7 +599,7 @@ export class SalesService {
         },
       },
       orderBy: {
-        saleDate: 'asc',
+        createdAt: 'asc',
       },
     });
 
@@ -685,7 +685,7 @@ export class SalesService {
       where: {
         localId: Number(localId),
         userId: Number(userId),
-        saleDate: {
+        createdAt: {
           gte: start,
           lte: end,
         },
@@ -780,7 +780,7 @@ export class SalesService {
     const sales = await this.prisma.sale.findMany({
       where: {
         localId: Number(localId),
-        saleDate: {
+        createdAt: {
           gte: start,
           lte: end,
         },
