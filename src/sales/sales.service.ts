@@ -303,7 +303,9 @@ export class SalesService {
           paymentMethod: dto.paymentMethod,
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',
-          saleDate: dto.saleDate ? new Date(dto.saleDate) : new Date(),
+          saleDate: dto.saleDate
+            ? new Date(new Date(dto.saleDate).toLocaleString('en-US', { timeZone: 'America/Bogota' }))
+            : new Date(),
           notes: dto.notes,
           customerId: dto.customerId,
           localId: dto.localId,
