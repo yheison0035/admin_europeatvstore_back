@@ -10,7 +10,11 @@ import { UpdateSaleDto } from './dto/update-sale.dto';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { PaymentMethod, PaymentStatus, Status } from '@prisma/client';
 import { StockService } from '@/inventory/stock.service';
-import { getDayRange, getRangeDates } from '@/common/date-range.util';
+import {
+  formatLocalDate,
+  getDayRange,
+  getRangeDates,
+} from '@/common/date-range.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
 
 @Injectable()
@@ -299,7 +303,9 @@ export class SalesService {
           paymentMethod: dto.paymentMethod,
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',
-          saleDate: dto.saleDate ? new Date(dto.saleDate) : new Date(),
+          saleDate: dto.saleDate
+            ? new Date(`${dto.saleDate}T12:00:00-05:00`)
+            : new Date(),
           notes: dto.notes,
           customerId: dto.customerId,
           localId: dto.localId,
@@ -556,7 +562,7 @@ export class SalesService {
 
     const local = await this.prisma.local.findFirst({
       where: {
-        id: localId,
+        id: Number(localId),
         companyId: user.companyId,
       },
     });
@@ -569,7 +575,7 @@ export class SalesService {
 
     const sales = await this.prisma.sale.findMany({
       where: {
-        localId,
+        localId: Number(localId),
         saleDate: {
           gte: start,
           lte: end,
@@ -577,22 +583,34 @@ export class SalesService {
       },
       include: {
         user: {
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+          },
         },
+      },
+      orderBy: {
+        saleDate: 'asc',
       },
     });
 
     let totalGeneral = 0;
 
     const usersMap: Record<string, number> = {};
+
     const methodsMap: Record<
       string,
-      { total: number; users: Record<string, number> }
+      {
+        total: number;
+        users: Record<string, number>;
+      }
     > = {};
 
     for (const sale of sales) {
-      const amount = sale.totalAmount;
+      const amount = Number(sale.totalAmount);
+
       const userName = sale.user?.name || 'SIN ASESOR';
+
       const method = sale.paymentMethod || 'OTROS';
 
       totalGeneral += amount;
@@ -600,16 +618,23 @@ export class SalesService {
       usersMap[userName] = (usersMap[userName] || 0) + amount;
 
       if (!methodsMap[method]) {
-        methodsMap[method] = { total: 0, users: {} };
+        methodsMap[method] = {
+          total: 0,
+          users: {},
+        };
       }
 
       methodsMap[method].total += amount;
+
       methodsMap[method].users[userName] =
         (methodsMap[method].users[userName] || 0) + amount;
     }
 
     const usersSorted = Object.entries(usersMap)
-      .map(([name, total]) => ({ name, total }))
+      .map(([name, total]) => ({
+        name,
+        total,
+      }))
       .sort((a, b) => b.total - a.total);
 
     return {
@@ -684,9 +709,7 @@ export class SalesService {
 
       methodsMap[method].total += amount;
 
-      const dateKey = new Date(sale.saleDate.getTime() - 5 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0];
+      const dateKey = formatLocalDate(sale.saleDate);
 
       dailyMap[dateKey] = (dailyMap[dateKey] || 0) + amount;
     }
@@ -697,9 +720,7 @@ export class SalesService {
     const last = new Date(`${endDate}T00:00:00-05:00`);
 
     while (current <= last) {
-      const dateKey = new Date(current.getTime() - 5 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0];
+      const dateKey = formatLocalDate(current);
 
       daily.push({
         date: dateKey,
@@ -782,9 +803,7 @@ export class SalesService {
       }
       methodsMap[method].total += amount;
 
-      const dateKey = new Date(sale.saleDate.getTime() - 5 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0];
+      const dateKey = formatLocalDate(sale.saleDate);
 
       dailyMap[dateKey] = (dailyMap[dateKey] || 0) + amount;
     }
@@ -795,9 +814,7 @@ export class SalesService {
     const last = new Date(`${endDate}T00:00:00-05:00`);
 
     while (current <= last) {
-      const dateKey = new Date(current.getTime() - 5 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0];
+      const dateKey = formatLocalDate(current);
 
       daily.push({
         date: dateKey,

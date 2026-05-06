@@ -25,3 +25,9 @@ export function getRangeDates(startDate: string, endDate: string) {
     end: new Date(`${endClean}T23:59:59.999-05:00`),
   };
 }
+
+export function formatLocalDate(date: Date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+  }).format(date);
+}
