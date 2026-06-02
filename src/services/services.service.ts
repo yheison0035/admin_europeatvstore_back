@@ -13,18 +13,17 @@ export class ServicesService {
   constructor(private prisma: PrismaService) {}
 
   async findAllPaginated(user: any, query: any) {
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const isAll = query.all === 'true' || query.all === true;
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {
       status: { not: 'ELIMINADO' },
     };
 
+    // Empresa
     if (user?.companyId) {
       where.companyId = user.companyId;
-
-      const localIds = await getAccessibleLocalIds(this.prisma, user);
 
       if (localIds !== null) {
         if (localIds.length === 0) {
@@ -39,9 +38,10 @@ export class ServicesService {
       }
     }
 
+    // Usuario sin empresa (portal público o cliente)
     if (!user?.companyId) {
       if (!query.localId) {
-        where.id = -1; // seguridad
+        where.id = -1;
       } else {
         where.serviceLocals = {
           some: {
@@ -51,7 +51,7 @@ export class ServicesService {
       }
     }
 
-    // filtro por local SIEMPRE (refuerza ambos casos)
+    // Filtro explícito por local
     if (query.localId) {
       where.serviceLocals = {
         some: {
@@ -60,7 +60,7 @@ export class ServicesService {
       };
     }
 
-    // opcional: filtrar por barbero
+    // Filtro por barbero
     if (query.barberId) {
       where.barbers = {
         some: {
@@ -69,32 +69,43 @@ export class ServicesService {
       };
     }
 
-    const isAll = query.all === 'true' || query.all === true;
+    // Filtro por nombre
+    if (query.name) {
+      where.name = {
+        contains: query.name,
+        mode: 'insensitive',
+      };
+    }
 
+    // Sin paginación
     if (isAll) {
       const items = await this.prisma.service.findMany({
         where,
         include: {
           serviceLocals: true,
         },
-        orderBy: { name: 'asc' },
+        orderBy: {
+          name: 'asc',
+        },
       });
-
-      const data = items.map((s) => ({
-        id: s.id,
-        name: s.name,
-        duration: s.duration,
-        priceFrom:
-          s.serviceLocals.length > 0
-            ? Math.min(...s.serviceLocals.map((l) => l.price))
-            : 0,
-      }));
 
       return {
         success: true,
-        data,
+        data: items.map((service) => ({
+          id: service.id,
+          name: service.name,
+          duration: service.duration,
+          priceFrom:
+            service.serviceLocals.length > 0
+              ? Math.min(...service.serviceLocals.map((local) => local.price))
+              : 0,
+        })),
       };
     }
+
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.service.findMany({
@@ -109,7 +120,9 @@ export class ServicesService {
         },
         skip,
         take: limit,
-        orderBy: { name: 'asc' },
+        orderBy: {
+          name: 'asc',
+        },
       }),
       this.prisma.service.count({ where }),
     ]);
