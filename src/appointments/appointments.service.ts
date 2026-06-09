@@ -153,8 +153,8 @@ export class AppointmentsService {
 
     const duration = service.duration;
 
-    // 2. Horario laboral (10:00 AM - 8:00 PM)
-    const startHour = 10;
+    // 2. Horario laboral (9:00 AM - 8:00 PM)
+    const startHour = 9;
     const endHour = 20;
 
     // intervalos internos en minutos (precisión)
