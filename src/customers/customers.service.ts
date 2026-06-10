@@ -16,9 +16,7 @@ export class CustomersService {
   constructor(private prisma: PrismaService) {}
 
   async findAllPaginated(user: any, query: any) {
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const isAll = query.all === 'true' || query.all === true;
 
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
@@ -66,9 +64,11 @@ export class CustomersService {
 
     if (query.localId) {
       where.local = {
-        name: {
-          contains: query.localId,
-          mode: 'insensitive',
+        is: {
+          name: {
+            contains: query.localId,
+            mode: 'insensitive',
+          },
         },
       };
     }
@@ -81,28 +81,80 @@ export class CustomersService {
       }
     }
 
+    const customerWhere = {
+      ...where,
+      NOT: {
+        document: '222222222222',
+      },
+    };
+
+    // ==========================
+    // LISTAR TODOS (SELECTS)
+    // ==========================
+    if (isAll) {
+      const items = await this.prisma.customer.findMany({
+        where: customerWhere,
+        orderBy: {
+          name: 'asc',
+        },
+        select: {
+          id: true,
+          name: true,
+          document: true,
+        },
+      });
+
+      const consumidorFinal = await this.prisma.customer.findFirst({
+        where: {
+          document: '222222222222',
+          companyId: user.companyId,
+        },
+        select: {
+          id: true,
+          name: true,
+          document: true,
+        },
+      });
+
+      return {
+        success: true,
+        data: consumidorFinal ? [consumidorFinal, ...items] : items,
+      };
+    }
+
+    // ==========================
+    // PAGINADO
+    // ==========================
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.customer.findMany({
-        where: {
-          ...where,
-          NOT: { document: '222222222222' },
+        where: customerWhere,
+        include: {
+          local: true,
         },
-        include: { local: true },
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.customer.count({
-        where: {
-          ...where,
-          NOT: { document: '222222222222' },
+        orderBy: {
+          createdAt: 'desc',
         },
+      }),
+
+      this.prisma.customer.count({
+        where: customerWhere,
       }),
     ]);
 
     const consumidorFinal = await this.prisma.customer.findFirst({
-      where: { document: '222222222222' },
-      include: { local: true },
+      where: {
+        document: '222222222222',
+        companyId: user.companyId,
+      },
+      include: {
+        local: true,
+      },
     });
 
     const data =

@@ -70,12 +70,39 @@ export class SalesService {
 
     applyLocalFilter(where, user, localIds, 'sale');
 
-    if (query.customerId) {
-      where.customerId = Number(query.customerId);
+    if (query.code) {
+      where.code = {
+        contains: query.code,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.customer) {
+      where.customer = {
+        is: {
+          name: {
+            contains: query.customer,
+            mode: 'insensitive',
+          },
+        },
+      };
     }
 
     if (query.userId) {
-      where.userId = Number(query.userId);
+      const numericUserId = Number(query.userId);
+
+      if (!isNaN(numericUserId)) {
+        where.userId = numericUserId;
+      } else {
+        where.user = {
+          is: {
+            name: {
+              contains: query.userId,
+              mode: 'insensitive',
+            },
+          },
+        };
+      }
     }
 
     if (query.localId) {
@@ -86,10 +113,28 @@ export class SalesService {
       where.paymentMethod = query.paymentMethod;
     }
 
-    if (query.startDate && query.endDate) {
+    if (query.paymentStatus) {
+      where.paymentStatus = query.paymentStatus;
+    }
+
+    if (query.totalAmount) {
+      const amount = Number(query.totalAmount);
+
+      if (!isNaN(amount)) {
+        where.totalAmount = amount;
+      }
+    }
+
+    if (query.saleDate) {
+      const start = new Date(query.saleDate);
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date(query.saleDate);
+      end.setHours(23, 59, 59, 999);
+
       where.saleDate = {
-        gte: new Date(query.startDate),
-        lte: new Date(query.endDate),
+        gte: start,
+        lte: end,
       };
     }
 
@@ -98,11 +143,17 @@ export class SalesService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: {
+          createdAt: 'desc',
+        },
         include: {
           items: {
             include: {
-              variant: { include: { inventory: true } },
+              variant: {
+                include: {
+                  inventory: true,
+                },
+              },
               service: true,
             },
           },
@@ -111,6 +162,7 @@ export class SalesService {
           local: true,
         },
       }),
+
       this.prisma.sale.count({ where }),
     ]);
 
@@ -132,16 +184,30 @@ export class SalesService {
       include: {
         items: {
           include: {
-            variant: { include: { inventory: true } },
+            variant: {
+              include: {
+                inventory: true,
+              },
+            },
+            service: true,
           },
         },
         customer: true,
         user: true,
         local: true,
+        shipment: true,
+        appointment: {
+          include: {
+            barber: true,
+            service: true,
+          },
+        },
       },
     });
 
-    if (!sale) throw new NotFoundException('Venta no encontrada');
+    if (!sale) {
+      throw new NotFoundException('Venta no encontrada');
+    }
 
     const local = await this.prisma.local.findFirst({
       where: {
@@ -154,7 +220,33 @@ export class SalesService {
       throw new ForbiddenException('No tienes acceso a esta venta');
     }
 
-    return { success: true, data: sale };
+    const items = sale.items.map((item) => {
+      if (item.service) {
+        return {
+          ...item,
+          type: 'service',
+          name: item.service.name,
+          duration: item.service.duration,
+        };
+      }
+
+      return {
+        ...item,
+        type: 'product',
+        name: item.variant?.inventory?.name,
+        color: item.variant?.color,
+        sku: item.variant?.sku,
+        stock: item.variant?.stock,
+      };
+    });
+
+    return {
+      success: true,
+      data: {
+        ...sale,
+        items,
+      },
+    };
   }
 
   async create(dto: CreateSaleDto, user: any) {
@@ -296,17 +388,15 @@ export class SalesService {
         }
       }
 
-      const date = dto.saleDate
-          ? new Date(dto.saleDate)
-          : new Date();
-        
-        const colombiaDate = new Date(
-          date.toLocaleString('en-US', { timeZone: 'America/Bogota' }),
-        );
-        
-        // dejarla a medianoche Colombia
-        colombiaDate.setHours(0, 0, 0, 0);
-      
+      const date = dto.saleDate ? new Date(dto.saleDate) : new Date();
+
+      const colombiaDate = new Date(
+        date.toLocaleString('en-US', { timeZone: 'America/Bogota' }),
+      );
+
+      // dejarla a medianoche Colombia
+      colombiaDate.setHours(0, 0, 0, 0);
+
       const sale = await tx.sale.create({
         data: {
           code: `SALE-${Date.now()}`,
@@ -342,10 +432,14 @@ export class SalesService {
     return this.prisma.$transaction(async (tx) => {
       const sale = await tx.sale.findUnique({
         where: { id },
-        include: { items: true },
+        include: {
+          items: true,
+        },
       });
 
-      if (!sale) throw new NotFoundException('Venta no encontrada');
+      if (!sale) {
+        throw new NotFoundException('Venta no encontrada');
+      }
 
       const local = await tx.local.findFirst({
         where: {
@@ -354,14 +448,22 @@ export class SalesService {
         },
       });
 
-      if (!local) throw new ForbiddenException('No tienes permiso');
+      if (!local) {
+        throw new ForbiddenException('No tienes permiso para esta venta');
+      }
 
       const baseUpdate = {
         paymentMethod: dto.paymentMethod ?? sale.paymentMethod,
         paymentStatus: dto.paymentStatus ?? sale.paymentStatus,
         saleStatus: dto.saleStatus ?? sale.saleStatus,
         notes: dto.notes ?? sale.notes,
+        customerId: dto.customerId ?? sale.customerId,
+        userId: dto.userId ?? sale.userId,
       };
+
+      // ====================================
+      // SOLO ACTUALIZAR CABECERA
+      // ====================================
 
       if (!dto.items?.length) {
         const updated = await tx.sale.update({
@@ -369,10 +471,16 @@ export class SalesService {
           data: baseUpdate,
         });
 
-        return { success: true, data: updated };
+        return {
+          success: true,
+          data: updated,
+        };
       }
 
-      // devolver stock
+      // ====================================
+      // DEVOLVER STOCK ANTERIOR
+      // ====================================
+
       for (const item of sale.items) {
         if (item.inventoryVariantId) {
           await this.stockService.increment(
@@ -383,9 +491,18 @@ export class SalesService {
         }
       }
 
-      await tx.saleItem.deleteMany({ where: { saleId: id } });
+      // ====================================
+      // ELIMINAR ITEMS ANTERIORES
+      // ====================================
+
+      await tx.saleItem.deleteMany({
+        where: {
+          saleId: id,
+        },
+      });
 
       let total = 0;
+
       const itemsData: {
         inventoryVariantId: number | null;
         serviceId: number | null;
@@ -395,59 +512,31 @@ export class SalesService {
         subtotal: number;
       }[] = [];
 
+      // ====================================
+      // NUEVOS ITEMS
+      // ====================================
+
       for (const item of dto.items) {
         this.validateItem(item);
 
-        // PRODUCTO
-        if (item.inventoryVariantId) {
-          const variant = await tx.inventoryVariant.findFirst({
-            where: {
-              id: item.inventoryVariantId,
-              inventory: {
-                local: {
-                  companyId: user.companyId,
-                },
-              },
-            },
-            include: { inventory: true },
-          });
-
-          if (!variant) throw new NotFoundException('Producto inválido');
-
-          const price = variant.inventory.salePrice;
-          const discount = item.discount ?? 0;
-
-          const subtotal = this.calculateSubtotal(
-            price,
-            item.quantity,
-            discount,
-          );
-
-          await this.stockService.decrement(variant.id, item.quantity, tx);
-
-          itemsData.push({
-            inventoryVariantId: variant.id,
-            serviceId: null,
-            quantity: item.quantity,
-            price,
-            discount,
-            subtotal,
-          });
-
-          total += subtotal;
-        }
-
+        // ============================
         // SERVICIO
-        else if (item.serviceId) {
+        // ============================
+
+        if (item.serviceId) {
           const service = await tx.service.findFirst({
             where: {
               id: item.serviceId,
               companyId: user.companyId,
             },
-            include: { serviceLocals: true },
+            include: {
+              serviceLocals: true,
+            },
           });
 
-          if (!service) throw new NotFoundException('Servicio inválido');
+          if (!service) {
+            throw new NotFoundException('Servicio inválido');
+          }
 
           const serviceLocal = service.serviceLocals.find(
             (sl) => sl.localId === sale.localId,
@@ -479,18 +568,107 @@ export class SalesService {
 
           total += subtotal;
         }
+
+        // ============================
+        // PRODUCTO
+        // ============================
+        else if (item.inventoryVariantId) {
+          const variant = await tx.inventoryVariant.findFirst({
+            where: {
+              id: item.inventoryVariantId,
+              inventory: {
+                local: {
+                  companyId: user.companyId,
+                },
+              },
+            },
+            include: {
+              inventory: true,
+            },
+          });
+
+          if (!variant) {
+            throw new NotFoundException('Producto inválido');
+          }
+
+          if (variant.stock < item.quantity) {
+            throw new BadRequestException(
+              `Stock insuficiente para ${variant.inventory.name}`,
+            );
+          }
+
+          const price = variant.inventory.salePrice;
+          const discount = item.discount ?? 0;
+
+          const subtotal = this.calculateSubtotal(
+            price,
+            item.quantity,
+            discount,
+          );
+
+          await this.stockService.decrement(variant.id, item.quantity, tx);
+
+          itemsData.push({
+            inventoryVariantId: variant.id,
+            serviceId: null,
+            quantity: item.quantity,
+            price,
+            discount,
+            subtotal,
+          });
+
+          total += subtotal;
+        }
+
+        // ============================
+        // INVALIDO
+        // ============================
+        else {
+          throw new BadRequestException(
+            'Debe enviar un producto o un servicio',
+          );
+        }
       }
+
+      // ====================================
+      // ACTUALIZAR VENTA
+      // ====================================
 
       const updatedSale = await tx.sale.update({
         where: { id },
+
         data: {
           ...baseUpdate,
+
           totalAmount: total,
-          items: { create: itemsData },
+
+          items: {
+            create: itemsData,
+          },
+        },
+
+        include: {
+          items: {
+            include: {
+              variant: {
+                include: {
+                  inventory: true,
+                },
+              },
+              service: true,
+            },
+          },
+
+          customer: true,
+          user: true,
+          local: true,
         },
       });
 
-      return { success: true, data: updatedSale };
+      return {
+        success: true,
+        data: updatedSale,
+      };
     });
   }
 
@@ -531,6 +709,7 @@ export class SalesService {
     });
   }
 
+  // Verificar validez de una venta por código
   async verifySale(code: string) {
     const sale = await this.prisma.sale.findUnique({
       where: { code },

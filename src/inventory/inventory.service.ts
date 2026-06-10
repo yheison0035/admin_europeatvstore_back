@@ -24,81 +24,230 @@ export class InventoryService {
     private variantsService: VariantsService,
   ) {}
 
-  // Endpoint para buscar productos por término (nombre o parte de él)
+  // Búsqueda avanzada de productos y servicios
   async search(term: string, user: any) {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
-    // -----------------------
-    // INVENTORY
-    // -----------------------
-    const inventoryWhere: any = {
+    const searchTerm = term.trim();
+
+    if (!searchTerm) {
+      return {
+        success: true,
+        data: [],
+      };
+    }
+
+    const words = searchTerm
+      .split(' ')
+      .map((w) => w.trim())
+      .filter(Boolean);
+
+    if (localIds !== null && localIds.length === 0) {
+      return {
+        success: true,
+        data: [],
+      };
+    }
+
+    // ==========================
+    // PRODUCTOS
+    // ==========================
+
+    const productWhere: any = {
       local: {
         companyId: user.companyId,
       },
-      OR: [
-        { name: { contains: term, mode: 'insensitive' } },
-        { barcode: term },
-      ],
+
+      ...(localIds !== null && {
+        localId: {
+          in: localIds,
+        },
+      }),
+
+      AND: words.map((word) => ({
+        OR: [
+          {
+            name: {
+              contains: word,
+              mode: 'insensitive',
+            },
+          },
+
+          {
+            description: {
+              contains: word,
+              mode: 'insensitive',
+            },
+          },
+
+          {
+            barcode: {
+              contains: word,
+              mode: 'insensitive',
+            },
+          },
+
+          {
+            variants: {
+              some: {
+                sku: {
+                  contains: word,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+
+          {
+            variants: {
+              some: {
+                color: {
+                  contains: word,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+        ],
+      })),
     };
 
-    if (localIds !== null) {
-      if (localIds.length === 0) return { success: true, data: [] };
-      inventoryWhere.localId = { in: localIds };
-    }
-
     const products = await this.prisma.inventory.findMany({
-      where: inventoryWhere,
+      where: productWhere,
+
       include: {
-        variants: { where: { isActive: true } },
+        variants: {
+          where: {
+            isActive: true,
+          },
+        },
       },
-      take: 5,
+
+      take: 20,
     });
 
-    const productResults = products.flatMap((p) =>
-      p.variants.map((v) => ({
-        type: 'product',
-        id: v.id,
-        name: p.name,
-        color: v.color,
-        sku: v.sku,
-        stock: v.stock,
-        price: p.salePrice,
-        localId: p.localId,
-      })),
+    const productResults = products.flatMap((product) =>
+      product.variants.map((variant) => {
+        let score = 0;
+
+        const termLower = searchTerm.toLowerCase();
+
+        if (product.name.toLowerCase().startsWith(termLower)) {
+          score += 100;
+        }
+
+        if (product.name.toLowerCase().includes(termLower)) {
+          score += 50;
+        }
+
+        if (product.description?.toLowerCase().includes(termLower)) {
+          score += 20;
+        }
+
+        if (variant.sku?.toLowerCase().includes(termLower)) {
+          score += 80;
+        }
+
+        if (variant.color?.toLowerCase().includes(termLower)) {
+          score += 15;
+        }
+
+        if (product.barcode?.toLowerCase().includes(termLower)) {
+          score += 90;
+        }
+
+        return {
+          type: 'product',
+          id: variant.id,
+          name: product.name,
+          color: variant.color,
+          sku: variant.sku,
+          stock: variant.stock,
+          price: product.salePrice,
+          localId: product.localId,
+          score,
+        };
+      }),
     );
 
-    // -----------------------
-    // SERVICES
-    // -----------------------
+    // ==========================
+    // SERVICIOS
+    // ==========================
+
     const serviceWhere: any = {
       companyId: user.companyId,
-      name: { contains: term, mode: 'insensitive' },
+
+      AND: words.map((word) => ({
+        OR: [
+          {
+            name: {
+              contains: word,
+              mode: 'insensitive',
+            },
+          },
+
+          {
+            description: {
+              contains: word,
+              mode: 'insensitive',
+            },
+          },
+        ],
+      })),
     };
 
     const services = await this.prisma.service.findMany({
       where: serviceWhere,
+
       include: {
         serviceLocals: true,
       },
-      take: 5,
+
+      take: 20,
     });
 
-    const serviceResults = services.flatMap((s) =>
-      s.serviceLocals
-        .filter((sl) =>
-          localIds === null ? true : localIds.includes(sl.localId),
+    const serviceResults = services.flatMap((service) =>
+      service.serviceLocals
+        .filter((local) =>
+          localIds === null ? true : localIds.includes(local.localId),
         )
-        .map((sl) => ({
-          type: 'service',
-          id: s.id,
-          name: s.name,
-          duration: s.duration,
-          price: sl.price,
-          localId: sl.localId,
-        })),
+        .map((local) => {
+          let score = 0;
+
+          const termLower = searchTerm.toLowerCase();
+
+          if (service.name.toLowerCase().startsWith(termLower)) {
+            score += 100;
+          }
+
+          if (service.name.toLowerCase().includes(termLower)) {
+            score += 50;
+          }
+
+          if (service.description?.toLowerCase().includes(termLower)) {
+            score += 20;
+          }
+
+          return {
+            type: 'service',
+            id: service.id,
+            name: service.name,
+            duration: service.duration,
+            price: local.price,
+            localId: local.localId,
+            score,
+          };
+        }),
     );
 
-    const data = [...productResults, ...serviceResults];
+    // ==========================
+    // UNIÓN + RELEVANCIA
+    // ==========================
+
+    const data = [...productResults, ...serviceResults]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20)
+      .map(({ score, ...item }) => item);
 
     return {
       success: true,

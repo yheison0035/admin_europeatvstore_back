@@ -27,6 +27,17 @@ export class AppointmentsController {
     return this.service.findAllPaginated(req.user, query);
   }
 
+  @Public()
+  @Get('availability')
+  getAvailability(@Query() query) {
+    return this.service.getAvailability(query);
+  }
+
+  @Get(':id')
+  findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.service.findOne(id, req.user);
+  }
+
   @Post()
   create(@Body() dto: CreateAppointmentDto, @Req() req) {
     return this.service.create(dto, req.user);
@@ -44,11 +55,5 @@ export class AppointmentsController {
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.remove(id, req.user);
-  }
-
-  @Public()
-  @Get('availability')
-  getAvailability(@Query() query) {
-    return this.service.getAvailability(query);
   }
 }

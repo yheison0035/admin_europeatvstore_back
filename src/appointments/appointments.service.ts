@@ -43,7 +43,7 @@ export class AppointmentsService {
         },
         skip,
         take: limit,
-        orderBy: { date: 'asc' },
+        orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
       }),
       this.prisma.appointment.count({ where }),
     ]);
@@ -57,6 +57,33 @@ export class AppointmentsService {
         total,
         totalPages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  async findOne(id: number, user: any) {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        service: true,
+        barber: true,
+        customer: true,
+        local: true,
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Cita no encontrada');
+    }
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    if (localIds !== null && !localIds.includes(appointment.localId)) {
+      throw new BadRequestException('No tienes acceso a esta cita');
+    }
+
+    return {
+      success: true,
+      data: appointment,
     };
   }
 
@@ -109,15 +136,88 @@ export class AppointmentsService {
 
   async update(id: number, dto: any, user: any) {
     const appt = await this.prisma.appointment.findFirst({
-      where: { id, companyId: user.companyId },
+      where: {
+        id,
+        companyId: user.companyId,
+      },
+      include: {
+        service: true,
+      },
     });
 
-    if (!appt) throw new NotFoundException();
+    if (!appt) {
+      throw new NotFoundException('Cita no encontrada');
+    }
+
+    const serviceId = dto.serviceId ?? appt.serviceId;
+    const barberId = dto.barberId ?? appt.barberId;
+
+    const appointmentDate = dto.date ? new Date(dto.date) : appt.date;
+
+    const startTime = dto.startTime ?? appt.startTime;
+
+    const service = await this.prisma.service.findUnique({
+      where: {
+        id: serviceId,
+      },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Servicio no encontrado');
+    }
+
+    const startMinutes = timeToMinutes(startTime);
+    const endMinutes = startMinutes + service.duration;
+
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        barberId,
+        date: appointmentDate,
+        NOT: {
+          id,
+        },
+      },
+      include: {
+        service: true,
+      },
+    });
+
+    const conflict = appointments.some((a) => {
+      const aStart = timeToMinutes(a.startTime);
+      const aEnd = aStart + a.service.duration;
+
+      return startMinutes < aEnd && endMinutes > aStart;
+    });
+
+    if (conflict) {
+      throw new BadRequestException('Horario no disponible');
+    }
 
     return this.prisma.appointment.update({
-      where: { id },
+      where: {
+        id,
+      },
       data: {
-        ...dto,
+        date: dto.date ? new Date(dto.date) : appt.date,
+
+        startTime: dto.startTime ?? appt.startTime,
+
+        notes: dto.notes ?? appt.notes,
+
+        status: dto.status ?? appt.status,
+
+        serviceId,
+        barberId,
+
+        customerId: dto.customerId ?? appt.customerId,
+
+        localId: dto.localId ?? appt.localId,
+      },
+      include: {
+        service: true,
+        barber: true,
+        customer: true,
+        local: true,
       },
     });
   }
@@ -136,15 +236,21 @@ export class AppointmentsService {
 
   // Devuelve los horarios disponibles para un barbero, fecha y servicio dado
   async getAvailability(query: any) {
-    const { barberId, date, serviceId } = query;
+    const {
+      barberId,
+      date,
+      serviceId,
+      appointmentId, // opcional cuando se edita
+    } = query;
 
     if (!barberId || !date || !serviceId) {
       throw new BadRequestException('Faltan datos');
     }
 
-    // 1. Obtener servicio (duración)
     const service = await this.prisma.service.findUnique({
-      where: { id: Number(serviceId) },
+      where: {
+        id: Number(serviceId),
+      },
     });
 
     if (!service) {
@@ -153,60 +259,65 @@ export class AppointmentsService {
 
     const duration = service.duration;
 
-    // 2. Horario laboral (9:00 AM - 8:00 PM)
     const startHour = 9;
     const endHour = 20;
-
-    // intervalos internos en minutos (precisión)
     const interval = 10;
 
     const slots: number[] = [];
 
-    for (let m = startHour * 60; m < endHour * 60; m += interval) {
-      slots.push(m);
+    for (
+      let minutes = startHour * 60;
+      minutes < endHour * 60;
+      minutes += interval
+    ) {
+      slots.push(minutes);
     }
 
-    // 3. Obtener TODAS las citas del barbero
     const appointments = await this.prisma.appointment.findMany({
       where: {
         barberId: Number(barberId),
+
+        ...(appointmentId && {
+          NOT: {
+            id: Number(appointmentId),
+          },
+        }),
       },
       include: {
         service: true,
       },
     });
 
-    // 4. FILTRAR SOLO LAS DEL DÍA (sin problemas de timezone)
-    const sameDayAppointments = appointments.filter((a) => {
-      const appointmentDate = a.date.toISOString().split('T')[0];
+    const sameDayAppointments = appointments.filter((appointment) => {
+      const appointmentDate = appointment.date.toISOString().split('T')[0];
+
       return appointmentDate === date;
     });
 
-    // 5. NORMALIZAR CITAS A MINUTOS
-    const normalizedAppointments = sameDayAppointments.map((a) => {
-      const start = timeToMinutes(a.startTime);
-      const end = start + a.service.duration;
+    const normalizedAppointments = sameDayAppointments.map((appointment) => {
+      const start = timeToMinutes(appointment.startTime);
+      const end = start + appointment.service.duration;
 
-      return { start, end };
+      return {
+        start,
+        end,
+      };
     });
 
-    // 6. FILTRAR DISPONIBILIDAD REAL
     const available = slots.filter((slotStart) => {
       const slotEnd = slotStart + duration;
 
-      // no permitir citas que se salgan del horario
-      if (slotEnd > endHour * 60) return false;
+      if (slotEnd > endHour * 60) {
+        return false;
+      }
 
-      // validar cruce con citas existentes
-      return !normalizedAppointments.some((a) => {
-        return slotStart < a.end && slotEnd > a.start;
+      return !normalizedAppointments.some((appointment) => {
+        return slotStart < appointment.end && slotEnd > appointment.start;
       });
     });
 
-    // 7. SOLO MOSTRAR HORAS VISIBLES (cada 30 min)
-    const visibleSlots = available.filter((m) => m % 30 === 0);
+    const visibleSlots = available.filter((minutes) => minutes % 30 === 0);
 
-    // 8. FORMATEAR A COLOMBIA
-    return visibleSlots.map((m) => minutesToColombiaHour(m));
+    return visibleSlots.map((minutes) => minutesToColombiaHour(minutes));
   }
 }
