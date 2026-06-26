@@ -121,6 +121,8 @@ model Company {
   id      Int          @id @default(autoincrement())
   name    String
   logo    String?
+  nit     String?
+  email   String?
   type    BusinessType @default(COMERCIO)
   status  Status       @default(ACTIVO)
   phone   String?
