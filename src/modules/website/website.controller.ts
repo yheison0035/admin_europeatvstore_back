@@ -1,14 +1,15 @@
-import { Controller, Get, Headers } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { Public } from '@/auth/decorators/public.decorator';
-import { WebsiteService } from './website.service';
+import { WebsiteGuard } from '@/common/guards/website.guard';
+import { Website } from '@/common/decorators/website.decorator';
+import { WebsiteContext } from './interfaces/website-context.interface';
 
 @Controller('website')
 export class WebsiteController {
-  constructor(private readonly websiteService: WebsiteService) {}
-
   @Public()
+  @UseGuards(WebsiteGuard)
   @Get('config')
-  async getConfig(@Headers('host') host: string) {
-    return this.websiteService.resolveCompany(host);
+  getConfig(@Website() website: WebsiteContext) {
+    return website;
   }
 }
