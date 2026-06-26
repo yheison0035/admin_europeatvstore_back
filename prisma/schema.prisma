@@ -113,6 +113,13 @@ enum AppointmentStatus {
   NO_ASISTIO
 }
 
+enum WebsiteBannerType {
+  HOME
+  CATEGORY
+  OFFER
+  POPUP
+}
+
 //////////////////////////////////////////////////
 // MODELOS
 //////////////////////////////////////////////////
@@ -128,6 +135,24 @@ model Company {
   phone   String?
   manager String?
 
+  //////////////////////////////////////////////////
+  // WEBSITE
+  //////////////////////////////////////////////////
+
+  domain           String? @unique
+  slug             String? @unique
+  websiteEnabled   Boolean @default(false)
+  websiteName      String?
+  favicon          String?
+  theme            String @default("default")
+  primaryColor     String?
+  secondaryColor   String?
+  accentColor      String?
+  heroTitle        String?
+  heroSubtitle     String?
+
+  //////////////////////////////////////////////////
+
   users        User[]
   locals       Local[]
   provider     Provider[]
@@ -136,6 +161,8 @@ model Company {
   customers    Customer[]
   services     Service[]
   appointments Appointment[]
+  websiteBanners WebsiteBanner[]
+  websiteSetting WebsiteSetting?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -253,6 +280,7 @@ model Local {
   appointments  Appointment[]
   customers     Customer[]
   serviceLocals ServiceLocal[]
+  websiteSettings WebsiteSetting[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -308,6 +336,7 @@ model Inventory {
   salePrice     Float
   status        Status  @default(ACTIVO)
   barcode       String? @unique
+  publishInEcommerce Boolean @default(false)
 
   localId    Int?
   providerId Int?
@@ -605,4 +634,45 @@ model Appointment {
   @@index([localId])
   @@index([barberId])
   @@index([date])
+}
+
+model WebsiteBanner {
+  id Int @id @default(autoincrement())
+  title String?
+  subtitle String?
+  image String
+  buttonText String?
+  buttonUrl String?
+  order Int @default(0)
+  active Boolean @default(true)
+  companyId Int
+  type WebsiteBannerType @default(HOME)
+
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WebsiteSetting {
+  id Int @id @default(autoincrement())
+  companyId Int @unique
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  facebook String?
+  instagram String?
+  whatsapp String?
+  youtube String?
+  tiktok String?
+  address String?
+  schedule String?
+  footerText String?
+  metaTitle String?
+  metaDescription String?
+
+  ecommerceLocalId Int?
+
+  ecommerceLocal Local? @relation(fields: [ecommerceLocalId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

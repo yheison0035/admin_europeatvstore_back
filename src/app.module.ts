@@ -19,6 +19,7 @@ import { WompiModule } from './wompi/wompi.module';
 import { CompaniesModule } from './companies/companies.module';
 import { ServicesModule } from './services/services.module';
 import { AppointmentsModule } from './appointments/appointments.module';
+import { WebsiteModule } from './modules/website/website.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
     CompaniesModule,
     ServicesModule,
     AppointmentsModule,
+    WebsiteModule,
   ],
 })
 export class AppModule {}

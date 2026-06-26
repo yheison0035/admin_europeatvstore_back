@@ -2,25 +2,26 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma.service';
 import { CreateEcommerceOrderDto } from './dto/create-ecommerce-order.dto';
 import { PaymentMethod } from '@prisma/client';
+import { WebsiteContext } from '@/modules/website/interfaces/website-context.interface';
 
-const ECOMMERCE_LOCAL_ID = 3;
-const CONSUMIDOR_FINAL_ID = 1;
 @Injectable()
 export class EcommerceService {
   constructor(private readonly prisma: PrismaService) {}
 
   // Imprime categorias
-  async getCategoriesWithProducts() {
+  async getCategoriesWithProducts(website: WebsiteContext) {
+    const { localId } = website;
+
     const categories = await this.prisma.category.findMany({
       where: {
-        localId: ECOMMERCE_LOCAL_ID,
+        localId,
         status: 'ACTIVO',
       },
       orderBy: { name: 'asc' },
       include: {
         inventories: {
           where: {
-            localId: ECOMMERCE_LOCAL_ID,
+            localId: localId,
             status: 'ACTIVO',
           },
           include: {
@@ -75,7 +76,9 @@ export class EcommerceService {
   }
 
   // Busqueda de productos
-  async searchProducts(term: string) {
+  async searchProducts(term: string, website: WebsiteContext) {
+    const { localId } = website;
+
     const normalizedTerm = term
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -85,7 +88,7 @@ export class EcommerceService {
       SELECT DISTINCT i.*
       FROM "Inventory" i
       WHERE
-        i."localId" = ${ECOMMERCE_LOCAL_ID}
+        i."localId" = ${localId}
         AND i."status" = 'ACTIVO'
         AND translate(
               lower(i."name"),
@@ -150,10 +153,12 @@ export class EcommerceService {
   }
 
   // Imprime novedades
-  async getNewProducts(limit = 10) {
+  async getNewProducts(limit = 10, website: WebsiteContext) {
+    const { localId } = website;
+
     const products = await this.prisma.inventory.findMany({
       where: {
-        localId: ECOMMERCE_LOCAL_ID,
+        localId,
         status: 'ACTIVO',
       },
       orderBy: {
@@ -199,10 +204,12 @@ export class EcommerceService {
   }
 
   // Imprime ofertas
-  async getOffers(limit = 10) {
+  async getOffers(limit = 10, website: WebsiteContext) {
+    const { localId } = website;
+
     const products = await this.prisma.inventory.findMany({
       where: {
-        localId: ECOMMERCE_LOCAL_ID,
+        localId,
         status: 'ACTIVO',
         oldPrice: { not: null },
         salePrice: { lt: this.prisma.inventory.fields.oldPrice },
@@ -240,15 +247,18 @@ export class EcommerceService {
   }
 
   // Imprime productos por (categorias-novedades-filtros) y filtros
-  async getProductsCatalog(options: {
-    categorySlug?: string;
-    mode?: 'category' | 'new' | 'offers';
-    colors?: string;
-    brands?: string;
-    minPrice?: string;
-    maxPrice?: string;
-    sort?: string;
-  }) {
+  async getProductsCatalog(
+    options: {
+      categorySlug?: string;
+      mode?: 'category' | 'new' | 'offers';
+      colors?: string;
+      brands?: string;
+      minPrice?: string;
+      maxPrice?: string;
+      sort?: string;
+    },
+    website: WebsiteContext,
+  ) {
     const {
       categorySlug,
       mode = 'category',
@@ -258,6 +268,7 @@ export class EcommerceService {
       maxPrice,
       sort,
     } = options;
+    const { localId } = website;
 
     let orderBy: any = { createdAt: 'desc' };
 
@@ -281,7 +292,7 @@ export class EcommerceService {
 
     /** WHERE BASE */
     const where: any = {
-      localId: ECOMMERCE_LOCAL_ID,
+      localId: localId,
       status: 'ACTIVO',
       salePrice: {
         gte: minPrice ? Number(minPrice) : undefined,
@@ -430,11 +441,13 @@ export class EcommerceService {
   }
 
   // Imprime producto por slug
-  async getProductBySlug(slug: string) {
+  async getProductBySlug(slug: string, website: WebsiteContext) {
+    const { localId } = website;
+
     const product = await this.prisma.inventory.findFirst({
       where: {
         slug,
-        localId: ECOMMERCE_LOCAL_ID,
+        localId: localId,
         status: 'ACTIVO',
       },
       include: {
@@ -482,12 +495,14 @@ export class EcommerceService {
   }
 
   // Productos relacionados
-  async getRelatedProducts(slug: string, limit = 8) {
+  async getRelatedProducts(slug: string, limit = 8, website: WebsiteContext) {
+    const { localId } = website;
+
     // 1. Producto base
     const baseProduct = await this.prisma.inventory.findFirst({
       where: {
         slug,
-        localId: ECOMMERCE_LOCAL_ID,
+        localId: localId,
         status: 'ACTIVO',
       },
       select: {
@@ -518,7 +533,7 @@ export class EcommerceService {
     // 3. Query relacionados
     const products = await this.prisma.inventory.findMany({
       where: {
-        localId: ECOMMERCE_LOCAL_ID,
+        localId: localId,
         status: 'ACTIVO',
         id: { not: baseProduct.id },
         OR: orConditions,
@@ -568,11 +583,13 @@ export class EcommerceService {
     };
   }
 
-  async getProductsForSitemap() {
+  async getProductsForSitemap(website: WebsiteContext) {
+    const { localId } = website;
+
     const products = await this.prisma.inventory.findMany({
       where: {
         status: 'ACTIVO',
-        localId: ECOMMERCE_LOCAL_ID,
+        localId: localId,
       },
       orderBy: {
         updatedAt: 'desc',
@@ -599,7 +616,9 @@ export class EcommerceService {
 
   /* CHECKOUT ECOMMERCE */
 
-  async createOrder(dto: CreateEcommerceOrderDto) {
+  async createOrder(dto: CreateEcommerceOrderDto, website: WebsiteContext) {
+    const { localId } = website;
+
     return this.prisma.$transaction(async (tx) => {
       /**  CLIENTE ECOMMERCE */
       let ecommerceCustomer = await tx.ecommerceCustomer.findUnique({
@@ -625,7 +644,7 @@ export class EcommerceService {
             billingPhone: dto.customer.billingPhone,
             billingAddress: dto.customer.billingAddress,
             isHardToAccess: dto.customer.isHardToAccess ?? false,
-            localId: 3,
+            localId: localId,
           },
         });
       }
@@ -637,9 +656,17 @@ export class EcommerceService {
       const itemsData: any[] = [];
 
       for (const item of dto.items) {
-        const variant = await tx.inventoryVariant.findUnique({
-          where: { id: item.inventoryVariantId },
-          include: { inventory: true },
+        const variant = await tx.inventoryVariant.findFirst({
+          where: {
+            id: item.inventoryVariantId,
+            inventory: {
+              localId: website.localId,
+              status: 'ACTIVO',
+            },
+          },
+          include: {
+            inventory: true,
+          },
         });
 
         if (!variant) {
@@ -685,11 +712,11 @@ export class EcommerceService {
           saleStatus: 'NUEVA',
           source: 'ECOMMERCE',
 
-          customerId: CONSUMIDOR_FINAL_ID,
+          customerId: website.customerId,
           ecommerceCustomerId: ecommerceCustomer.id,
 
-          localId: ECOMMERCE_LOCAL_ID,
-          userId: 3, // usuario sistema
+          localId: localId,
+          userId: website.systemUserId,
 
           wompiTransactionId: dto.wompiTransactionId ?? null,
           wompiReference: dto.wompiReference ?? null,
