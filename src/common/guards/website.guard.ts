@@ -9,7 +9,10 @@ export class WebsiteGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
-    const host = request.headers.host;
+    const host =
+      request.headers['x-website-domain'] ||
+      request.headers['x-forwarded-host'] ||
+      request.headers.host;
 
     request.website = await this.websiteService.resolveCompany(host);
 
