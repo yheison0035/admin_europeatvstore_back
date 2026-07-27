@@ -211,6 +211,12 @@ export class CustomersService {
     const customer = await this.prisma.customer.create({
       data: {
         ...rest,
+        // Valores por defecto cuando se crea rápido (modal): cédula, un
+        // documento dinámico no repetido y ubicación Itagüí, Antioquia.
+        type_document: rest.type_document || 'CC',
+        document: rest.document || String(Date.now()),
+        department: rest.department || 'ANTIOQUIA',
+        city: rest.city || 'ITAGUI',
 
         company: {
           connect: { id: user.companyId },
