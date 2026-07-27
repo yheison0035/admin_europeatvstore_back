@@ -1088,6 +1088,12 @@ export class SalesService {
     let globalTotal = 0;
     const paymentTotals: Record<string, number> = {};
 
+    // Comisión de barberos: 40% hasta el sábado 25/07/2026 y 45% desde el
+    // domingo 26/07/2026 (00:00 hora Colombia = 05:00 UTC).
+    const RATE_OLD = 0.4;
+    const RATE_NEW = 0.45;
+    const RATE_CHANGE = new Date('2026-07-26T05:00:00Z');
+
     for (const sale of sales) {
       const userName = sale.user?.name || 'SIN USUARIO';
 
@@ -1123,7 +1129,8 @@ export class SalesService {
           usersMap[userName].services[name].count += item.quantity;
           usersMap[userName].services[name].total += item.subtotal;
 
-          const commission = item.subtotal * 0.45;
+          const rate = sale.saleDate >= RATE_CHANGE ? RATE_NEW : RATE_OLD;
+          const commission = item.subtotal * rate;
 
           usersMap[userName].services[name].commission += commission;
 
@@ -1169,7 +1176,9 @@ export class SalesService {
     return {
       success: true,
       globalTotal,
-      commissionRate: 0.45,
+      commissionRate: RATE_NEW,
+      previousCommissionRate: RATE_OLD,
+      commissionRateChangeDate: '2026-07-26',
       paymentBreakdown,
       data: usersMap,
     };
