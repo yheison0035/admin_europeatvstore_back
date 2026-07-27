@@ -2,14 +2,12 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
-  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { Status } from '@prisma/client';
-import { applyLocalFilter } from '@/common/local-filter.util';
 
 @Injectable()
 export class CustomersService {
@@ -18,14 +16,10 @@ export class CustomersService {
   async findAllPaginated(user: any, query: any) {
     const isAll = query.all === 'true' || query.all === true;
 
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
     const where: any = {
       status: { not: Status.ELIMINADO },
       companyId: user.companyId,
     };
-
-    applyLocalFilter(where, user, localIds);
 
     if (query.document) {
       where.document = {
@@ -200,29 +194,15 @@ export class CustomersService {
   }
 
   async create(dto: CreateCustomerDto, user: any) {
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
+    // Los clientes son globales por empresa; el local es opcional.
     let localId: number | null = null;
 
-    if (localIds === null) {
-      if (!dto.localId) {
-        throw new BadRequestException('Debes indicar el local del cliente');
-      }
-      localId = dto.localId;
-    } else if (localIds.length === 1) {
-      localId = localIds[0];
-    } else if (localIds.length > 1) {
-      if (!dto.localId) {
-        throw new BadRequestException('Debes indicar el local del cliente');
-      }
-
-      if (!localIds.includes(dto.localId)) {
+    if (dto.localId) {
+      const localIds = await getAccessibleLocalIds(this.prisma, user);
+      if (localIds !== null && !localIds.includes(dto.localId)) {
         throw new ForbiddenException('Local no permitido');
       }
-
       localId = dto.localId;
-    } else {
-      throw new ForbiddenException('No tienes locales');
     }
 
     const { localId: _, ...rest } = dto;
@@ -257,12 +237,7 @@ export class CustomersService {
       throw new NotFoundException('Cliente no encontrado');
     }
 
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-
-    if (
-      localIds !== null &&
-      (!customer.localId || !localIds.includes(customer.localId))
-    ) {
+    if (customer.companyId !== user.companyId) {
       throw new ForbiddenException('No tienes permiso');
     }
 
