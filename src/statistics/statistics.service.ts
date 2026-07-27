@@ -218,6 +218,39 @@ export class StatisticsService {
     const prevTotalExpenses = prevExpensesAgg._sum.amount || 0;
     const prevProfit = prevTotalSales - prevTotalExpenses;
 
+    // Por cobrar (fiado): ventas a crédito aún sin pagar. Se listan TODAS las
+    // pendientes sin importar el periodo, porque una deuda vieja sigue vigente
+    // hoy; respeta el filtro de sede si está activo.
+    const fiadoSales = await this.prisma.sale.findMany({
+      where: {
+        local: { companyId },
+        ...localFilter,
+        paymentStatus: 'FIADO' as any,
+      },
+      select: {
+        id: true,
+        code: true,
+        totalAmount: true,
+        saleDate: true,
+        customer: { select: { name: true } },
+        local: { select: { name: true } },
+      },
+      orderBy: { saleDate: 'desc' },
+    });
+
+    const receivables = {
+      total: Math.round(fiadoSales.reduce((a, s) => a + s.totalAmount, 0)),
+      count: fiadoSales.length,
+      items: fiadoSales.map((s) => ({
+        id: s.id,
+        code: s.code,
+        customer: s.customer?.name || 'Consumidor final',
+        amount: Math.round(s.totalAmount),
+        date: s.saleDate,
+        local: s.local?.name || '—',
+      })),
+    };
+
     return {
       success: true,
       data: {
@@ -246,6 +279,7 @@ export class StatisticsService {
         topServices: topFrom(serviceMap, 8),
         topSellers: pairs(sellerMap, 'name').slice(0, 6),
         expensesByType: pairs(expenseTypeMap, 'type'),
+        receivables,
         hasMultipleLocals: locals.length > 1,
       },
     };
