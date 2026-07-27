@@ -23,6 +23,7 @@ import { ServicesModule } from './services/services.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { WebsiteModule } from './modules/website/website.module';
 import { StatisticsModule } from './statistics/statistics.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { StatisticsModule } from './statistics/statistics.module';
     AppointmentsModule,
     WebsiteModule,
     StatisticsModule,
+    AuditModule,
   ],
   providers: [
     // Aplica el rate-limiting a todas las rutas

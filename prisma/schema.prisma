@@ -25,6 +25,27 @@ enum Role {
   RECEPCIONISTA
 }
 
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+model AuditLog {
+  id        Int         @id @default(autoincrement())
+  entity    String
+  entityId  Int
+  action    AuditAction
+  changes   Json?
+  userId    Int?
+  userName  String
+  companyId Int
+  createdAt DateTime    @default(now())
+
+  @@index([entity, entityId])
+  @@index([companyId])
+}
+
 enum Status {
   ACTIVO
   INACTIVO

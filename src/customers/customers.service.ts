@@ -7,10 +7,14 @@ import { PrismaService } from '../prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { Status } from '@prisma/client';
+import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
 export class CustomersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   async findAllPaginated(user: any, query: any) {
     const isAll = query.all === 'true' || query.all === true;
@@ -160,9 +164,15 @@ export class CustomersService {
     const data =
       consumidorFinal && page === 1 ? [consumidorFinal, ...items] : items;
 
+    const auditMap = await this.audit.latestFor(
+      'customer',
+      data.map((c) => c.id),
+      user.companyId,
+    );
+
     return {
       success: true,
-      data,
+      data: data.map((c) => ({ ...c, lastAudit: auditMap[c.id] || null })),
       meta: {
         page,
         limit,
@@ -230,6 +240,13 @@ export class CustomersService {
       },
     });
 
+    await this.audit.log({
+      entity: 'customer',
+      entityId: customer.id,
+      action: 'CREATE',
+      user,
+    });
+
     return {
       success: true,
       message: 'Cliente creado correctamente',
@@ -261,6 +278,26 @@ export class CustomersService {
       },
     });
 
+    const changes = this.audit.diff(customer, dto, [
+      'type_document',
+      'document',
+      'name',
+      'email',
+      'phone',
+      'department',
+      'city',
+      'address',
+      'status',
+      'localId',
+    ]);
+    await this.audit.log({
+      entity: 'customer',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes,
+    });
+
     return {
       success: true,
       message: 'Cliente actualizado correctamente',
@@ -283,6 +320,13 @@ export class CustomersService {
     await this.prisma.customer.update({
       where: { id },
       data: { status: Status.ELIMINADO },
+    });
+
+    await this.audit.log({
+      entity: 'customer',
+      entityId: id,
+      action: 'DELETE',
+      user,
     });
 
     return {
