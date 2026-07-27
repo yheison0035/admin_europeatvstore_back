@@ -9,6 +9,12 @@ function colombiaDay(date: Date): string {
   return new Date(date).toLocaleDateString('en-CA', { timeZone: TZ });
 }
 
+// Día de una fecha "solo día" (guardada a medianoche UTC): se lee en UTC
+// para no correr el día por la conversión de zona horaria.
+function utcDay(date: Date): string {
+  return new Date(date).toISOString().slice(0, 10);
+}
+
 // Convierte 'YYYY-MM-DD' a los límites UTC del día en Colombia (UTC-5).
 function dayStartUtc(y: number, m: number, d: number): Date {
   return new Date(Date.UTC(y, m - 1, d, 5, 0, 0));
@@ -60,6 +66,13 @@ export class StatisticsService {
     const prevStart = new Date(start.getTime() - lengthMs);
     const prevEnd = start;
 
+    // Gastos: fecha "solo día" (medianoche UTC) → límites y agrupación en UTC.
+    const expStart = new Date(Date.UTC(sy, sm - 1, sd, 0, 0, 0));
+    const expEnd = new Date(Date.UTC(ey, em - 1, ed + 1, 0, 0, 0));
+    const expLen = expEnd.getTime() - expStart.getTime();
+    const prevExpStart = new Date(expStart.getTime() - expLen);
+    const prevExpEnd = expStart;
+
     const localFilter = localId ? { localId } : {};
 
     const saleWhere = (from: Date, to: Date) => ({
@@ -102,11 +115,11 @@ export class StatisticsService {
         select: { totalAmount: true },
       }),
       this.prisma.expense.findMany({
-        where: expenseWhere(start, end),
+        where: expenseWhere(expStart, expEnd),
         select: { amount: true, type: true, expenseDate: true },
       }),
       this.prisma.expense.aggregate({
-        where: expenseWhere(prevStart, prevEnd),
+        where: expenseWhere(prevExpStart, prevExpEnd),
         _sum: { amount: true },
       }),
       this.prisma.customer.count({
@@ -174,7 +187,7 @@ export class StatisticsService {
     for (const e of expenses) {
       totalExpenses += e.amount;
       expenseTypeMap[e.type] = (expenseTypeMap[e.type] || 0) + e.amount;
-      const day = colombiaDay(e.expenseDate);
+      const day = utcDay(e.expenseDate);
       expensesByDay[day] = (expensesByDay[day] || 0) + e.amount;
     }
 
