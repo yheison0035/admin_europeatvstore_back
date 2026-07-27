@@ -135,16 +135,23 @@ export class SalesService {
     }
 
     if (query.saleDate) {
-      const start = new Date(query.saleDate);
-      start.setHours(0, 0, 0, 0);
+      const raw = String(query.saleDate).trim();
+      let y: number | undefined;
+      let m: number | undefined;
+      let d: number | undefined;
 
-      const end = new Date(query.saleDate);
-      end.setHours(23, 59, 59, 999);
+      if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        [y, m, d] = raw.slice(0, 10).split('-').map(Number);
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+        [d, m, y] = raw.split('/').map(Number);
+      }
 
-      where.saleDate = {
-        gte: start,
-        lte: end,
-      };
+      if (y && m && d) {
+        // Rango del día en zona Colombia (UTC-5), expresado en UTC.
+        const start = new Date(Date.UTC(y, m - 1, d, 5, 0, 0));
+        const end = new Date(Date.UTC(y, m - 1, d + 1, 5, 0, 0));
+        where.saleDate = { gte: start, lt: end };
+      }
     }
 
     // La columna "Fecha de Venta" del listado muestra createdAt, así que
