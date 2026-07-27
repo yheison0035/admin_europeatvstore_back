@@ -80,10 +80,10 @@ export class SalesService {
     if (query.customer) {
       where.customer = {
         is: {
-          name: {
-            contains: query.customer,
-            mode: 'insensitive',
-          },
+          OR: [
+            { name: { contains: query.customer, mode: 'insensitive' } },
+            { phone: { contains: query.customer, mode: 'insensitive' } },
+          ],
         },
       };
     }
