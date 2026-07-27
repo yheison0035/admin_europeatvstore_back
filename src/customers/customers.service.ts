@@ -81,11 +81,11 @@ export class CustomersService {
       }
     }
 
+    // Excluye SOLO al consumidor final. Se incluye document NULL, porque
+    // `document <> '222...'` en SQL descarta los NULL sin querer.
     const customerWhere = {
       ...where,
-      NOT: {
-        document: '222222222222',
-      },
+      OR: [{ document: null }, { document: { not: '222222222222' } }],
     };
 
     // ==========================
