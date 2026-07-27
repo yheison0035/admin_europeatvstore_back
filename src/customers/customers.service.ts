@@ -6,7 +6,6 @@ import {
 import { PrismaService } from '../prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
-import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { Status } from '@prisma/client';
 
 @Injectable()
@@ -194,15 +193,17 @@ export class CustomersService {
   }
 
   async create(dto: CreateCustomerDto, user: any) {
-    // Los clientes son globales por empresa; el local es opcional.
-    let localId: number | null = null;
+    // El cliente es global por empresa, pero guardamos el "local de registro"
+    // (de dónde viene): el del contexto (factura/formulario) o, si no llega,
+    // el local del usuario que lo crea. Es solo informativo, no restringe.
+    let localId: number | null = dto.localId || user.localId || null;
 
-    if (dto.localId) {
-      const localIds = await getAccessibleLocalIds(this.prisma, user);
-      if (localIds !== null && !localIds.includes(dto.localId)) {
-        throw new ForbiddenException('Local no permitido');
-      }
-      localId = dto.localId;
+    if (localId) {
+      const local = await this.prisma.local.findFirst({
+        where: { id: localId, companyId: user.companyId },
+        select: { id: true },
+      });
+      localId = local ? local.id : null; // si no es de la empresa, se ignora
     }
 
     const { localId: _, ...rest } = dto;
