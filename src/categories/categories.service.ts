@@ -10,10 +10,14 @@ import { Role, Status } from '@prisma/client';
 import { hasRole } from '@/common/role-check.util';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
+import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
 export class CategoriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   async findAllPaginated(user: any, query: any) {
     const isAll = query.all === 'true' || query.all === true;
@@ -92,9 +96,15 @@ export class CategoriesService {
       this.prisma.category.count({ where }),
     ]);
 
+    const auditMap = await this.audit.latestFor(
+      'category',
+      items.map((c) => c.id),
+      user.companyId,
+    );
+
     return {
       success: true,
-      data: items,
+      data: items.map((c) => ({ ...c, lastAudit: auditMap[c.id] || null })),
       meta: {
         page,
         limit,
@@ -164,6 +174,13 @@ export class CategoriesService {
       },
     });
 
+    await this.audit.log({
+      entity: 'category',
+      entityId: category.id,
+      action: 'CREATE',
+      user,
+    });
+
     return {
       success: true,
       message: 'Categoría creada correctamente',
@@ -210,6 +227,20 @@ export class CategoriesService {
       },
     });
 
+    const changes = this.audit.diff(found, dto, [
+      'name',
+      'description',
+      'status',
+      'localId',
+    ]);
+    await this.audit.log({
+      entity: 'category',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes,
+    });
+
     return {
       success: true,
       message: 'Categoría actualizada correctamente',
@@ -238,6 +269,13 @@ export class CategoriesService {
       data: {
         status: Status.ELIMINADO,
       },
+    });
+
+    await this.audit.log({
+      entity: 'category',
+      entityId: id,
+      action: 'DELETE',
+      user,
     });
 
     return {

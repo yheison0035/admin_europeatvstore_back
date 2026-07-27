@@ -8,10 +8,14 @@ import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { applyLocalFilter } from '@/common/local-filter.util';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { minutesToColombiaHour, timeToMinutes } from '@/utils/format';
+import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
 export class AppointmentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   async findAllPaginated(user: any, query: any) {
     const page = Number(query.page) || 1;
@@ -103,9 +107,15 @@ export class AppointmentsService {
       this.prisma.appointment.count({ where }),
     ]);
 
+    const auditMap = await this.audit.latestFor(
+      'appointment',
+      items.map((a) => a.id),
+      user.companyId,
+    );
+
     return {
       success: true,
-      data: items,
+      data: items.map((a) => ({ ...a, lastAudit: auditMap[a.id] || null })),
       meta: {
         page,
         limit,
@@ -175,7 +185,7 @@ export class AppointmentsService {
       throw new BadRequestException('Horario no disponible');
     }
 
-    return this.prisma.appointment.create({
+    const created = await this.prisma.appointment.create({
       data: {
         date: new Date(dto.date),
         startTime: dto.startTime,
@@ -187,6 +197,15 @@ export class AppointmentsService {
         companyId: user.companyId,
       },
     });
+
+    await this.audit.log({
+      entity: 'appointment',
+      entityId: created.id,
+      action: 'CREATE',
+      user,
+    });
+
+    return created;
   }
 
   async update(id: number, dto: any, user: any) {
@@ -248,7 +267,7 @@ export class AppointmentsService {
       throw new BadRequestException('Horario no disponible');
     }
 
-    return this.prisma.appointment.update({
+    const updated = await this.prisma.appointment.update({
       where: {
         id,
       },
@@ -275,6 +294,26 @@ export class AppointmentsService {
         local: true,
       },
     });
+
+    const changes = this.audit.diff(appt, dto, [
+      'date',
+      'startTime',
+      'status',
+      'notes',
+      'serviceId',
+      'barberId',
+      'customerId',
+      'localId',
+    ]);
+    await this.audit.log({
+      entity: 'appointment',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes,
+    });
+
+    return updated;
   }
 
   async remove(id: number, user: any) {
@@ -285,6 +324,13 @@ export class AppointmentsService {
     if (!appt) throw new NotFoundException();
 
     await this.prisma.appointment.delete({ where: { id } });
+
+    await this.audit.log({
+      entity: 'appointment',
+      entityId: id,
+      action: 'DELETE',
+      user,
+    });
 
     return { success: true };
   }

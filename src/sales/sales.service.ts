@@ -16,12 +16,14 @@ import {
   getRangeDates,
 } from '@/common/date-range.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
+import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
 export class SalesService {
   constructor(
     private prisma: PrismaService,
     private stockService: StockService,
+    private audit: AuditService,
   ) {}
 
   private calculateSubtotal(price: number, quantity: number, discount = 0) {
@@ -180,9 +182,15 @@ export class SalesService {
       this.prisma.sale.count({ where }),
     ]);
 
+    const auditMap = await this.audit.latestFor(
+      'sale',
+      items.map((s) => s.id),
+      user.companyId,
+    );
+
     return {
       success: true,
-      data: items,
+      data: items.map((s) => ({ ...s, lastAudit: auditMap[s.id] || null })),
       meta: {
         page,
         limit,
@@ -433,6 +441,13 @@ export class SalesService {
         },
       });
 
+      await this.audit.log({
+        entity: 'sale',
+        entityId: sale.id,
+        action: 'CREATE',
+        user,
+      });
+
       return { success: true, data: sale };
     });
   }
@@ -478,6 +493,22 @@ export class SalesService {
         const updated = await tx.sale.update({
           where: { id },
           data: baseUpdate,
+        });
+
+        const changes = this.audit.diff(sale, dto, [
+          'paymentMethod',
+          'paymentStatus',
+          'saleStatus',
+          'notes',
+          'customerId',
+          'userId',
+        ]);
+        await this.audit.log({
+          entity: 'sale',
+          entityId: id,
+          action: 'UPDATE',
+          user,
+          changes,
         });
 
         return {
@@ -674,6 +705,22 @@ export class SalesService {
         },
       });
 
+      const changes = this.audit.diff(sale, dto, [
+        'paymentMethod',
+        'paymentStatus',
+        'saleStatus',
+        'notes',
+        'customerId',
+        'userId',
+      ]);
+      await this.audit.log({
+        entity: 'sale',
+        entityId: id,
+        action: 'UPDATE',
+        user,
+        changes,
+      });
+
       return {
         success: true,
         data: updatedSale,
@@ -710,6 +757,13 @@ export class SalesService {
       }
 
       await tx.sale.delete({ where: { id } });
+
+      await this.audit.log({
+        entity: 'sale',
+        entityId: id,
+        action: 'DELETE',
+        user,
+      });
 
       return {
         success: true,

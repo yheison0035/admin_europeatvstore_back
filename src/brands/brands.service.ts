@@ -10,10 +10,14 @@ import { Role, Status } from '@prisma/client';
 import { hasRole } from '@/common/role-check.util';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
+import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
 export class BrandsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   async findAllPaginated(user: any, query: any) {
     const isAll = query.all === 'true' || query.all === true;
@@ -90,9 +94,15 @@ export class BrandsService {
       this.prisma.brand.count({ where }),
     ]);
 
+    const auditMap = await this.audit.latestFor(
+      'brand',
+      items.map((b) => b.id),
+      user.companyId,
+    );
+
     return {
       success: true,
-      data: items,
+      data: items.map((b) => ({ ...b, lastAudit: auditMap[b.id] || null })),
       meta: {
         page,
         limit,
@@ -162,6 +172,13 @@ export class BrandsService {
       },
     });
 
+    await this.audit.log({
+      entity: 'brand',
+      entityId: brand.id,
+      action: 'CREATE',
+      user,
+    });
+
     return {
       success: true,
       message: 'Marca creada correctamente',
@@ -208,6 +225,20 @@ export class BrandsService {
       },
     });
 
+    const changes = this.audit.diff(found, dto, [
+      'name',
+      'description',
+      'status',
+      'localId',
+    ]);
+    await this.audit.log({
+      entity: 'brand',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes,
+    });
+
     return {
       success: true,
       message: 'Marca actualizada correctamente',
@@ -234,6 +265,13 @@ export class BrandsService {
     await this.prisma.brand.update({
       where: { id },
       data: { status: Status.ELIMINADO },
+    });
+
+    await this.audit.log({
+      entity: 'brand',
+      entityId: id,
+      action: 'DELETE',
+      user,
     });
 
     return {

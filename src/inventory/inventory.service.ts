@@ -15,6 +15,7 @@ import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { generateSlug } from '@/utils/slug.util';
 import { getPagination } from '@/common/pagination.util';
 import { generateSku } from '../../utils/sku.util';
+import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
 export class InventoryService {
@@ -22,6 +23,7 @@ export class InventoryService {
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
     private variantsService: VariantsService,
+    private audit: AuditService,
   ) {}
 
   // Búsqueda avanzada de productos y servicios
@@ -348,9 +350,15 @@ export class InventoryService {
       return { ...product, stock };
     });
 
+    const auditMap = await this.audit.latestFor(
+      'inventory',
+      data.map((p) => p.id),
+      user.companyId,
+    );
+
     return {
       success: true,
-      data,
+      data: data.map((p) => ({ ...p, lastAudit: auditMap[p.id] || null })),
       meta: {
         page,
         limit,
@@ -421,7 +429,7 @@ export class InventoryService {
       slug = `${baseSlug}-${counter++}`;
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const product = await tx.inventory.create({
         data: {
           name: dto.name,
@@ -482,6 +490,15 @@ export class InventoryService {
         data: { ...product, variants },
       };
     });
+
+    await this.audit.log({
+      entity: 'inventory',
+      entityId: result.data.id,
+      action: 'CREATE',
+      user,
+    });
+
+    return result;
   }
 
   async update(id: number, dto: UpdateInventoryDto, user: any) {
@@ -489,7 +506,7 @@ export class InventoryService {
       throw new ForbiddenException('No autorizado');
     }
 
-    await this.findOne(id, user);
+    const before = (await this.findOne(id, user)).data;
 
     const updated = await this.prisma.inventory.update({
       where: { id },
@@ -528,6 +545,27 @@ export class InventoryService {
       await this.variantsService.syncVariants(id, dto.variants, user);
     }
 
+    const changes = this.audit.diff(before, dto, [
+      'name',
+      'barcode',
+      'description',
+      'purchasePrice',
+      'salePrice',
+      'oldPrice',
+      'status',
+      'localId',
+      'providerId',
+      'categoryId',
+      'brandId',
+    ]);
+    await this.audit.log({
+      entity: 'inventory',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes,
+    });
+
     return {
       success: true,
       message: 'Producto actualizado correctamente',
@@ -553,6 +591,13 @@ export class InventoryService {
     }
 
     await this.prisma.inventory.delete({ where: { id } });
+
+    await this.audit.log({
+      entity: 'inventory',
+      entityId: id,
+      action: 'DELETE',
+      user,
+    });
 
     return { success: true, message: 'Producto eliminado' };
   }

@@ -10,10 +10,14 @@ import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { CreateExpenseDto } from './dto/create-expenses.dto';
 import { UpdateExpenseDto } from './dto/update-expenses.dto';
 import { applyLocalFilter } from '@/common/local-filter.util';
+import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
 export class ExpensesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   async findAllPaginated(user: any, query: any) {
     const page = Number(query.page) || 1;
@@ -119,9 +123,15 @@ export class ExpensesService {
       this.prisma.expense.count({ where }),
     ]);
 
+    const auditMap = await this.audit.latestFor(
+      'expense',
+      items.map((e) => e.id),
+      user.companyId,
+    );
+
     return {
       success: true,
-      data: items,
+      data: items.map((e) => ({ ...e, lastAudit: auditMap[e.id] || null })),
       meta: {
         page,
         limit,
@@ -201,6 +211,13 @@ export class ExpensesService {
       },
     });
 
+    await this.audit.log({
+      entity: 'expense',
+      entityId: expense.id,
+      action: 'CREATE',
+      user,
+    });
+
     return {
       success: true,
       message: 'Gasto registrado correctamente',
@@ -234,6 +251,24 @@ export class ExpensesService {
       },
     });
 
+    const changes = this.audit.diff(found, dto, [
+      'concept',
+      'type',
+      'amount',
+      'paymentMethod',
+      'paidTo',
+      'status',
+      'providerId',
+      'localId',
+    ]);
+    await this.audit.log({
+      entity: 'expense',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes,
+    });
+
     return {
       success: true,
       message: 'Gasto actualizado correctamente',
@@ -262,6 +297,13 @@ export class ExpensesService {
     await this.prisma.expense.update({
       where: { id },
       data: { status: Status.ELIMINADO },
+    });
+
+    await this.audit.log({
+      entity: 'expense',
+      entityId: id,
+      action: 'DELETE',
+      user,
     });
 
     return {

@@ -8,10 +8,14 @@ import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { Role, Status } from '@prisma/client';
 import { hasRole } from '@/common/role-check.util';
+import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
 export class ProvidersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   async findAllPaginated(query: any, user: any) {
     const isAll = query.all === 'true' || query.all === true;
@@ -88,9 +92,15 @@ export class ProvidersService {
       this.prisma.provider.count({ where }),
     ]);
 
+    const auditMap = await this.audit.latestFor(
+      'provider',
+      items.map((p) => p.id),
+      user.companyId,
+    );
+
     return {
       success: true,
-      data: items,
+      data: items.map((p) => ({ ...p, lastAudit: auditMap[p.id] || null })),
       meta: {
         page,
         limit,
@@ -140,6 +150,13 @@ export class ProvidersService {
       },
     });
 
+    await this.audit.log({
+      entity: 'provider',
+      entityId: provider.id,
+      action: 'CREATE',
+      user,
+    });
+
     return {
       success: true,
       message: 'Proveedor creado correctamente',
@@ -184,6 +201,25 @@ export class ProvidersService {
       },
     });
 
+    const changes = this.audit.diff(found, dto, [
+      'name',
+      'contactName',
+      'phone',
+      'email',
+      'city',
+      'department',
+      'address',
+      'productType',
+      'status',
+    ]);
+    await this.audit.log({
+      entity: 'provider',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes,
+    });
+
     return {
       success: true,
       message: 'Proveedor actualizado correctamente',
@@ -209,6 +245,13 @@ export class ProvidersService {
 
     await this.prisma.provider.delete({
       where: { id },
+    });
+
+    await this.audit.log({
+      entity: 'provider',
+      entityId: id,
+      action: 'DELETE',
+      user,
     });
 
     return {

@@ -8,10 +8,14 @@ import { UpdateServiceDto } from './dto/update-service.dto';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { Status } from '@prisma/client';
+import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
 export class ServicesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   async findAllPaginated(user: any, query: any) {
     const isAll = query.all === 'true' || query.all === true;
@@ -152,9 +156,15 @@ export class ServicesService {
       this.prisma.service.count({ where }),
     ]);
 
+    const auditMap = await this.audit.latestFor(
+      'service',
+      items.map((s) => s.id),
+      user.companyId,
+    );
+
     return {
       success: true,
-      data: items,
+      data: items.map((s) => ({ ...s, lastAudit: auditMap[s.id] || null })),
       meta: {
         page,
         limit,
@@ -192,7 +202,7 @@ export class ServicesService {
   }
 
   async create(dto: CreateServiceDto, user: any) {
-    return this.prisma.service.create({
+    const service = await this.prisma.service.create({
       data: {
         name: dto.name,
         description: dto.description,
@@ -212,6 +222,15 @@ export class ServicesService {
           : undefined,
       },
     });
+
+    await this.audit.log({
+      entity: 'service',
+      entityId: service.id,
+      action: 'CREATE',
+      user,
+    });
+
+    return service;
   }
 
   async update(id: number, dto: UpdateServiceDto, user: any) {
@@ -221,7 +240,7 @@ export class ServicesService {
 
     if (!service) throw new NotFoundException();
 
-    return this.prisma.service.update({
+    const updated = await this.prisma.service.update({
       where: { id },
       data: {
         name: dto.name,
@@ -244,6 +263,22 @@ export class ServicesService {
           : undefined,
       },
     });
+
+    const changes = this.audit.diff(service, dto, [
+      'name',
+      'description',
+      'duration',
+      'status',
+    ]);
+    await this.audit.log({
+      entity: 'service',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes,
+    });
+
+    return updated;
   }
 
   async remove(id: number, user: any) {
@@ -255,6 +290,13 @@ export class ServicesService {
 
     await this.prisma.service.delete({
       where: { id },
+    });
+
+    await this.audit.log({
+      entity: 'service',
+      entityId: id,
+      action: 'DELETE',
+      user,
     });
 
     return { success: true };
