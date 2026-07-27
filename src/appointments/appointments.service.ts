@@ -26,11 +26,57 @@ export class AppointmentsService {
 
     applyLocalFilter(where, user, localIds);
 
-    if (query.barberId) where.barberId = Number(query.barberId);
-    if (query.serviceId) where.serviceId = Number(query.serviceId);
-    if (query.localId) where.localId = Number(query.localId);
+    // Las columnas muestran nombres (barbero, servicio, cliente, local) y el
+    // filtro es un input de texto, así que filtramos por el nombre de la
+    // relación. Si llega un número puro, se filtra por id.
+    const byRelationName = (value: string) => ({
+      is: { name: { contains: value.trim(), mode: 'insensitive' } },
+    });
+
+    if (query.barberId) {
+      const v = String(query.barberId).trim();
+      if (/^\d+$/.test(v)) where.barberId = Number(v);
+      else where.barber = byRelationName(v);
+    }
+
+    if (query.serviceId) {
+      const v = String(query.serviceId).trim();
+      if (/^\d+$/.test(v)) where.serviceId = Number(v);
+      else where.service = byRelationName(v);
+    }
+
+    if (query.customerId) {
+      const v = String(query.customerId).trim();
+      if (/^\d+$/.test(v)) where.customerId = Number(v);
+      else where.customer = byRelationName(v);
+    }
+
+    // Para local no sobreescribimos el filtro de acceso (where.localId);
+    // filtramos por nombre de la relación.
+    if (query.localId) {
+      where.local = byRelationName(String(query.localId));
+    }
+
     if (query.status) where.status = query.status;
-    if (query.startTime) where.startTime = query.startTime;
+
+    if (query.startTime) {
+      where.startTime = { contains: query.startTime, mode: 'insensitive' };
+    }
+
+    if (query.notes) {
+      where.notes = { contains: query.notes, mode: 'insensitive' };
+    }
+
+    if (query.date) {
+      const parsed = new Date(query.date);
+      if (!Number.isNaN(parsed.getTime())) {
+        const start = new Date(parsed);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 1);
+        where.date = { gte: start, lt: end };
+      }
+    }
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.appointment.findMany({

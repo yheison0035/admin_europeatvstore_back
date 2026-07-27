@@ -107,6 +107,35 @@ export class UsersService {
       where.email = { contains: query.email, mode: 'insensitive' };
     }
 
+    if (query.document) {
+      where.document = { contains: query.document, mode: 'insensitive' };
+    }
+
+    if (query.phone) {
+      where.phone = { contains: query.phone, mode: 'insensitive' };
+    }
+
+    if (query.address) {
+      where.address = { contains: query.address, mode: 'insensitive' };
+    }
+
+    // El filtro de estado solo aplica para SUPER_ADMIN; el resto ya está
+    // restringido a usuarios ACTIVO más arriba.
+    if (query.status && user.role === Role.SUPER_ADMIN) {
+      const normalizedStatus = query.status.toUpperCase();
+      if (Object.values(Status).includes(normalizedStatus as Status)) {
+        where.status = normalizedStatus as Status;
+      }
+    }
+
+    if (query.managedLocals) {
+      where.managedLocals = {
+        some: {
+          name: { contains: query.managedLocals, mode: 'insensitive' },
+        },
+      };
+    }
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where,

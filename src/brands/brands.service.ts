@@ -34,6 +34,31 @@ export class BrandsService {
       };
     }
 
+    if (query.description) {
+      where.description = {
+        contains: query.description,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.localId) {
+      where.local = {
+        is: {
+          name: {
+            contains: query.localId,
+            mode: 'insensitive',
+          },
+        },
+      };
+    }
+
+    if (query.status) {
+      const normalizedStatus = query.status.toUpperCase();
+      if (Object.values(Status).includes(normalizedStatus as Status)) {
+        where.status = normalizedStatus as Status;
+      }
+    }
+
     if (isAll) {
       const items = await this.prisma.brand.findMany({
         where,

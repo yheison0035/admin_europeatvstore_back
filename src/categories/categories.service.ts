@@ -41,6 +41,17 @@ export class CategoriesService {
       };
     }
 
+    if (query.localId) {
+      where.local = {
+        is: {
+          name: {
+            contains: query.localId,
+            mode: 'insensitive',
+          },
+        },
+      };
+    }
+
     if (query.status) {
       const normalizedStatus = query.status.toUpperCase();
       if (Object.values(Status).includes(normalizedStatus as Status)) {

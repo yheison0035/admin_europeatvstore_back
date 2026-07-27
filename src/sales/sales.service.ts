@@ -106,7 +106,16 @@ export class SalesService {
     }
 
     if (query.localId) {
-      where.localId = Number(query.localId);
+      const v = String(query.localId).trim();
+      if (/^\d+$/.test(v)) {
+        where.localId = Number(v);
+      } else {
+        where.local = where.local || {};
+        where.local.is = {
+          ...(where.local.is || {}),
+          name: { contains: v, mode: 'insensitive' },
+        };
+      }
     }
 
     if (query.paymentMethod) {
@@ -136,6 +145,24 @@ export class SalesService {
         gte: start,
         lte: end,
       };
+    }
+
+    // La columna "Fecha de Venta" del listado muestra createdAt, así que
+    // permitimos filtrar también por esa fecha.
+    if (query.createdAt) {
+      const base = new Date(query.createdAt);
+      if (!Number.isNaN(base.getTime())) {
+        const start = new Date(base);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(base);
+        end.setHours(23, 59, 59, 999);
+
+        where.createdAt = {
+          gte: start,
+          lte: end,
+        };
+      }
     }
 
     const [items, total] = await this.prisma.$transaction([

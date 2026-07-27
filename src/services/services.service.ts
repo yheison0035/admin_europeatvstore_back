@@ -7,6 +7,7 @@ import { PrismaService } from '@/prisma.service';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
+import { Status } from '@prisma/client';
 
 @Injectable()
 export class ServicesService {
@@ -75,6 +76,30 @@ export class ServicesService {
         contains: query.name,
         mode: 'insensitive',
       };
+    }
+
+    if (query.description) {
+      where.description = {
+        contains: query.description,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.duration) {
+      const duration = Number(query.duration);
+      if (!Number.isNaN(duration)) {
+        where.duration = duration;
+      }
+    }
+
+    if (query.status) {
+      const normalizedStatus = query.status.toUpperCase();
+      if (
+        Object.values(Status).includes(normalizedStatus as Status) &&
+        normalizedStatus !== Status.ELIMINADO
+      ) {
+        where.status = normalizedStatus as Status;
+      }
     }
 
     // Sin paginación

@@ -285,6 +285,33 @@ export class InventoryService {
       where.status = query.status;
     }
 
+    if (query.localId) {
+      where.local = {
+        ...where.local,
+        name: { contains: query.localId, mode: 'insensitive' },
+      };
+    }
+
+    if (query.providerId) {
+      where.provider = {
+        is: { name: { contains: query.providerId, mode: 'insensitive' } },
+      };
+    }
+
+    if (query.oldPrice) {
+      const oldPrice = Number(query.oldPrice);
+      if (!Number.isNaN(oldPrice)) {
+        where.oldPrice = oldPrice;
+      }
+    }
+
+    if (query.salePrice) {
+      const salePrice = Number(query.salePrice);
+      if (!Number.isNaN(salePrice)) {
+        where.salePrice = salePrice;
+      }
+    }
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.inventory.findMany({
         where,

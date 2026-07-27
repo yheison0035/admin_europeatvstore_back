@@ -41,6 +41,13 @@ export class CustomersService {
       };
     }
 
+    if (query.type_document) {
+      where.type_document = {
+        contains: query.type_document,
+        mode: 'insensitive',
+      };
+    }
+
     if (query.email) {
       where.email = {
         contains: query.email,

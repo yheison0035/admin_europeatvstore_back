@@ -39,6 +39,20 @@ export class LocalsService {
       };
     }
 
+    if (query.address) {
+      where.address = { contains: query.address, mode: 'insensitive' };
+    }
+
+    if (query.phone) {
+      where.phone = { contains: query.phone, mode: 'insensitive' };
+    }
+
+    if (query.managerId) {
+      where.manager = {
+        is: { name: { contains: query.managerId, mode: 'insensitive' } },
+      };
+    }
+
     if (query.city) {
       where.city = {
         contains: query.city,
