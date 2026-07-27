@@ -2,11 +2,17 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as express from 'express';
+import helmet from 'helmet';
 import { join } from 'path';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // Cabeceras de seguridad HTTP
+  app.use(helmet());
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -18,23 +24,32 @@ async function bootstrap() {
 
   app.use('/public', express.static(join(process.cwd(), 'public')));
 
-  // Configuración de Swagger
-  const config = new DocumentBuilder()
-    .setTitle('API_EUROPEATVSTORE_ADMIN')
-    .setDescription('Documentación y pruebas de la API')
-    .setVersion('1.0')
-    .addBearerAuth() // si quieres probar con JWT
-    .build();
+  // CORS: orígenes permitidos desde .env (CORS_ORIGINS, separados por coma).
+  // En desarrollo, si no se configura, permite todos; en producción se bloquea.
+  const allowedOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document); // Ruta => http://localhost:3000/api-docs
-
-   app.enableCors({
-    origin: true,
+  app.enableCors({
+    origin: allowedOrigins.length ? allowedOrigins : !isProd,
     credentials: true,
-    methods: '*',
-    allowedHeaders: '*',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
+
+  // Swagger solo fuera de producción
+  if (!isProd) {
+    const config = new DocumentBuilder()
+      .setTitle('API_EUROPEATVSTORE_ADMIN')
+      .setDescription('Documentación y pruebas de la API')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api-docs', app, document); // http://localhost:3002/api-docs
+  }
 
   await app.listen(process.env.PORT || 3002);
 }

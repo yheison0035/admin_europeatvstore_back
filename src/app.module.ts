@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { BrandsModule } from './brands/brands.module';
 import { CategoriesModule } from './categories/categories.module';
 import { CustomersModule } from './customers/customers.module';
@@ -24,6 +26,8 @@ import { WebsiteModule } from './modules/website/website.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Rate-limiting global: máx. 100 peticiones por minuto por IP
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
     AuthModule,
     BrandsModule,
@@ -43,6 +47,10 @@ import { WebsiteModule } from './modules/website/website.module';
     ServicesModule,
     AppointmentsModule,
     WebsiteModule,
+  ],
+  providers: [
+    // Aplica el rate-limiting a todas las rutas
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}
