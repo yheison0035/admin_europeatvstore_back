@@ -154,32 +154,12 @@ export class SalesService {
       }
     }
 
-    // La columna "Fecha de Venta" del listado muestra createdAt, así que
-    // permitimos filtrar también por esa fecha.
-    if (query.createdAt) {
-      const base = new Date(query.createdAt);
-      if (!Number.isNaN(base.getTime())) {
-        const start = new Date(base);
-        start.setHours(0, 0, 0, 0);
-
-        const end = new Date(base);
-        end.setHours(23, 59, 59, 999);
-
-        where.createdAt = {
-          gte: start,
-          lte: end,
-        };
-      }
-    }
-
     const [items, total] = await this.prisma.$transaction([
       this.prisma.sale.findMany({
         where,
         skip,
         take: limit,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [{ saleDate: 'desc' }, { createdAt: 'desc' }],
         include: {
           items: {
             include: {
@@ -793,7 +773,7 @@ export class SalesService {
     const sales = await this.prisma.sale.findMany({
       where: {
         localId: Number(localId),
-        createdAt: {
+        saleDate: {
           gte: start,
           lte: end,
         },
@@ -807,7 +787,7 @@ export class SalesService {
         },
       },
       orderBy: {
-        createdAt: 'asc',
+        saleDate: 'asc',
       },
     });
 
@@ -893,7 +873,7 @@ export class SalesService {
       where: {
         localId: Number(localId),
         userId: Number(userId),
-        createdAt: {
+        saleDate: {
           gte: start,
           lte: end,
         },
@@ -988,7 +968,7 @@ export class SalesService {
     const sales = await this.prisma.sale.findMany({
       where: {
         localId: Number(localId),
-        createdAt: {
+        saleDate: {
           gte: start,
           lte: end,
         },
@@ -1085,7 +1065,7 @@ export class SalesService {
     const sales = await this.prisma.sale.findMany({
       where: {
         localId: Number(localId),
-        createdAt: {
+        saleDate: {
           gte: start,
           lte: end,
         },
