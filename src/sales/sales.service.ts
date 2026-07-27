@@ -1086,6 +1086,7 @@ export class SalesService {
     const usersMap: any = {};
 
     let globalTotal = 0;
+    const paymentTotals: Record<string, number> = {};
 
     for (const sale of sales) {
       const userName = sale.user?.name || 'SIN USUARIO';
@@ -1122,7 +1123,7 @@ export class SalesService {
           usersMap[userName].services[name].count += item.quantity;
           usersMap[userName].services[name].total += item.subtotal;
 
-          const commission = item.subtotal * 0.4;
+          const commission = item.subtotal * 0.45;
 
           usersMap[userName].services[name].commission += commission;
 
@@ -1151,12 +1152,25 @@ export class SalesService {
 
         usersMap[userName].totals.total += item.subtotal;
         globalTotal += item.subtotal;
+
+        const method = sale.paymentMethod || 'SIN_METODO';
+        paymentTotals[method] = (paymentTotals[method] || 0) + item.subtotal;
+      }
+    }
+
+    // Desglose por cada método de pago, omitiendo los que sean cero.
+    const paymentBreakdown: Record<string, number> = {};
+    for (const [method, amount] of Object.entries(paymentTotals)) {
+      if (amount > 0) {
+        paymentBreakdown[method] = amount;
       }
     }
 
     return {
       success: true,
       globalTotal,
+      commissionRate: 0.45,
+      paymentBreakdown,
       data: usersMap,
     };
   }
