@@ -59,6 +59,7 @@ enum PaymentMethod {
   TRANSFERENCIA
   DATAFONO
   ADDI
+  CREDITO
 }
 
 enum PaymentStatus {
@@ -70,6 +71,7 @@ enum PaymentStatus {
   VENCIDO
   REEMBOLSADO
   ANULADO
+  FIADO
 }
 
 enum SaleStatus {

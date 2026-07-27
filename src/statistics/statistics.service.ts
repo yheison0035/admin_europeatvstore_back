@@ -75,10 +75,13 @@ export class StatisticsService {
 
     const localFilter = localId ? { localId } : {};
 
+    // Los ingresos solo cuentan ventas realmente cobradas: se excluye el
+    // fiado (y cualquier estado no pagado) hasta que la venta pase a PAGADA.
     const saleWhere = (from: Date, to: Date) => ({
       local: { companyId },
       ...localFilter,
       saleDate: { gte: from, lt: to },
+      paymentStatus: 'PAGADA' as any,
     });
 
     const expenseWhere = (from: Date, to: Date) => ({
