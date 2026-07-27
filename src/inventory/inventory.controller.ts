@@ -28,7 +28,7 @@ export class InventoryController {
 
   @Roles(
     'SUPER_ADMIN',
-    'ADMIN',
+    'ADMIN', 'RECEPCIONISTA',
     'COORDINADOR',
     'AUXILIAR',
     'ASESOR',
@@ -41,7 +41,7 @@ export class InventoryController {
 
   @Roles(
     'SUPER_ADMIN',
-    'ADMIN',
+    'ADMIN', 'RECEPCIONISTA',
     'COORDINADOR',
     'AUXILIAR',
     'ASESOR',
@@ -52,13 +52,13 @@ export class InventoryController {
     return this.inventoryService.findOne(id, req.user);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Post()
   create(@Body() dto: CreateInventoryDto, @Req() req) {
     return this.inventoryService.create(dto, req.user);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -75,7 +75,7 @@ export class InventoryController {
   }
 
   // Endpoint para sincronizar imágenes de un producto
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Put(':id/images')
   @UseInterceptors(FilesInterceptor('images', 10))
   syncImages(
@@ -91,7 +91,7 @@ export class InventoryController {
 
   @Roles(
     'SUPER_ADMIN',
-    'ADMIN',
+    'ADMIN', 'RECEPCIONISTA',
     'COORDINADOR',
     'AUXILIAR',
     'ASESOR',

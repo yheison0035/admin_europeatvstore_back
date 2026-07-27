@@ -24,28 +24,28 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   // ADMIN / COORDINADOR / SUPER_ADMIN / ASESOR
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'COORDINADOR', 'ASESOR')
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.categoriesService.findAllPaginated(req.user, query);
   }
 
   // Obtener una categoría
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'COORDINADOR', 'ASESOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.categoriesService.findOne(id, req.user);
   }
 
   // Crear categoría
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Post()
   create(@Body() dto: CreateCategoryDto, @Req() req) {
     return this.categoriesService.create(dto, req.user);
   }
 
   // Actualizar categoría
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,

@@ -26,7 +26,7 @@ export class CustomersController {
   // Ver clientes
   @Roles(
     'SUPER_ADMIN',
-    'ADMIN',
+    'ADMIN', 'RECEPCIONISTA',
     'COORDINADOR',
     'AUXILIAR',
     'ASESOR',
@@ -41,7 +41,7 @@ export class CustomersController {
   // Ver uno
   @Roles(
     'SUPER_ADMIN',
-    'ADMIN',
+    'ADMIN', 'RECEPCIONISTA',
     'COORDINADOR',
     'AUXILIAR',
     'ASESOR',
@@ -54,14 +54,14 @@ export class CustomersController {
   }
 
   // Crear
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'COORDINADOR', 'ASESOR')
   @Post()
   create(@Body() dto: CreateCustomerDto, @Req() req) {
     return this.customersService.create(dto, req.user);
   }
 
   // Actualizar
-  @Roles('SUPER_ADMIN', 'ADMIN', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,

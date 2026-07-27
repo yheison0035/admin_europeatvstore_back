@@ -24,28 +24,28 @@ export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
   // LISTAR
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'COORDINADOR', 'ASESOR')
   @Get()
   findAll(@Query() query, @Req() req) {
     return this.providersService.findAllPaginated(query, req.user);
   }
 
   // VER UNO
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'COORDINADOR', 'ASESOR')
   @Get(':id')
   findOne(@Param('id') id: number, @Req() req) {
     return this.providersService.findOne(id, req.user);
   }
 
   // CREAR
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Post()
   create(@Body() dto: CreateProviderDto, @Req() req) {
     return this.providersService.create(dto, req.user);
   }
 
   // ACTUALIZAR
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
