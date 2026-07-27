@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { StatisticsController } from './statistics.controller';
 import { StatisticsService } from './statistics.service';
-import { PrismaService } from '../prisma.service';
 
+// PrismaService viene del PrismaModule global; no se re-provee para no crear
+// otra instancia (pool de conexiones) del cliente.
 @Module({
   controllers: [StatisticsController],
-  providers: [StatisticsService, PrismaService],
+  providers: [StatisticsService],
 })
 export class StatisticsModule {}

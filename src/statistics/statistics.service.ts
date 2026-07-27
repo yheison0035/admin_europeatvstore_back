@@ -112,15 +112,15 @@ export class StatisticsService {
       this.prisma.customer.count({
         where: {
           companyId,
-          document: { not: CONSUMIDOR_FINAL },
           createdAt: { gte: start, lt: end },
+          OR: [{ document: null }, { document: { not: CONSUMIDOR_FINAL } }],
         },
       }),
       this.prisma.customer.count({
         where: {
           companyId,
-          document: { not: CONSUMIDOR_FINAL },
           createdAt: { gte: prevStart, lt: prevEnd },
+          OR: [{ document: null }, { document: { not: CONSUMIDOR_FINAL } }],
         },
       }),
       this.prisma.local.findMany({
