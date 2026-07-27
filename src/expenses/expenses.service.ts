@@ -82,11 +82,21 @@ export class ExpensesService {
     }
 
     if (query.expenseDate) {
-      const [day, month, year] = query.expenseDate.split('/').map(Number);
+      const raw = String(query.expenseDate).trim();
+      let y: number | undefined;
+      let m: number | undefined;
+      let d: number | undefined;
 
-      if (day && month && year) {
-        const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
-        const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+      if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        [y, m, d] = raw.slice(0, 10).split('-').map(Number);
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+        [d, m, y] = raw.split('/').map(Number);
+      }
+
+      if (y && m && d) {
+        // expenseDate es solo fecha (medianoche UTC): rango del día en UTC.
+        const startOfDay = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+        const endOfDay = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
 
         where.expenseDate = {
           gte: startOfDay,

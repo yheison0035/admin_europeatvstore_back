@@ -68,12 +68,21 @@ export class AppointmentsService {
     }
 
     if (query.date) {
-      const parsed = new Date(query.date);
-      if (!Number.isNaN(parsed.getTime())) {
-        const start = new Date(parsed);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(start);
-        end.setDate(end.getDate() + 1);
+      const raw = String(query.date).trim();
+      let y: number | undefined;
+      let m: number | undefined;
+      let d: number | undefined;
+
+      if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        [y, m, d] = raw.slice(0, 10).split('-').map(Number);
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+        [d, m, y] = raw.split('/').map(Number);
+      }
+
+      if (y && m && d) {
+        // date es solo fecha (medianoche UTC): rango del día en UTC.
+        const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+        const end = new Date(Date.UTC(y, m - 1, d + 1, 0, 0, 0, 0));
         where.date = { gte: start, lt: end };
       }
     }
