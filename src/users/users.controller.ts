@@ -42,7 +42,7 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR', 'RECEPCIONISTA')
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.usersService.findAllPaginated(req.user, query);
