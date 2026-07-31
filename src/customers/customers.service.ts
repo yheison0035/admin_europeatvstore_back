@@ -182,6 +182,26 @@ export class CustomersService {
     };
   }
 
+  // Busca un cliente por documento exacto (para autocompletar). Devuelve null
+  // si no existe. Aislado por empresa.
+  async findByDocument(document: string, user: any) {
+    const doc = (document || '').trim();
+    if (!doc) {
+      return { success: true, data: null };
+    }
+
+    const customer = await this.prisma.customer.findFirst({
+      where: {
+        document: doc,
+        companyId: user.companyId,
+        status: { not: Status.ELIMINADO },
+      },
+      include: { local: true },
+    });
+
+    return { success: true, data: customer || null };
+  }
+
   async findOne(id: number, user: any) {
     const customer = await this.prisma.customer.findFirst({
       where: {

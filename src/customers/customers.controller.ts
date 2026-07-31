@@ -38,6 +38,22 @@ export class CustomersController {
     return this.customersService.findAllPaginated(req.user, query);
   }
 
+  // Autocompletar por documento: trae el cliente si ya existe en la empresa.
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN',
+    'RECEPCIONISTA',
+    'COORDINADOR',
+    'AUXILIAR',
+    'ASESOR',
+    'VENTAS',
+    'BODEGUERO',
+  )
+  @Get('lookup')
+  lookup(@Query('document') document: string, @Req() req) {
+    return this.customersService.findByDocument(document, req.user);
+  }
+
   // Ver uno
   @Roles(
     'SUPER_ADMIN',
