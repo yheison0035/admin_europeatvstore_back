@@ -11,6 +11,8 @@ import { LoginDto } from './dto/login.dto';
 import { UsersService } from '@/users/users.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { MailService } from '@/mail/mail.service';
+import { WhatsappService } from '@/mail/whatsapp.service';
+import { randomInt } from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -19,7 +21,101 @@ export class AuthService {
     private jwtService: JwtService,
     private usersService: UsersService,
     private mail: MailService,
+    private whatsapp: WhatsappService,
   ) {}
+
+  // Busca un usuario por correo o por celular (identificador flexible).
+  private async findByIdentifier(identifier: string) {
+    const id = (identifier || '').trim();
+    if (!id) return null;
+
+    if (id.includes('@')) {
+      return this.prisma.user.findUnique({ where: { email: id.toLowerCase() } });
+    }
+
+    const phone = id.replace(/\D/g, '');
+    return this.prisma.user.findFirst({
+      where: { phone: { contains: phone.slice(-10) } },
+    });
+  }
+
+  // Solicita un código OTP y lo envía por WhatsApp al celular registrado.
+  // Respuesta uniforme para no revelar si la cuenta existe.
+  async requestPasswordOtp(identifier: string) {
+    const user = await this.findByIdentifier(identifier);
+
+    if (user && user.status !== 'ELIMINADO' && user.phone) {
+      const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      const hash = await bcrypt.hash(code, 10);
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          resetOtpHash: hash,
+          resetOtpExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 min
+          resetOtpAttempts: 0,
+        },
+      });
+
+      await this.whatsapp.sendOtp(user.phone, code);
+    }
+
+    return {
+      success: true,
+      message:
+        'Si la cuenta existe y tiene celular registrado, te enviamos un código por WhatsApp.',
+    };
+  }
+
+  async resetPasswordWithOtp(
+    identifier: string,
+    code: string,
+    newPassword: string,
+  ) {
+    const user = await this.findByIdentifier(identifier);
+
+    if (
+      !user ||
+      !user.resetOtpHash ||
+      !user.resetOtpExpires ||
+      user.resetOtpExpires < new Date()
+    ) {
+      throw new BadRequestException(
+        'El código no es válido o venció. Solicita uno nuevo.',
+      );
+    }
+
+    if (user.resetOtpAttempts >= 5) {
+      throw new BadRequestException(
+        'Demasiados intentos. Solicita un código nuevo.',
+      );
+    }
+
+    const ok = await bcrypt.compare(code, user.resetOtpHash);
+    if (!ok) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { resetOtpAttempts: { increment: 1 } },
+      });
+      throw new BadRequestException('Código incorrecto.');
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashed,
+        resetOtpHash: null,
+        resetOtpExpires: null,
+        resetOtpAttempts: 0,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Contraseña actualizada. Ya puedes iniciar sesión.',
+    };
+  }
 
   // Solicitud de restablecimiento: envía un enlace al correo si existe. Siempre
   // responde igual para no revelar qué correos están registrados.

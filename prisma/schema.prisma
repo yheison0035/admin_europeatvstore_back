@@ -212,6 +212,11 @@ model User {
   password   String
   avatar     String?
 
+  // Código OTP para restablecer contraseña por celular (WhatsApp)
+  resetOtpHash     String?
+  resetOtpExpires  DateTime?
+  resetOtpAttempts Int       @default(0)
+
   localId Int?
   local   Local? @relation("LocalUsers", fields: [localId], references: [id], onDelete: SetNull)
 

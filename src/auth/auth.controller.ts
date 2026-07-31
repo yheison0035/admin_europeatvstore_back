@@ -17,6 +17,8 @@ import { UsersService } from '@/users/users.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ForgotOtpDto } from './dto/forgot-otp.dto';
+import { ResetOtpDto } from './dto/reset-otp.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -51,6 +53,23 @@ export class AuthController {
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token, dto.password);
+  }
+
+  // Código OTP por WhatsApp (público).
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('forgot-password-otp')
+  forgotPasswordOtp(@Body() dto: ForgotOtpDto) {
+    return this.authService.requestPasswordOtp(dto.identifier);
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('reset-password-otp')
+  resetPasswordOtp(@Body() dto: ResetOtpDto) {
+    return this.authService.resetPasswordWithOtp(
+      dto.identifier,
+      dto.code,
+      dto.password,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
