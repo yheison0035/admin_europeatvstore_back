@@ -144,7 +144,7 @@ export class CategoriesService {
   }
 
   async create(dto: CreateCategoryDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.RECEPCIONISTA])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
@@ -189,7 +189,7 @@ export class CategoriesService {
   }
 
   async update(id: number, dto: UpdateCategoryDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.RECEPCIONISTA])) {
       throw new ForbiddenException('No tienes permisos');
     }
 

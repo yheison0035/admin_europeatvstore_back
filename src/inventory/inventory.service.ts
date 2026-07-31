@@ -396,7 +396,7 @@ export class InventoryService {
   }
 
   async create(dto: CreateInventoryDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.RECEPCIONISTA])) {
       throw new ForbiddenException('No autorizado');
     }
 
@@ -502,7 +502,7 @@ export class InventoryService {
   }
 
   async update(id: number, dto: UpdateInventoryDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.RECEPCIONISTA])) {
       throw new ForbiddenException('No autorizado');
     }
 

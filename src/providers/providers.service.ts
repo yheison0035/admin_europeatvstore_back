@@ -130,7 +130,7 @@ export class ProvidersService {
   }
 
   async create(dto: CreateProviderDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.RECEPCIONISTA])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
@@ -165,7 +165,7 @@ export class ProvidersService {
   }
 
   async update(id: number, dto: UpdateProviderDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.RECEPCIONISTA])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
