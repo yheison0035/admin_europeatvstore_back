@@ -1,4 +1,11 @@
-import { IsOptional, IsString, IsEnum, IsDateString } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsEnum,
+  IsDateString,
+  IsEmail,
+  MinLength,
+} from 'class-validator';
 import { BusinessType, Status } from '@prisma/client';
 
 export class CreateCompanyDto {
@@ -32,4 +39,19 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsDateString()
   paidUntil?: string;
+
+  // Credenciales del usuario administrador inicial de la empresa (para que
+  // pueda loguear y de ahí en adelante gestione todo por su cuenta).
+  @IsOptional()
+  @IsString()
+  adminName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  adminEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  adminPassword?: string;
 }

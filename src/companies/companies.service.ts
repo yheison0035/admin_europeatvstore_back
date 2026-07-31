@@ -2,9 +2,11 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -189,23 +191,73 @@ export class CompaniesService {
       throw new ForbiddenException('No tienes permisos');
     }
 
-    const company = await this.prisma.company.create({
-      data: {
-        name: dto.name,
-        logo: dto.logo,
-        phone: dto.phone,
-        manager: dto.manager,
-        type: dto.type,
-        status: dto.status ?? Status.ACTIVO,
-        plan: dto.plan ?? null,
-        paidUntil: dto.paidUntil ? new Date(dto.paidUntil) : null,
-      },
+    // Si se van a crear credenciales de administrador, validar el correo antes
+    // (email es único global) y preparar el hash fuera de la transacción.
+    let adminData: {
+      email: string;
+      password: string;
+      name: string;
+    } | null = null;
+
+    if (dto.adminEmail && dto.adminPassword) {
+      const exists = await this.prisma.user.findUnique({
+        where: { email: dto.adminEmail },
+      });
+      if (exists) {
+        throw new ConflictException(
+          'Ya existe un usuario con ese correo. Usa otro para el administrador.',
+        );
+      }
+
+      adminData = {
+        email: dto.adminEmail,
+        password: await bcrypt.hash(dto.adminPassword, 10),
+        name: dto.adminName?.trim() || 'Administrador',
+      };
+    }
+
+    // Empresa + su usuario administrador (SUPER_ADMIN) de forma atómica: si algo
+    // falla, no queda una empresa sin acceso ni un usuario huérfano.
+    const result = await this.prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({
+        data: {
+          name: dto.name,
+          logo: dto.logo,
+          phone: dto.phone,
+          manager: dto.manager,
+          type: dto.type,
+          status: dto.status ?? Status.ACTIVO,
+          plan: dto.plan ?? null,
+          paidUntil: dto.paidUntil ? new Date(dto.paidUntil) : null,
+        },
+      });
+
+      let admin: { id: number; email: string; name: string } | null = null;
+
+      if (adminData) {
+        admin = await tx.user.create({
+          data: {
+            email: adminData.email,
+            password: adminData.password,
+            name: adminData.name,
+            role: Role.SUPER_ADMIN,
+            status: Status.ACTIVO,
+            companyId: company.id,
+          },
+          select: { id: true, email: true, name: true },
+        });
+      }
+
+      return { company, admin };
     });
 
     return {
       success: true,
-      message: 'Empresa creada correctamente',
-      data: company,
+      message: adminData
+        ? 'Empresa y administrador creados correctamente'
+        : 'Empresa creada correctamente',
+      data: result.company,
+      admin: result.admin,
     };
   }
 
