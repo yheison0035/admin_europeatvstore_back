@@ -4,7 +4,7 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  const password = await bcrypt.hash('europeatvstore123', 10);
+  const password = await bcrypt.hash('pegazo123', 10);
 
   // ✅ Crear empresa base (si no existe)
   let company = await prisma.company.findFirst();
