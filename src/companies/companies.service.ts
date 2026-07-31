@@ -229,6 +229,7 @@ export class CompaniesService {
           status: dto.status ?? Status.ACTIVO,
           plan: dto.plan ?? null,
           paidUntil: dto.paidUntil ? new Date(dto.paidUntil) : null,
+          startDate: dto.startDate ? new Date(dto.startDate) : null,
         },
       });
 
@@ -287,6 +288,9 @@ export class CompaniesService {
         ...(dto.plan !== undefined && { plan: dto.plan || null }),
         ...(dto.paidUntil !== undefined && {
           paidUntil: dto.paidUntil ? new Date(dto.paidUntil) : null,
+        }),
+        ...(dto.startDate !== undefined && {
+          startDate: dto.startDate ? new Date(dto.startDate) : null,
         }),
       },
     });

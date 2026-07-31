@@ -40,6 +40,10 @@ export class CreateCompanyDto {
   @IsDateString()
   paidUntil?: string;
 
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
   // Credenciales del usuario administrador inicial de la empresa (para que
   // pueda loguear y de ahí en adelante gestione todo por su cuenta).
   @IsOptional()

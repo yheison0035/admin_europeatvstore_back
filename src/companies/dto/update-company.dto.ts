@@ -34,4 +34,9 @@ export class UpdateCompanyDto {
   @IsOptional()
   @IsDateString()
   paidUntil?: string;
+
+  // Fecha (ISO) en que la empresa empezó con nosotros.
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
 }

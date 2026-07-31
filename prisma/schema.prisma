@@ -162,6 +162,7 @@ model Company {
   // Facturación / suscripción (control de la plataforma)
   plan      String?
   paidUntil DateTime? // fecha hasta la que la empresa está al día; si vence, se auto-suspende
+  startDate DateTime? // fecha en que la empresa empezó con nosotros (si null, se usa createdAt)
 
   //////////////////////////////////////////////////
   // WEBSITE
