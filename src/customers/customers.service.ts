@@ -8,12 +8,14 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { Status } from '@prisma/client';
 import { AuditService } from '@/audit/audit.service';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 
 @Injectable()
 export class CustomersService {
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
+    private planLimits: PlanLimitsService,
   ) {}
 
   async findAllPaginated(user: any, query: any) {
@@ -223,6 +225,9 @@ export class CustomersService {
   }
 
   async create(dto: CreateCustomerDto, user: any) {
+    // Límite de clientes según el plan de la empresa.
+    await this.planLimits.assertCanCreate(user.companyId, 'customers');
+
     // El cliente es global por empresa, pero guardamos el "local de registro"
     // (de dónde viene): el del contexto (factura/formulario) o, si no llega,
     // el local del usuario que lo crea. Es solo informativo, no restringe.

@@ -14,12 +14,14 @@ import { hasRole } from '@/common/role-check.util';
 import { CloudinaryService } from '@/cloudinary/cloudinary.service';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
+    private planLimits: PlanLimitsService,
   ) {}
 
   // LISTADO GLOBAL (todos los usuarios de todas las empresas) — plataforma
@@ -284,6 +286,9 @@ export class UsersService {
     });
 
     if (exists) throw new ConflictException('Email ya registrado');
+
+    // Límite de usuarios según el plan de la empresa.
+    await this.planLimits.assertCanCreate(user?.companyId, 'users');
 
     if (dto.localId) {
       const local = await this.prisma.local.findFirst({

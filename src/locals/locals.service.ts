@@ -10,10 +10,14 @@ import { Role, Status } from '@prisma/client';
 import { hasRole } from '@/common/role-check.util';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 
 @Injectable()
 export class LocalsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private planLimits: PlanLimitsService,
+  ) {}
 
   async findAllPaginated(user: any, query: any) {
     const page = Number(query.page) || 1;
@@ -199,6 +203,9 @@ export class LocalsService {
         throw new NotFoundException('Empresa no encontrada');
       }
     }
+
+    // Límite de sedes según el plan de la empresa.
+    await this.planLimits.assertCanCreate(companyId, 'locals');
 
     const local = await this.prisma.local.create({
       data: {

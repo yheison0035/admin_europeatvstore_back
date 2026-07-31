@@ -5,6 +5,10 @@ import * as express from 'express';
 import helmet from 'helmet';
 import { join } from 'path';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { createCorsOriginChecker } from './common/cors-origin.util';
+import { PrismaService } from './prisma.service';
+
+type CorsCallback = (err: Error | null, allow?: boolean) => void;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -24,8 +28,9 @@ async function bootstrap() {
 
   app.use('/public', express.static(join(process.cwd(), 'public')));
 
-  // CORS: orígenes de Pegazo siempre permitidos + los que se agreguen por env
-  // (CORS_ORIGINS, separados por coma) para futuros dominios.
+  // CORS: orígenes de Pegazo siempre permitidos, los que se agreguen por env
+  // (CORS_ORIGINS, separados por coma) y —dinámicamente— el dominio de cada
+  // empresa con sitio web activo, porque cada tienda vive en su propio dominio.
   const envOrigins = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((origin) => origin.trim())
@@ -37,13 +42,24 @@ async function bootstrap() {
     'http://localhost:3000',
   ];
 
-  const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])];
+  const isOriginAllowed = createCorsOriginChecker(app.get(PrismaService), {
+    staticOrigins: [...new Set([...defaultOrigins, ...envOrigins])],
+    allowLocalhost: !isProd,
+  });
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin: string | undefined, callback: CorsCallback) => {
+      // Sin Origin: curl, Postman, SSR o apps móviles (no son peticiones de navegador).
+      if (!origin) return callback(null, true);
+
+      isOriginAllowed(origin)
+        .then((allowed) => callback(null, allowed))
+        .catch(() => callback(null, false));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    // X-Website-Domain lo envía la tienda para identificar de qué empresa es.
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Website-Domain'],
   });
 
   // Swagger solo fuera de producción

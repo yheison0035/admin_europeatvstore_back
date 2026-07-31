@@ -2,7 +2,9 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
+import { BusinessType, Role, Status } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
@@ -12,6 +14,8 @@ import { UsersService } from '@/users/users.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { MailService } from '@/mail/mail.service';
 import { WhatsappService } from '@/mail/whatsapp.service';
+import { RegisterBusinessDto } from './dto/register-business.dto';
+import { CouponsService } from '@/coupons/coupons.service';
 import { randomInt } from 'crypto';
 
 @Injectable()
@@ -22,6 +26,7 @@ export class AuthService {
     private usersService: UsersService,
     private mail: MailService,
     private whatsapp: WhatsappService,
+    private coupons: CouponsService,
   ) {}
 
   // Busca un usuario por correo o por celular (identificador flexible).
@@ -184,6 +189,90 @@ export class AuthService {
   async register(dto: CreateUserDto) {
     const user = await this.usersService.createUser(dto);
     return { message: 'Usuario creado', user };
+  }
+
+  // AUTO-REGISTRO DE NEGOCIO (público): crea la empresa + su usuario
+  // administrador (SUPER_ADMIN) de forma atómica y devuelve un token para que
+  // entre directamente. Empieza en el plan gratuito (Despegue).
+  async registerBusiness(dto: RegisterBusinessDto) {
+    const email = dto.email.trim().toLowerCase();
+
+    const exists = await this.prisma.user.findUnique({ where: { email } });
+    if (exists) {
+      throw new ConflictException('Ya existe una cuenta con ese correo.');
+    }
+
+    // Si viene cupón, se valida contra el plan elegido (lanza si no sirve).
+    const couponCode = dto.couponCode?.trim();
+    const coupon = couponCode
+      ? await this.coupons.validateForPlan(couponCode, dto.plan)
+      : null;
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const { company, admin } = await this.prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({
+        data: {
+          name: dto.companyName.trim(),
+          type: dto.type ?? BusinessType.COMERCIO,
+          phone: dto.phone?.trim() || null,
+          manager: dto.ownerName.trim(),
+          status: Status.ACTIVO,
+          plan: dto.plan,
+          startDate: new Date(),
+          couponCode: coupon ? coupon.code : null,
+        },
+      });
+
+      const admin = await tx.user.create({
+        data: {
+          name: dto.ownerName.trim(),
+          email,
+          password: hashedPassword,
+          phone: dto.phone?.trim() || null,
+          role: Role.SUPER_ADMIN,
+          status: Status.ACTIVO,
+          companyId: company.id,
+        },
+      });
+
+      if (coupon) {
+        await tx.coupon.update({
+          where: { id: coupon.id },
+          data: { timesRedeemed: { increment: 1 } },
+        });
+      }
+
+      return { company, admin };
+    });
+
+    const payload = {
+      sub: admin.id,
+      email: admin.email,
+      name: admin.name,
+      role: admin.role,
+      companyId: admin.companyId,
+      localId: admin.localId,
+    };
+
+    const { password, ...safeUser } = admin;
+
+    return {
+      success: true,
+      message: 'Cuenta creada correctamente',
+      data: {
+        access_token: await this.jwtService.signAsync(payload),
+        user: {
+          ...safeUser,
+          company: {
+            id: company.id,
+            name: company.name,
+            status: company.status,
+            type: company.type,
+          },
+        },
+      },
+    };
   }
 
   async login(dto: LoginDto) {

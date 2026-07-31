@@ -11,6 +11,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from '@/users/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
+import { RegisterBusinessDto } from './dto/register-business.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UpdateUserDto } from '@/users/dto/update-user.dto';
 import { UsersService } from '@/users/users.service';
@@ -39,6 +40,13 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  // Auto-registro de negocio (público): crea empresa + admin y devuelve token.
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('register-business')
+  registerBusiness(@Body() dto: RegisterBusinessDto) {
+    return this.authService.registerBusiness(dto);
   }
 
   // Solicitar enlace de restablecimiento (público). Límite anti-abuso.

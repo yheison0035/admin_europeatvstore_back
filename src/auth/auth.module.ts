@@ -8,9 +8,11 @@ import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '@/users/users.module';
 import { MailService } from '@/mail/mail.service';
 import { WhatsappService } from '@/mail/whatsapp.service';
+import { CouponsModule } from '@/coupons/coupons.module';
 
 @Module({
   imports: [
+    CouponsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

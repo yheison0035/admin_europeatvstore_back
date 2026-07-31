@@ -128,6 +128,29 @@ enum BusinessType {
   ZORVEX
 }
 
+enum DiscountType {
+  PERCENT // porcentaje sobre el precio del plan (0-100)
+  FIXED // monto fijo en COP
+}
+
+// Cupones de descuento gestionados por el SUPER_PLATFORM_ADMIN. Se pueden
+// aplicar en el registro para descontar sobre el precio del plan elegido.
+model Coupon {
+  id            Int          @id @default(autoincrement())
+  code          String       @unique
+  description   String?
+  discountType  DiscountType @default(PERCENT)
+  discountValue Int          @default(0) // % (0-100) o monto fijo en COP
+  appliesToPlan String? // null = todos los planes; o un id de plan (DESPEGUE, IMPULSO, ...)
+  maxRedemptions Int? // null = ilimitado
+  timesRedeemed Int          @default(0)
+  expiresAt     DateTime? // null = sin vencimiento
+  active        Boolean      @default(true)
+  status        Status       @default(ACTIVO) // para borrado lógico
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
 enum AppointmentStatus {
   PENDIENTE
   CONFIRMADA
@@ -160,9 +183,10 @@ model Company {
   manager String?
 
   // Facturación / suscripción (control de la plataforma)
-  plan      String?
-  paidUntil DateTime? // fecha hasta la que la empresa está al día; si vence, se auto-suspende
-  startDate DateTime? // fecha en que la empresa empezó con nosotros (si null, se usa createdAt)
+  plan       String?
+  paidUntil  DateTime? // fecha hasta la que la empresa está al día; si vence, se auto-suspende
+  startDate  DateTime? // fecha en que la empresa empezó con nosotros (si null, se usa createdAt)
+  couponCode String? // cupón de descuento con el que se registró (informativo)
 
   //////////////////////////////////////////////////
   // WEBSITE
@@ -174,9 +198,11 @@ model Company {
   websiteName      String?
   favicon          String?
   theme            String @default("default")
+  fontFamily       String? // tipografía de la tienda (clave, no la fuente completa)
   primaryColor     String?
   secondaryColor   String?
   accentColor      String?
+  ctaColor         String? // color de los botones de compra
   heroTitle        String?
   heroSubtitle     String?
 

@@ -16,6 +16,7 @@ import { generateSlug } from '@/utils/slug.util';
 import { getPagination } from '@/common/pagination.util';
 import { generateSku } from '../../utils/sku.util';
 import { AuditService } from '@/audit/audit.service';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 
 @Injectable()
 export class InventoryService {
@@ -24,6 +25,7 @@ export class InventoryService {
     private cloudinaryService: CloudinaryService,
     private variantsService: VariantsService,
     private audit: AuditService,
+    private planLimits: PlanLimitsService,
   ) {}
 
   // Búsqueda avanzada de productos y servicios
@@ -399,6 +401,9 @@ export class InventoryService {
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.RECEPCIONISTA])) {
       throw new ForbiddenException('No autorizado');
     }
+
+    // Límite de productos según el plan de la empresa.
+    await this.planLimits.assertCanCreate(user.companyId, 'products');
 
     if (dto.localId) {
       const local = await this.prisma.local.findFirst({

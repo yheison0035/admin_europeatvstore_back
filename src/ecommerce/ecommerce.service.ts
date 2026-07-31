@@ -116,6 +116,7 @@ export class EcommerceService {
       const colors = product.variants
         .filter((v) => v.stock > 0)
         .map((v) => ({
+          variantId: v.id,
           name: v.color,
           stock: v.stock,
         }));
@@ -381,7 +382,7 @@ export class EcommerceService {
 
       const colors = product.variants
         .filter((v) => v.stock > 0)
-        .map((v) => ({ name: v.color, stock: v.stock }));
+        .map((v) => ({ variantId: v.id, name: v.color, stock: v.stock }));
 
       const stock = colors.reduce((s, c) => s + c.stock, 0);
 
@@ -463,6 +464,7 @@ export class EcommerceService {
     }
 
     const colors = product.variants.map((v) => ({
+      variantId: v.id,
       name: v.color,
       stock: v.stock,
     }));
@@ -616,6 +618,20 @@ export class EcommerceService {
 
   /* CHECKOUT ECOMMERCE */
 
+  /**
+   * Prefijo del código de pedido a partir del nombre de la empresa
+   * (cada tienda es de un negocio distinto, no puede ir fijo).
+   */
+  private buildOrderPrefix(companyName?: string | null) {
+    const letters = (companyName || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '');
+
+    return letters.slice(0, 3) || 'WEB';
+  }
+
   async createOrder(dto: CreateEcommerceOrderDto, website: WebsiteContext) {
     const { localId } = website;
 
@@ -700,7 +716,7 @@ export class EcommerceService {
       /** CREAR VENTA (SALE) */
       const sale = await tx.sale.create({
         data: {
-          code: `ETS-${Date.now()}`,
+          code: `${this.buildOrderPrefix(website.company?.name)}-${Date.now()}`,
           totalAmount: total,
 
           paymentMethod: dto.paymentMethod,
