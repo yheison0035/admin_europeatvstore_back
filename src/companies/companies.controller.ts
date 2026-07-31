@@ -32,6 +32,12 @@ export class CompaniesController {
     return this.service.findAllPaginated(req.user, query);
   }
 
+  // Resumen global de la plataforma (debe ir antes de :id)
+  @Get('platform/overview')
+  overview(@Req() req) {
+    return this.service.platformOverview(req.user);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.findOne(id, req.user);

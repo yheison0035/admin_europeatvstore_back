@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
   Put,
+  Patch,
   Query,
 } from '@nestjs/common';
 import { LocalsService } from './locals.service';
@@ -18,6 +19,7 @@ import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/auth/guards/roles.guard';
 import { Roles } from '@/auth/roles.decorator';
 import { Public } from '@/auth/decorators/public.decorator';
+import { Status } from '@prisma/client';
 
 @Controller('locals')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -46,6 +48,15 @@ export class LocalsController {
     @Req() req,
   ) {
     return this.localsService.update(id, dto, req.user);
+  }
+
+  @Patch(':id/status')
+  setStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('status') status: Status,
+    @Req() req,
+  ) {
+    return this.localsService.setStatus(id, status, req.user);
   }
 
   @Delete(':id')

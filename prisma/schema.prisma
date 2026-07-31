@@ -159,6 +159,10 @@ model Company {
   phone   String?
   manager String?
 
+  // Facturación / suscripción (control de la plataforma)
+  plan      String?
+  paidUntil DateTime? // fecha hasta la que la empresa está al día; si vence, se auto-suspende
+
   //////////////////////////////////////////////////
   // WEBSITE
   //////////////////////////////////////////////////

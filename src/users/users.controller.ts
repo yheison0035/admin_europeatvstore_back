@@ -54,6 +54,14 @@ export class UsersController {
     return this.usersService.getUsersByRole(req.user, query);
   }
 
+  // Listado global de usuarios (todas las empresas) — solo plataforma
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_PLATFORM_ADMIN')
+  @Get('platform/all')
+  findAllGlobal(@Req() req, @Query() query) {
+    return this.usersService.findAllGlobal(req.user, query);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get('/:id')

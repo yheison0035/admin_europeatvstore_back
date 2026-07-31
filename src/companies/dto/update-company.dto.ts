@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsDateString } from 'class-validator';
 import { BusinessType, Status } from '@prisma/client';
 
 export class UpdateCompanyDto {
@@ -25,4 +25,13 @@ export class UpdateCompanyDto {
   @IsOptional()
   @IsEnum(Status)
   status?: Status;
+
+  @IsOptional()
+  @IsString()
+  plan?: string;
+
+  // Fecha (ISO) hasta la que la empresa está al día. null/'' para quitarla.
+  @IsOptional()
+  @IsDateString()
+  paidUntil?: string;
 }

@@ -25,6 +25,12 @@ export class CreateLocalDto {
   @IsInt()
   managerId?: number;
 
+  // Solo lo usa el SUPER_PLATFORM_ADMIN para crear un local en una empresa
+  // concreta. Los usuarios normales ignoran este campo (usan su companyId).
+  @IsOptional()
+  @IsInt()
+  companyId?: number;
+
   @IsOptional()
   @IsEnum(Status)
   status?: Status;

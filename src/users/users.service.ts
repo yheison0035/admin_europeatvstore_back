@@ -22,6 +22,62 @@ export class UsersService {
     private cloudinaryService: CloudinaryService,
   ) {}
 
+  // LISTADO GLOBAL (todos los usuarios de todas las empresas) — plataforma
+  async findAllGlobal(user: any, query: any) {
+    if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = { status: { not: Status.ELIMINADO } };
+
+    if (query.name) {
+      where.name = { contains: query.name, mode: 'insensitive' };
+    }
+    if (query.email) {
+      where.email = { contains: query.email, mode: 'insensitive' };
+    }
+    if (query.role) {
+      where.role = query.role;
+    }
+    if (query.companyId) {
+      where.companyId = Number(query.companyId);
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          company: { select: { id: true, name: true } },
+          local: { select: { name: true } },
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   async updateAvatar(userId: number, file: Express.Multer.File, user?: any) {
     const found = await this.prisma.user.findFirst({
       where: {

@@ -20,17 +20,26 @@ export class LocalsService {
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    if (!user || !user.companyId) {
+    // El SUPER_PLATFORM_ADMIN puede listar los locales de CUALQUIER empresa
+    // pasando ?companyId=. Los demás usan su propia empresa.
+    const isPlatform = user?.role === Role.SUPER_PLATFORM_ADMIN;
+    const companyId = isPlatform ? Number(query.companyId) : user?.companyId;
+
+    if (!companyId) {
       throw new ForbiddenException('No autorizado');
     }
 
     const where: any = {
-      companyId: user.companyId,
+      companyId,
       status: { not: Status.ELIMINADO },
     };
 
-    const localIds = await getAccessibleLocalIds(this.prisma, user);
-    applyLocalFilter(where, user, localIds, 'local');
+    // El filtro por locales accesibles solo aplica a usuarios de empresa; el
+    // platform admin ve todos los locales de la empresa consultada.
+    if (!isPlatform) {
+      const localIds = await getAccessibleLocalIds(this.prisma, user);
+      applyLocalFilter(where, user, localIds, 'local');
+    }
 
     if (query.name) {
       where.name = {
@@ -111,11 +120,10 @@ export class LocalsService {
   }
 
   async findOne(id: number, user: any) {
+    const isPlatform = user?.role === Role.SUPER_PLATFORM_ADMIN;
+
     const local = await this.prisma.local.findFirst({
-      where: {
-        id,
-        companyId: user.companyId,
-      },
+      where: isPlatform ? { id } : { id, companyId: user.companyId },
       include: {
         users: true,
         manager: true,
@@ -124,6 +132,15 @@ export class LocalsService {
 
     if (!local) {
       throw new NotFoundException(`Local con ID ${id} no encontrado`);
+    }
+
+    // El platform admin puede ver cualquier local
+    if (isPlatform) {
+      return {
+        success: true,
+        message: 'Local obtenido correctamente',
+        data: local,
+      };
     }
 
     // Roles globales → permitido
@@ -159,8 +176,28 @@ export class LocalsService {
   }
 
   async create(dto: CreateLocalDto, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN])) {
+    const isPlatform = user.role === Role.SUPER_PLATFORM_ADMIN;
+
+    if (!isPlatform && !hasRole(user.role, [Role.SUPER_ADMIN])) {
       throw new ForbiddenException('No tienes permisos');
+    }
+
+    // El platform admin indica la empresa destino (dto.companyId); los demás
+    // crean siempre en su propia empresa.
+    const companyId = isPlatform ? Number(dto.companyId) : user.companyId;
+
+    if (!companyId) {
+      throw new ForbiddenException('Falta la empresa destino');
+    }
+
+    if (isPlatform) {
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId },
+        select: { id: true },
+      });
+      if (!company) {
+        throw new NotFoundException('Empresa no encontrada');
+      }
     }
 
     const local = await this.prisma.local.create({
@@ -173,7 +210,7 @@ export class LocalsService {
         status: dto.status ?? Status.ACTIVO,
         managerId: dto.managerId ?? null,
 
-        companyId: user.companyId,
+        companyId,
       },
     });
 
@@ -185,19 +222,19 @@ export class LocalsService {
   }
 
   async update(id: number, dto: UpdateLocalDto, user: any) {
+    const isPlatform = user.role === Role.SUPER_PLATFORM_ADMIN;
+
     const found = await this.prisma.local.findFirst({
-      where: {
-        id,
-        companyId: user.companyId,
-      },
+      where: isPlatform ? { id } : { id, companyId: user.companyId },
     });
 
     if (!found) {
       throw new NotFoundException(`Local con ID ${id} no encontrado`);
     }
 
-    // Roles globales → OK
+    // Roles globales → OK (el platform admin puede editar cualquier local)
     if (
+      !isPlatform &&
       ![Role.SUPER_ADMIN, Role.COORDINADOR, Role.AUXILIAR].includes(user.role)
     ) {
       if (user.role === Role.ADMIN && found.managerId !== user.id) {
@@ -218,7 +255,7 @@ export class LocalsService {
       const manager = await this.prisma.user.findFirst({
         where: {
           id: dto.managerId,
-          companyId: user.companyId,
+          companyId: found.companyId,
         },
       });
 
@@ -246,15 +283,14 @@ export class LocalsService {
   }
 
   async remove(id: number, user: any) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    const isPlatform = user.role === Role.SUPER_PLATFORM_ADMIN;
+
+    if (!isPlatform && !hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
       throw new ForbiddenException('No tienes permisos');
     }
 
     const found = await this.prisma.local.findFirst({
-      where: {
-        id,
-        companyId: user.companyId,
-      },
+      where: isPlatform ? { id } : { id, companyId: user.companyId },
     });
 
     if (!found) {
@@ -266,6 +302,40 @@ export class LocalsService {
     return {
       success: true,
       message: 'Local eliminado correctamente',
+    };
+  }
+
+  // ACTIVAR / DESACTIVAR un local (operativo). El platform admin puede sobre
+  // cualquier empresa; el SUPER_ADMIN solo sobre su empresa.
+  async setStatus(id: number, status: Status, user: any) {
+    const isPlatform = user.role === Role.SUPER_PLATFORM_ADMIN;
+
+    if (!isPlatform && !hasRole(user.role, [Role.SUPER_ADMIN])) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+
+    if (status !== Status.ACTIVO && status !== Status.INACTIVO) {
+      throw new ForbiddenException('Estado no válido');
+    }
+
+    const found = await this.prisma.local.findFirst({
+      where: isPlatform ? { id } : { id, companyId: user.companyId },
+    });
+
+    if (!found || found.status === Status.ELIMINADO) {
+      throw new NotFoundException(`Local con ID ${id} no encontrado`);
+    }
+
+    const updated = await this.prisma.local.update({
+      where: { id },
+      data: { status },
+    });
+
+    return {
+      success: true,
+      message:
+        status === Status.ACTIVO ? 'Local activado' : 'Local desactivado',
+      data: updated,
     };
   }
 

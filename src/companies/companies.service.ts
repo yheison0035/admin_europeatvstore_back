@@ -2,7 +2,9 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '@/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -10,7 +12,91 @@ import { Role, Status } from '@prisma/client';
 
 @Injectable()
 export class CompaniesService {
+  private readonly logger = new Logger(CompaniesService.name);
+
   constructor(private prisma: PrismaService) {}
+
+  // AUTO-SUSPENSIÓN POR IMPAGO: cada día se desactivan las empresas activas
+  // cuya fecha de pago (paidUntil) ya venció. Reactivar = extender paidUntil a
+  // futuro y volver a ACTIVO desde el panel. Las empresas sin paidUntil (null)
+  // no se tocan (control manual / sin vencimiento).
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async autoSuspendOverdue() {
+    const now = new Date();
+
+    const result = await this.prisma.company.updateMany({
+      where: {
+        status: Status.ACTIVO,
+        paidUntil: { lt: now },
+      },
+      data: { status: Status.INACTIVO },
+    });
+
+    if (result.count > 0) {
+      this.logger.warn(
+        `Auto-suspensión: ${result.count} empresa(s) vencida(s) desactivada(s).`,
+      );
+    }
+  }
+
+  // RESUMEN GLOBAL DE PLATAFORMA (para el dashboard del SUPER_PLATFORM_ADMIN)
+  async platformOverview(user: any) {
+    if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+
+    const now = new Date();
+
+    const [companies, totalUsers, totalLocals] = await this.prisma.$transaction([
+      this.prisma.company.findMany({
+        where: { status: { not: Status.ELIMINADO } },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          type: true,
+          paidUntil: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.user.count({ where: { status: { not: Status.ELIMINADO } } }),
+      this.prisma.local.count({
+        where: { status: { not: Status.ELIMINADO } },
+      }),
+    ]);
+
+    const active = companies.filter((c) => c.status === Status.ACTIVO).length;
+    const suspended = companies.filter(
+      (c) => c.status === Status.INACTIVO,
+    ).length;
+    const overdue = companies.filter(
+      (c) => c.paidUntil && new Date(c.paidUntil) < now,
+    ).length;
+
+    const expiringSoon = companies
+      .filter((c) => {
+        if (!c.paidUntil) return false;
+        const diffDays =
+          (new Date(c.paidUntil).getTime() - now.getTime()) / 86_400_000;
+        return diffDays >= 0 && diffDays <= 7;
+      })
+      .map((c) => ({ id: c.id, name: c.name, paidUntil: c.paidUntil }));
+
+    return {
+      success: true,
+      data: {
+        totals: {
+          companies: companies.length,
+          active,
+          suspended,
+          overdue,
+          users: totalUsers,
+          locals: totalLocals,
+        },
+        expiringSoon,
+      },
+    };
+  }
 
   // LISTADO GLOBAL
   async findAllPaginated(user: any, query: any) {
@@ -111,6 +197,8 @@ export class CompaniesService {
         manager: dto.manager,
         type: dto.type,
         status: dto.status ?? Status.ACTIVO,
+        plan: dto.plan ?? null,
+        paidUntil: dto.paidUntil ? new Date(dto.paidUntil) : null,
       },
     });
 
@@ -123,7 +211,6 @@ export class CompaniesService {
 
   // ACTUALIZAR EMPRESA
   async update(id: number, dto: UpdateCompanyDto, user: any) {
-    console.log('User role:', user.role);
     if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
       throw new ForbiddenException('No tienes permisos');
     }
@@ -145,6 +232,10 @@ export class CompaniesService {
         ...(dto.manager !== undefined && { manager: dto.manager }),
         ...(dto.type !== undefined && { type: dto.type }),
         ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.plan !== undefined && { plan: dto.plan || null }),
+        ...(dto.paidUntil !== undefined && {
+          paidUntil: dto.paidUntil ? new Date(dto.paidUntil) : null,
+        }),
       },
     });
 
