@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
@@ -6,6 +10,7 @@ import { CreateUserDto } from '@/users/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { UsersService } from '@/users/users.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { MailService } from '@/mail/mail.service';
 
 @Injectable()
 export class AuthService {
@@ -13,7 +18,72 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private usersService: UsersService,
+    private mail: MailService,
   ) {}
+
+  // Solicitud de restablecimiento: envía un enlace al correo si existe. Siempre
+  // responde igual para no revelar qué correos están registrados.
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: (email || '').trim().toLowerCase() },
+    });
+
+    if (user && user.status !== 'ELIMINADO') {
+      // El token se firma con un secreto que incluye el hash actual de la
+      // contraseña: así queda inválido en cuanto la contraseña cambia (un solo
+      // uso efectivo) y vence a los 30 minutos.
+      const secret = (process.env.JWT_SECRET || '') + user.password;
+      const token = await this.jwtService.signAsync(
+        { sub: user.id },
+        { secret, expiresIn: '30m' },
+      );
+
+      const base = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const resetUrl = `${base}/reset-password?token=${token}`;
+
+      await this.mail.sendPasswordReset(user.email, resetUrl, user.name);
+    }
+
+    return {
+      success: true,
+      message:
+        'Si el correo está registrado, te enviamos las instrucciones para restablecer la contraseña.',
+    };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const decoded: any = this.jwtService.decode(token);
+    if (!decoded?.sub) {
+      throw new BadRequestException('Enlace inválido');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: decoded.sub },
+    });
+    if (!user) {
+      throw new BadRequestException('Enlace inválido');
+    }
+
+    const secret = (process.env.JWT_SECRET || '') + user.password;
+    try {
+      await this.jwtService.verifyAsync(token, { secret });
+    } catch {
+      throw new BadRequestException(
+        'El enlace expiró o ya no es válido. Solicita uno nuevo.',
+      );
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed },
+    });
+
+    return {
+      success: true,
+      message: 'Contraseña actualizada. Ya puedes iniciar sesión.',
+    };
+  }
 
   async register(dto: CreateUserDto) {
     const user = await this.usersService.createUser(dto);
