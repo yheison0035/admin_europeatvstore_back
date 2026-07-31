@@ -41,7 +41,7 @@ async function bootstrap() {
   // Swagger solo fuera de producción
   if (!isProd) {
     const config = new DocumentBuilder()
-      .setTitle('API_EUROPEATVSTORE_ADMIN')
+      .setTitle('API_PEGAZO')
       .setDescription('Documentación y pruebas de la API')
       .setVersion('1.0')
       .addBearerAuth()
