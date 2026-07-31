@@ -24,15 +24,23 @@ async function bootstrap() {
 
   app.use('/public', express.static(join(process.cwd(), 'public')));
 
-  // CORS: orígenes permitidos desde .env (CORS_ORIGINS, separados por coma).
-  // En desarrollo, si no se configura, permite todos; en producción se bloquea.
-  const allowedOrigins = (process.env.CORS_ORIGINS || '')
+  // CORS: orígenes de Pegazo siempre permitidos + los que se agreguen por env
+  // (CORS_ORIGINS, separados por coma) para futuros dominios.
+  const envOrigins = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
+  const defaultOrigins = [
+    'https://pegazo.co',
+    'https://www.pegazo.co',
+    'http://localhost:3000',
+  ];
+
+  const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])];
+
   app.enableCors({
-    origin: allowedOrigins.length ? allowedOrigins : !isProd,
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
