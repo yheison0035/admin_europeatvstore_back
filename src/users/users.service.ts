@@ -239,6 +239,9 @@ export class UsersService {
             phone: true,
             status: true,
             type: true,
+            // El CRM las usa para mostrar (o no) el módulo de tienda online.
+            websiteEnabled: true,
+            domain: true,
           },
         },
         local: true,

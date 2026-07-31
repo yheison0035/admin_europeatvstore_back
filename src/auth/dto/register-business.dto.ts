@@ -36,6 +36,11 @@ export class RegisterBusinessDto {
   @IsString()
   phone?: string;
 
+  // URL del logo ya subido a Cloudinary (opcional).
+  @IsOptional()
+  @IsString()
+  logo?: string;
+
   // Plan obligatorio: el cliente debe elegir uno para continuar.
   @IsIn(PLAN_IDS as unknown as string[])
   plan: string;

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -6,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Role, Status } from '@prisma/client';
 import { PrismaService } from '@/prisma.service';
+import { CloudinaryService } from '@/cloudinary/cloudinary.service';
 import { WebsiteContext } from './interfaces/website-context.interface';
 import { UpdateWebsiteDto } from './dto/update-website.dto';
 import {
@@ -15,7 +17,10 @@ import {
 
 @Injectable()
 export class WebsiteService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudinary: CloudinaryService,
+  ) {}
 
   normalizeDomain(host: string): string {
     return host
@@ -96,9 +101,11 @@ export class WebsiteService {
         websiteName: true,
         favicon: true,
         theme: true,
+        fontFamily: true,
         primaryColor: true,
         secondaryColor: true,
         accentColor: true,
+        ctaColor: true,
         heroTitle: true,
         heroSubtitle: true,
         websiteSetting: true,
@@ -218,6 +225,26 @@ export class WebsiteService {
 
       return { success: true };
     });
+  }
+
+  /** Sube una imagen del sitio a Cloudinary, separada por empresa. */
+  async uploadImage(
+    user: any,
+    file: Express.Multer.File,
+    companyId?: number,
+  ) {
+    const { companyId: id } = this.resolveCompanyId(user, companyId);
+
+    if (!file) {
+      throw new BadRequestException('No se recibió ninguna imagen.');
+    }
+
+    const { url, publicId } = await this.cloudinary.uploadImage(
+      file,
+      `website/${id}`,
+    );
+
+    return { url, publicId };
   }
 
   /* ---------- Banners ---------- */

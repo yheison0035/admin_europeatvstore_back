@@ -9,8 +9,11 @@ import {
   Put,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Public } from '@/auth/decorators/public.decorator';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/auth/guards/roles.guard';
@@ -62,6 +65,23 @@ export class WebsiteController {
     return this.service.updateConfig(
       req.user,
       dto,
+      companyId ? Number(companyId) : undefined,
+    );
+  }
+
+  /** Sube una imagen del sitio (logo, favicon o banner) y devuelve su URL. */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'SUPER_PLATFORM_ADMIN')
+  @Post('admin/upload')
+  @UseInterceptors(FileInterceptor('image'))
+  uploadImage(
+    @Req() req,
+    @UploadedFile() file: Express.Multer.File,
+    @Query('companyId') companyId?: string,
+  ) {
+    return this.service.uploadImage(
+      req.user,
+      file,
       companyId ? Number(companyId) : undefined,
     );
   }

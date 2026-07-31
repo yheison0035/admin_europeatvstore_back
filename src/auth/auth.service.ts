@@ -217,6 +217,7 @@ export class AuthService {
           type: dto.type ?? BusinessType.COMERCIO,
           phone: dto.phone?.trim() || null,
           manager: dto.ownerName.trim(),
+          logo: dto.logo?.trim() || null,
           status: Status.ACTIVO,
           plan: dto.plan,
           startDate: new Date(),
