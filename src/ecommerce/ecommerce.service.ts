@@ -1,12 +1,32 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma.service';
 import { CreateEcommerceOrderDto } from './dto/create-ecommerce-order.dto';
 import { PaymentMethod } from '@prisma/client';
 import { WebsiteContext } from '@/modules/website/interfaces/website-context.interface';
 
+const SORT_OPTIONS = [
+  { label: 'Precio: menor a mayor', value: 'price_asc' },
+  { label: 'Precio: mayor a menor', value: 'price_desc' },
+  { label: 'A - Z', value: 'name_asc' },
+  { label: 'Z - A', value: 'name_desc' },
+];
+
 @Injectable()
 export class EcommerceService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Convierte un nombre en el slug que usan las URLs de la tienda.
+   * Debe dar el mismo resultado que el slug del sitemap y el del front.
+   */
+  private slugify(value: string) {
+    return (value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .replace(/\s+/g, '-');
+  }
 
   // Imprime categorias
   async getCategoriesWithProducts(website: WebsiteContext) {
@@ -303,12 +323,35 @@ export class EcommerceService {
 
     /** CATEGORY */
     if (mode === 'category' && categorySlug) {
-      where.category = {
-        name: {
-          equals: categorySlug.replace('-', ' '),
-          mode: 'insensitive',
-        },
-      };
+      // El slug de la URL se compara contra el slug del nombre de la categoría.
+      // (Antes se hacía `replace('-', ' ')`, que solo cambia el PRIMER guion y
+      // dejaba sin productos a toda categoría de tres o más palabras.)
+      const categories = await this.prisma.category.findMany({
+        where: { localId, status: 'ACTIVO' },
+        select: { id: true, name: true },
+      });
+
+      const target = this.slugify(categorySlug);
+
+      const category = categories.find(
+        (item) => this.slugify(item.name) === target,
+      );
+
+      if (!category) {
+        return {
+          success: true,
+          total: 0,
+          data: [],
+          filters: {
+            colors: [],
+            brands: [],
+            price: { min: 0, max: 0 },
+            sort: SORT_OPTIONS,
+          },
+        };
+      }
+
+      where.categoryId = category.id;
     }
 
     /** NOVEDADES */
@@ -425,12 +468,7 @@ export class EcommerceService {
         min: isFinite(minPriceFound) ? minPriceFound : 0,
         max: maxPriceFound,
       },
-      sort: [
-        { label: 'Precio: menor a mayor', value: 'price_asc' },
-        { label: 'Precio: mayor a menor', value: 'price_desc' },
-        { label: 'A - Z', value: 'name_asc' },
-        { label: 'Z - A', value: 'name_desc' },
-      ],
+      sort: SORT_OPTIONS,
     };
 
     return {
@@ -685,13 +723,17 @@ export class EcommerceService {
           },
         });
 
+        // Son errores del comprador (producto retirado o sin stock), no fallos
+        // del servidor: se devuelven como 400 para que la tienda los muestre.
         if (!variant) {
-          throw new Error(`Variante ${item.inventoryVariantId} no encontrada`);
+          throw new BadRequestException(
+            'Uno de los productos ya no está disponible. Actualiza tu carrito.',
+          );
         }
 
         if (variant.stock < item.quantity) {
-          throw new Error(
-            `Stock insuficiente para ${variant.inventory.name} (${variant.color})`,
+          throw new BadRequestException(
+            `Stock insuficiente para ${variant.inventory.name} (${variant.color}). Quedan ${variant.stock}.`,
           );
         }
 

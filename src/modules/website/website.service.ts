@@ -96,6 +96,10 @@ export class WebsiteService {
         id: true,
         name: true,
         logo: true,
+        // Se devuelven para que el CRM muestre de dónde saldrán los datos de
+        // contacto si la tienda no define los suyos.
+        phone: true,
+        email: true,
         domain: true,
         websiteEnabled: true,
         websiteName: true,
@@ -112,7 +116,7 @@ export class WebsiteService {
         websiteBanners: { orderBy: { order: 'asc' } },
         locals: {
           where: { status: Status.ACTIVO },
-          select: { id: true, name: true },
+          select: { id: true, name: true, address: true, city: true },
           orderBy: { name: 'asc' },
         },
       },
