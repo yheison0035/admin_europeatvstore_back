@@ -284,6 +284,24 @@ export class UsersService {
       throw new ForbiddenException('No tienes permisos');
     }
 
+    // Anti escalada de privilegios: nadie crea un SUPER_PLATFORM_ADMIN desde
+    // aquí; y un ADMIN no puede crear ADMIN ni SUPER_ADMIN (solo el SUPER_ADMIN
+    // de la empresa puede crear administradores).
+    if (user) {
+      const requested = dto.role ?? Role.ASESOR;
+      if (requested === Role.SUPER_PLATFORM_ADMIN) {
+        throw new ForbiddenException('No puedes asignar el rol de plataforma.');
+      }
+      if (
+        user.role === Role.ADMIN &&
+        (requested === Role.SUPER_ADMIN || requested === Role.ADMIN)
+      ) {
+        throw new ForbiddenException(
+          'No tienes permiso para asignar el rol de administrador.',
+        );
+      }
+    }
+
     const exists = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });

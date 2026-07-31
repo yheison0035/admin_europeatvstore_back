@@ -254,6 +254,10 @@ export class CompaniesService {
           plan: dto.plan ?? null,
           paidUntil: dto.paidUntil ? new Date(dto.paidUntil) : null,
           startDate: dto.startDate ? new Date(dto.startDate) : null,
+          ...(dto.domain !== undefined && { domain: dto.domain || null }),
+          ...(dto.websiteEnabled !== undefined && {
+            websiteEnabled: dto.websiteEnabled,
+          }),
         },
       });
 

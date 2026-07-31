@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsDateString,
   IsEmail,
+  IsBoolean,
   MinLength,
 } from 'class-validator';
 import { BusinessType, Status } from '@prisma/client';
@@ -15,6 +16,14 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsString()
   logo?: string;
+
+  @IsOptional()
+  @IsString()
+  domain?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  websiteEnabled?: boolean;
 
   @IsOptional()
   @IsString()

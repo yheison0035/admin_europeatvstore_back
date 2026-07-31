@@ -19,7 +19,11 @@ export class EnumsService {
   }
 
   getRoles() {
-    return this.mapEnumToOptions(Role);
+    // SUPER_PLATFORM_ADMIN es un rol de plataforma; nunca debe poder asignarse
+    // a un usuario de empresa desde el formulario de usuarios.
+    return this.mapEnumToOptions(Role).filter(
+      (r) => r.id !== Role.SUPER_PLATFORM_ADMIN,
+    );
   }
 
   getStatus() {
