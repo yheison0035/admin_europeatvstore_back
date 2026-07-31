@@ -300,6 +300,36 @@ export class CompaniesService {
       throw new NotFoundException('Empresa no encontrada');
     }
 
+    // Dominio de la tienda: se normaliza (sin protocolo, sin www, sin puerto)
+    // y se comprueba que no lo esté usando otra empresa, porque es la clave
+    // con la que la tienda sabe de quién es cada visita.
+    let domain: string | null | undefined;
+
+    if (dto.domain !== undefined) {
+      domain = dto.domain
+        ? dto.domain
+            .trim()
+            .replace(/^https?:\/\//, '')
+            .split('/')[0]
+            .split(':')[0]
+            .replace(/^www\./, '')
+            .toLowerCase()
+        : null;
+
+      if (domain) {
+        const taken = await this.prisma.company.findFirst({
+          where: { domain, NOT: { id } },
+          select: { id: true, name: true },
+        });
+
+        if (taken) {
+          throw new ConflictException(
+            `El dominio ${domain} ya lo usa la empresa ${taken.name}.`,
+          );
+        }
+      }
+    }
+
     const updated = await this.prisma.company.update({
       where: { id },
       data: {
@@ -315,6 +345,10 @@ export class CompaniesService {
         }),
         ...(dto.startDate !== undefined && {
           startDate: dto.startDate ? new Date(dto.startDate) : null,
+        }),
+        ...(domain !== undefined && { domain }),
+        ...(dto.websiteEnabled !== undefined && {
+          websiteEnabled: dto.websiteEnabled,
         }),
       },
     });

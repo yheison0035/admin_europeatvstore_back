@@ -1,4 +1,10 @@
-import { IsOptional, IsString, IsEnum, IsDateString } from 'class-validator';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsEnum,
+  IsDateString,
+} from 'class-validator';
 import { BusinessType, Status } from '@prisma/client';
 
 export class UpdateCompanyDto {
@@ -39,4 +45,14 @@ export class UpdateCompanyDto {
   @IsOptional()
   @IsDateString()
   startDate?: string;
+
+  // Dominio de su tienda online. Se normaliza y valida que no lo tenga otra.
+  @IsOptional()
+  @IsString()
+  domain?: string;
+
+  // Publica o retira la tienda de ese dominio.
+  @IsOptional()
+  @IsBoolean()
+  websiteEnabled?: boolean;
 }
