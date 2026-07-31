@@ -169,9 +169,17 @@ model Company {
   paidUntil DateTime? // fecha hasta la que la empresa está al día; si vence, se auto-suspende
   startDate DateTime? // fecha en que la empresa empezó con nosotros (si null, se usa createdAt)
 
-  // Configuración fiscal (IVA)
+  // Configuración fiscal (IVA + datos del emisor, estilo Alegra/Siigo)
   responsableIVA     Boolean @default(false) // ¿la empresa cobra IVA?
   preciosIncluyenIVA Boolean @default(false) // ¿los precios ya incluyen IVA? (por defecto no: el IVA se suma)
+  businessName       String? // razón social (si difiere del nombre comercial)
+  dv                 String? // dígito de verificación del NIT
+  personType         String? // NATURAL / JURIDICA
+  taxRegime          String? // régimen tributario (informativo para FE)
+  ciiu               String? // actividad económica (código CIIU)
+  fiscalAddress      String? // dirección fiscal
+  fiscalCity         String? // ciudad fiscal
+  defaultTaxRate     Decimal @default(0) @db.Decimal(5, 2) // % IVA por defecto para productos nuevos
 
   //////////////////////////////////////////////////
   // WEBSITE
