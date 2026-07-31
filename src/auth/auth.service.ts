@@ -47,6 +47,18 @@ export class AuthService {
       throw new UnauthorizedException('Usuario sin empresa asignada');
     }
 
+    // Suspensión por impago: si la empresa no está ACTIVA, no se permite el
+    // acceso (el SUPER_PLATFORM_ADMIN es de plataforma y no depende de empresa).
+    if (
+      user.role !== 'SUPER_PLATFORM_ADMIN' &&
+      user.company &&
+      user.company.status !== 'ACTIVO'
+    ) {
+      throw new UnauthorizedException(
+        'Tu empresa está suspendida. Contacta al administrador.',
+      );
+    }
+
     const isValid = await bcrypt.compare(dto.password, user.password);
     if (!isValid) {
       throw new UnauthorizedException('Credenciales inválidas');

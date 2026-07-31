@@ -155,6 +155,35 @@ export class CompaniesService {
     };
   }
 
+  // ACTIVAR / DESACTIVAR (suspensión por impago)
+  async setStatus(id: number, status: Status, user: any) {
+    if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+
+    if (status !== Status.ACTIVO && status !== Status.INACTIVO) {
+      throw new ForbiddenException('Estado no válido');
+    }
+
+    const found = await this.prisma.company.findUnique({ where: { id } });
+
+    if (!found || found.status === Status.ELIMINADO) {
+      throw new NotFoundException('Empresa no encontrada');
+    }
+
+    const updated = await this.prisma.company.update({
+      where: { id },
+      data: { status },
+    });
+
+    return {
+      success: true,
+      message:
+        status === Status.ACTIVO ? 'Empresa activada' : 'Empresa desactivada',
+      data: updated,
+    };
+  }
+
   // ELIMINAR (SOFT DELETE)
   async remove(id: number, user: any) {
     if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
