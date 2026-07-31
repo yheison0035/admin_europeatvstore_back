@@ -7,12 +7,7 @@ import {
   IsString,
   IsDateString,
 } from 'class-validator';
-import {
-  PaymentMethod,
-  PaymentStatus,
-  SaleStatus,
-  InvoiceType,
-} from '@prisma/client';
+import { PaymentMethod, PaymentStatus, SaleStatus } from '@prisma/client';
 
 export class CreateSaleItemDto {
   @IsOptional()
@@ -41,11 +36,6 @@ export class CreateSaleDto {
   @IsEnum(SaleStatus)
   @IsOptional()
   saleStatus?: SaleStatus;
-
-  // NORMAL (sin IVA) o ELECTRONICA (suma IVA sobre el subtotal)
-  @IsEnum(InvoiceType)
-  @IsOptional()
-  invoiceType?: InvoiceType;
 
   @IsInt()
   customerId: number;

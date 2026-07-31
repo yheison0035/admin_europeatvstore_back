@@ -19,7 +19,6 @@ import { RolesGuard } from '@/auth/guards/roles.guard';
 import { Roles } from '@/auth/roles.decorator';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
-import { CompanyConfigDto } from './dto/company-config.dto';
 import { Status } from '@prisma/client';
 
 @Controller('companies')
@@ -37,23 +36,6 @@ export class CompaniesController {
   @Get('platform/overview')
   overview(@Req() req) {
     return this.service.platformOverview(req.user);
-  }
-
-  // Configuración fiscal (la empresa edita la suya; la plataforma cualquiera).
-  // Van antes de :id para no confundir "config" con un id.
-  @Roles('SUPER_ADMIN', 'SUPER_PLATFORM_ADMIN')
-  @Get('config')
-  getConfig(@Req() req, @Query('companyId') companyId?: string) {
-    return this.service.getConfig(
-      req.user,
-      companyId ? Number(companyId) : undefined,
-    );
-  }
-
-  @Roles('SUPER_ADMIN', 'SUPER_PLATFORM_ADMIN')
-  @Put('config')
-  updateConfig(@Body() dto: CompanyConfigDto, @Req() req) {
-    return this.service.updateConfig(req.user, dto);
   }
 
   @Get(':id')

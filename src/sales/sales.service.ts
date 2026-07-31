@@ -42,36 +42,6 @@ export class SalesService {
     return subtotal - discount;
   }
 
-  // Desglosa el IVA de una línea. `ratePct` es el % (0/5/19). Si el precio ya
-  // incluye IVA, se extrae hacia atrás; si no, se suma sobre la base.
-  private computeLineTax(
-    lineGross: number,
-    ratePct: number,
-    pricesIncludeIVA: boolean,
-  ) {
-    const fraction = (ratePct || 0) / 100;
-
-    if (fraction <= 0) {
-      return { base: lineGross, taxAmount: 0, lineTotal: lineGross };
-    }
-
-    if (pricesIncludeIVA) {
-      const base = lineGross / (1 + fraction);
-      return {
-        base: Math.round(base * 100) / 100,
-        taxAmount: Math.round((lineGross - base) * 100) / 100,
-        lineTotal: lineGross,
-      };
-    }
-
-    const taxAmount = Math.round(lineGross * fraction * 100) / 100;
-    return {
-      base: lineGross,
-      taxAmount,
-      lineTotal: Math.round((lineGross + taxAmount) * 100) / 100,
-    };
-  }
-
   private validateItem(item: CreateSaleItemDto) {
     if (
       (!item.inventoryVariantId && !item.serviceId) ||
@@ -332,26 +302,8 @@ export class SalesService {
       throw new ForbiddenException('Usuario no pertenece a tu empresa');
     }
 
-    // Configuración fiscal de la empresa (para el IVA de factura electrónica).
-    const company = await this.prisma.company.findUnique({
-      where: { id: user.companyId },
-      select: {
-        responsableIVA: true,
-        preciosIncluyenIVA: true,
-        defaultTaxRate: true,
-      },
-    });
-
-    // Solo se cobra IVA si es factura ELECTRONICA y la empresa es responsable.
-    const chargesIVA =
-      dto.invoiceType === 'ELECTRONICA' && !!company?.responsableIVA;
-    const pricesIncludeIVA = !!company?.preciosIncluyenIVA;
-    const defaultRate = Number(company?.defaultTaxRate ?? 0);
-
     return this.prisma.$transaction(async (tx) => {
       let total = 0;
-      let subtotalBase = 0;
-      let taxTotal = 0;
 
       const itemsData: {
         inventoryVariantId: number | null;
@@ -360,8 +312,6 @@ export class SalesService {
         price: number;
         discount: number;
         subtotal: number;
-        taxRate: number;
-        taxAmount: number;
       }[] = [];
 
       for (const item of dto.items) {
@@ -398,13 +348,6 @@ export class SalesService {
 
           await this.stockService.decrement(variant.id, item.quantity, tx);
 
-          const ratePct = chargesIVA
-            ? Number(variant.inventory.taxRate) > 0
-              ? Number(variant.inventory.taxRate)
-              : defaultRate
-            : 0;
-          const line = this.computeLineTax(subtotal, ratePct, pricesIncludeIVA);
-
           itemsData.push({
             inventoryVariantId: variant.id,
             serviceId: null,
@@ -412,13 +355,9 @@ export class SalesService {
             price,
             discount,
             subtotal,
-            taxRate: ratePct,
-            taxAmount: line.taxAmount,
           });
 
-          subtotalBase += line.base;
-          taxTotal += line.taxAmount;
-          total += line.lineTotal;
+          total += subtotal;
         }
 
         // =========================
@@ -458,13 +397,6 @@ export class SalesService {
             discount,
           );
 
-          const ratePct = chargesIVA
-            ? Number(service.taxRate) > 0
-              ? Number(service.taxRate)
-              : defaultRate
-            : 0;
-          const line = this.computeLineTax(subtotal, ratePct, pricesIncludeIVA);
-
           itemsData.push({
             inventoryVariantId: null,
             serviceId: service.id,
@@ -472,13 +404,9 @@ export class SalesService {
             price,
             discount,
             subtotal,
-            taxRate: ratePct,
-            taxAmount: line.taxAmount,
           });
 
-          subtotalBase += line.base;
-          taxTotal += line.taxAmount;
-          total += line.lineTotal;
+          total += subtotal;
         }
       }
 
@@ -490,9 +418,6 @@ export class SalesService {
         data: {
           code: `SALE-${Date.now()}`,
           totalAmount: total,
-          invoiceType: dto.invoiceType ?? 'NORMAL',
-          subtotal: subtotalBase,
-          taxTotal: taxTotal,
           paymentMethod: dto.paymentMethod,
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',

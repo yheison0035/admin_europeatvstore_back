@@ -74,11 +74,6 @@ enum PaymentStatus {
   FIADO
 }
 
-enum InvoiceType {
-  NORMAL // solo el valor de los productos (sin IVA)
-  ELECTRONICA // se agrega IVA sobre el subtotal (factura electrónica DIAN)
-}
-
 enum SaleStatus {
   NUEVA
   EN_PROCESO
@@ -168,18 +163,6 @@ model Company {
   plan      String?
   paidUntil DateTime? // fecha hasta la que la empresa está al día; si vence, se auto-suspende
   startDate DateTime? // fecha en que la empresa empezó con nosotros (si null, se usa createdAt)
-
-  // Configuración fiscal (IVA + datos del emisor, estilo Alegra/Siigo)
-  responsableIVA     Boolean @default(false) // ¿la empresa cobra IVA?
-  preciosIncluyenIVA Boolean @default(false) // ¿los precios ya incluyen IVA? (por defecto no: el IVA se suma)
-  businessName       String? // razón social (si difiere del nombre comercial)
-  dv                 String? // dígito de verificación del NIT
-  personType         String? // NATURAL / JURIDICA
-  taxRegime          String? // régimen tributario (informativo para FE)
-  ciiu               String? // actividad económica (código CIIU)
-  fiscalAddress      String? // dirección fiscal
-  fiscalCity         String? // ciudad fiscal
-  defaultTaxRate     Decimal @default(0) @db.Decimal(5, 2) // % IVA por defecto para productos nuevos
 
   //////////////////////////////////////////////////
   // WEBSITE
@@ -380,7 +363,6 @@ model Inventory {
   purchasePrice Float
   oldPrice      Float?
   salePrice     Float
-  taxRate       Decimal @default(0) @db.Decimal(5, 2) // % IVA del producto (0/5/19)
   status        Status  @default(ACTIVO)
   barcode       String? @unique
   publishInEcommerce Boolean @default(false)
@@ -495,11 +477,6 @@ model Sale {
   paymentMethod PaymentMethod
   saleStatus    SaleStatus    @default(NUEVA)
   paymentStatus PaymentStatus @default(PENDIENTE)
-
-  // Facturación: NORMAL (sin IVA) o ELECTRONICA (suma IVA sobre el subtotal)
-  invoiceType InvoiceType @default(NORMAL)
-  subtotal    Decimal?    @db.Decimal(14, 2) // base sin IVA
-  taxTotal    Decimal     @default(0) @db.Decimal(14, 2) // IVA total
   saleDate      DateTime      @default(now())
   notes         String?
 
@@ -547,9 +524,6 @@ model SaleItem {
   price    Float
   subtotal Float
   discount Float @default(0)
-
-  taxRate   Decimal @default(0) @db.Decimal(5, 2) // % IVA aplicado a esta línea
-  taxAmount Decimal @default(0) @db.Decimal(14, 2) // IVA en pesos de esta línea
 
   saleId             Int
   inventoryVariantId Int?
@@ -625,7 +599,6 @@ model Service {
   description String?
   duration    Int
   status      Status  @default(ACTIVO)
-  taxRate     Decimal @default(0) @db.Decimal(5, 2) // % IVA del servicio (0/5/19)
 
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)

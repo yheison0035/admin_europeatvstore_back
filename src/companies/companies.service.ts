@@ -10,7 +10,6 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
-import { CompanyConfigDto } from './dto/company-config.dto';
 import { Role, Status } from '@prisma/client';
 
 @Injectable()
@@ -98,70 +97,6 @@ export class CompaniesService {
         },
         expiringSoon,
       },
-    };
-  }
-
-  // Campos que expone/edita la configuración fiscal
-  private readonly CONFIG_SELECT = {
-    id: true,
-    name: true,
-    businessName: true,
-    nit: true,
-    dv: true,
-    personType: true,
-    taxRegime: true,
-    ciiu: true,
-    fiscalAddress: true,
-    fiscalCity: true,
-    email: true,
-    phone: true,
-    responsableIVA: true,
-    preciosIncluyenIVA: true,
-    defaultTaxRate: true,
-  };
-
-  // CONFIGURACIÓN FISCAL — la empresa (SUPER_ADMIN) ve/edita la suya; la
-  // plataforma puede indicar companyId para cualquier empresa.
-  async getConfig(user: any, companyId?: number) {
-    const isPlatform = user.role === Role.SUPER_PLATFORM_ADMIN;
-    const targetId =
-      isPlatform && companyId ? Number(companyId) : user.companyId;
-
-    if (!targetId) throw new ForbiddenException('No autorizado');
-
-    const company = await this.prisma.company.findUnique({
-      where: { id: targetId },
-      select: this.CONFIG_SELECT,
-    });
-
-    if (!company) throw new NotFoundException('Empresa no encontrada');
-
-    return { success: true, data: company };
-  }
-
-  async updateConfig(user: any, dto: CompanyConfigDto) {
-    const isPlatform = user.role === Role.SUPER_PLATFORM_ADMIN;
-    const targetId =
-      isPlatform && dto.companyId ? Number(dto.companyId) : user.companyId;
-
-    if (!targetId) throw new ForbiddenException('No autorizado');
-
-    const { companyId: _c, ...fields } = dto;
-    const data: any = {};
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) data[key] = value;
-    }
-
-    const updated = await this.prisma.company.update({
-      where: { id: targetId },
-      data,
-      select: this.CONFIG_SELECT,
-    });
-
-    return {
-      success: true,
-      message: 'Configuración actualizada correctamente',
-      data: updated,
     };
   }
 
