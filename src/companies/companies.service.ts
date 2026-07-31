@@ -141,7 +141,13 @@ export class CompaniesService {
       this.prisma.company.findMany({
         where,
         include: {
-          users: true,
+          // Solo el administrador inicial (SUPER_ADMIN) y sin exponer contraseñas.
+          users: {
+            where: { role: Role.SUPER_ADMIN, status: { not: Status.ELIMINADO } },
+            select: { id: true, email: true, name: true },
+            orderBy: { id: 'asc' },
+            take: 1,
+          },
         },
         skip,
         take: limit,
@@ -150,9 +156,16 @@ export class CompaniesService {
       this.prisma.company.count({ where }),
     ]);
 
+    // Se aplana el correo de acceso del administrador para el listado.
+    const data = items.map(({ users, ...company }) => ({
+      ...company,
+      adminEmail: users[0]?.email ?? null,
+      adminName: users[0]?.name ?? null,
+    }));
+
     return {
       success: true,
-      data: items,
+      data,
       meta: {
         page,
         limit,
@@ -171,7 +184,12 @@ export class CompaniesService {
     const company = await this.prisma.company.findUnique({
       where: { id },
       include: {
-        users: true,
+        users: {
+          where: { role: Role.SUPER_ADMIN, status: { not: Status.ELIMINADO } },
+          select: { id: true, email: true, name: true },
+          orderBy: { id: 'asc' },
+          take: 1,
+        },
       },
     });
 
@@ -179,9 +197,15 @@ export class CompaniesService {
       throw new NotFoundException('Empresa no encontrada');
     }
 
+    const { users, ...rest } = company;
+
     return {
       success: true,
-      data: company,
+      data: {
+        ...rest,
+        adminEmail: users[0]?.email ?? null,
+        adminName: users[0]?.name ?? null,
+      },
     };
   }
 
