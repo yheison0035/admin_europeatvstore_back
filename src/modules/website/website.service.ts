@@ -348,13 +348,9 @@ export class WebsiteService {
       },
     });
 
-    if (!customer) {
-      throw new Error(
-        'No existe un cliente Consumidor Final para esta empresa.',
-      );
-    }
-
-    return customer.id;
+    // No se lanza error: el catálogo debe funcionar aunque falte. El checkout
+    // (createOrder) crea el "Consumidor Final" si hace falta.
+    return customer?.id ?? null;
   }
 
   private async getSystemUser(companyId: number) {
@@ -367,7 +363,9 @@ export class WebsiteService {
     });
 
     if (!user) {
-      throw new Error('No existe un usuario del sistema para esta empresa.');
+      // No se lanza error: el catálogo no depende de esto. El checkout resuelve
+      // el usuario del sistema.
+      return null;
     }
 
     return user.id;

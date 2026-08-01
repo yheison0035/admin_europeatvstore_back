@@ -2,6 +2,8 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsNumber,
+  Min,
   ValidateNested,
   ArrayMinSize,
 } from 'class-validator';
@@ -22,6 +24,12 @@ export class CreateEcommerceOrderDto {
 
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
+
+  // Costo de envío calculado en la tienda; se suma al total del pedido.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  shippingCost?: number;
 
   @IsOptional()
   @IsString()

@@ -755,6 +755,54 @@ export class EcommerceService {
         });
       }
 
+      // El costo de envío se suma al total (para que coincida con lo cobrado).
+      const shippingCost = Number(dto.shippingCost) || 0;
+      total += shippingCost;
+
+      /** ACTORES DEL CHECKOUT (se crean/resuelven si la empresa no los tenía) */
+      let crmCustomerId = website.customerId;
+      if (!crmCustomerId) {
+        const cf = await tx.customer.upsert({
+          where: {
+            document_companyId: {
+              document: '222222222222',
+              companyId: website.companyId,
+            },
+          },
+          update: {},
+          create: {
+            document: '222222222222',
+            name: 'CONSUMIDOR FINAL',
+            companyId: website.companyId,
+          },
+          select: { id: true },
+        });
+        crmCustomerId = cf.id;
+      }
+
+      let systemUserId = website.systemUserId;
+      if (!systemUserId) {
+        const su =
+          (await tx.user.findFirst({
+            where: {
+              companyId: website.companyId,
+              status: 'ACTIVO',
+              role: 'SUPER_ADMIN',
+            },
+            select: { id: true },
+          })) ||
+          (await tx.user.findFirst({
+            where: { companyId: website.companyId, status: 'ACTIVO' },
+            select: { id: true },
+          }));
+        if (!su) {
+          throw new BadRequestException(
+            'La tienda no está lista para recibir pedidos. Contacta al administrador.',
+          );
+        }
+        systemUserId = su.id;
+      }
+
       /** CREAR VENTA (SALE) */
       const sale = await tx.sale.create({
         data: {
@@ -770,11 +818,11 @@ export class EcommerceService {
           saleStatus: 'NUEVA',
           source: 'ECOMMERCE',
 
-          customerId: website.customerId,
+          customerId: crmCustomerId,
           ecommerceCustomerId: ecommerceCustomer.id,
 
           localId: localId,
-          userId: website.systemUserId,
+          userId: systemUserId,
 
           wompiTransactionId: dto.wompiTransactionId ?? null,
           wompiReference: dto.wompiReference ?? null,
