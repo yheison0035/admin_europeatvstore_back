@@ -292,8 +292,11 @@ export class ServicesService {
 
     if (!service) throw new NotFoundException();
 
-    await this.prisma.service.delete({
+    // Borrado lógico (coherente con el listado que filtra ELIMINADO y evita el
+    // fallo de clave foránea si el servicio ya tiene citas o ventas asociadas).
+    await this.prisma.service.update({
       where: { id },
+      data: { status: 'ELIMINADO' },
     });
 
     await this.audit.log({

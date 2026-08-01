@@ -199,6 +199,8 @@ export class AppointmentsService {
         customerId: dto.customerId,
         localId: dto.localId,
         companyId: user.companyId,
+        // Respeta el estado elegido (si no llega, Prisma usa PENDIENTE).
+        ...(dto.status && { status: dto.status }),
       },
     });
 
