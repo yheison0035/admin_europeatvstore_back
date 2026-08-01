@@ -397,6 +397,32 @@ export class InventoryService {
     return { success: true, data: { ...product, stock } };
   }
 
+  // Verifica que la categoría, marca y proveedor indicados pertenezcan a la
+  // empresa del usuario (evita asignar referencias de otra empresa).
+  private async assertRefsOwnership(dto: any, companyId: number) {
+    if (dto.categoryId) {
+      const ok = await this.prisma.category.findFirst({
+        where: { id: dto.categoryId, companyId },
+        select: { id: true },
+      });
+      if (!ok) throw new ForbiddenException('La categoría no es de tu empresa');
+    }
+    if (dto.brandId) {
+      const ok = await this.prisma.brand.findFirst({
+        where: { id: dto.brandId, companyId },
+        select: { id: true },
+      });
+      if (!ok) throw new ForbiddenException('La marca no es de tu empresa');
+    }
+    if (dto.providerId) {
+      const ok = await this.prisma.provider.findFirst({
+        where: { id: dto.providerId, companyId },
+        select: { id: true },
+      });
+      if (!ok) throw new ForbiddenException('El proveedor no es de tu empresa');
+    }
+  }
+
   async create(dto: CreateInventoryDto, user: any) {
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.RECEPCIONISTA])) {
       throw new ForbiddenException('No autorizado');
@@ -404,6 +430,9 @@ export class InventoryService {
 
     // Límite de productos según el plan de la empresa.
     await this.planLimits.assertCanCreate(user.companyId, 'products');
+
+    // La categoría/marca/proveedor deben ser de la empresa.
+    await this.assertRefsOwnership(dto, user.companyId);
 
     if (dto.localId) {
       const local = await this.prisma.local.findFirst({
@@ -512,6 +541,9 @@ export class InventoryService {
     }
 
     const before = (await this.findOne(id, user)).data;
+
+    // La categoría/marca/proveedor deben ser de la empresa.
+    await this.assertRefsOwnership(dto, user.companyId);
 
     const updated = await this.prisma.inventory.update({
       where: { id },

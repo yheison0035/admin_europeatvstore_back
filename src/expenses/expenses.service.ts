@@ -234,12 +234,14 @@ export class ExpensesService {
       throw new ForbiddenException('No tienes permisos');
     }
 
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
     const found = await this.prisma.expense.findFirst({
       where: {
         id,
         local: {
           companyId: user.companyId,
         },
+        ...(localIds !== null && { localId: { in: localIds } }),
       },
     });
 
@@ -285,12 +287,14 @@ export class ExpensesService {
       throw new ForbiddenException('No tienes permisos');
     }
 
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
     const found = await this.prisma.expense.findFirst({
       where: {
         id,
         local: {
           companyId: user.companyId,
         },
+        ...(localIds !== null && { localId: { in: localIds } }),
       },
     });
 

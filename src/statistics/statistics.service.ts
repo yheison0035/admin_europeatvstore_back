@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { PlanLimitsService } from '@/common/plan-limits.service';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
 
 const TZ = 'America/Bogota';
 const CONSUMIDOR_FINAL = '222222222222';
@@ -78,7 +79,19 @@ export class StatisticsService {
     const prevExpStart = new Date(expStart.getTime() - expLen);
     const prevExpEnd = expStart;
 
-    const localFilter = localId ? { localId } : {};
+    // Aislamiento por sede: un ADMIN limitado a ciertas sedes solo ve las
+    // suyas. accessible = null significa acceso total (SUPER_ADMIN/COORDINADOR).
+    const accessible = await getAccessibleLocalIds(this.prisma, user);
+    let localFilter: any = {};
+    if (localId) {
+      // Si pide una sede que no gestiona, no se le devuelven datos.
+      localFilter =
+        accessible && !accessible.includes(localId)
+          ? { localId: { in: [] } }
+          : { localId };
+    } else if (accessible) {
+      localFilter = { localId: { in: accessible } };
+    }
 
     // Los ingresos solo cuentan ventas realmente cobradas: se excluye el
     // fiado (y cualquier estado no pagado) hasta que la venta pase a PAGADA.
