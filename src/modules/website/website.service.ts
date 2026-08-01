@@ -14,12 +14,14 @@ import {
   CreateWebsiteBannerDto,
   UpdateWebsiteBannerDto,
 } from './dto/website-banner.dto';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 
 @Injectable()
 export class WebsiteService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cloudinary: CloudinaryService,
+    private readonly planLimits: PlanLimitsService,
   ) {}
 
   normalizeDomain(host: string): string {
@@ -134,6 +136,12 @@ export class WebsiteService {
       user,
       companyId,
     );
+
+    // La tienda online requiere plan Altura o superior (la plataforma no se
+    // restringe).
+    if (!isPlatform) {
+      await this.planLimits.assertModule(id, 'website');
+    }
 
     const {
       // Solo la plataforma toca dominio y publicación: son infraestructura.

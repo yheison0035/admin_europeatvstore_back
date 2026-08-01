@@ -19,10 +19,16 @@ export class EnumsService {
   }
 
   getRoles() {
-    // SUPER_PLATFORM_ADMIN es un rol de plataforma; nunca debe poder asignarse
-    // a un usuario de empresa desde el formulario de usuarios.
+    // Roles NO asignables desde el formulario de usuarios:
+    // - SUPER_PLATFORM_ADMIN: rol de plataforma, solo existe uno (el dueño).
+    // - SUPER_ADMIN: administrador principal, se crea automáticamente con la
+    //   empresa y solo puede haber uno por empresa.
+    const noAsignables: Role[] = [
+      Role.SUPER_PLATFORM_ADMIN,
+      Role.SUPER_ADMIN,
+    ];
     return this.mapEnumToOptions(Role).filter(
-      (r) => r.id !== Role.SUPER_PLATFORM_ADMIN,
+      (r) => !noAsignables.includes(r.id as Role),
     );
   }
 

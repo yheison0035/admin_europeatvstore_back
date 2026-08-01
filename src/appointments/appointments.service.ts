@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '@/prisma.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { applyLocalFilter } from '@/common/local-filter.util';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { minutesToColombiaHour, timeToMinutes } from '@/utils/format';
 import { AuditService } from '@/audit/audit.service';
@@ -15,6 +16,7 @@ export class AppointmentsService {
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
+    private planLimits: PlanLimitsService,
   ) {}
 
   async findAllPaginated(user: any, query: any) {
@@ -153,6 +155,8 @@ export class AppointmentsService {
   }
 
   async create(dto: CreateAppointmentDto, user: any) {
+    await this.planLimits.assertModule(user.companyId, 'appointments');
+
     const service = await this.prisma.service.findUnique({
       where: { id: dto.serviceId },
     });

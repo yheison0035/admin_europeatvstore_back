@@ -239,6 +239,8 @@ export class UsersService {
             phone: true,
             status: true,
             type: true,
+            // El plan gobierna qué funciones/módulos ve la empresa.
+            plan: true,
             // El CRM las usa para mostrar (o no) el módulo de tienda online.
             websiteEnabled: true,
             domain: true,
@@ -299,6 +301,24 @@ export class UsersService {
         throw new ForbiddenException(
           'No tienes permiso para asignar el rol de administrador.',
         );
+      }
+
+      // Solo puede haber UN SUPER_ADMIN por empresa (el administrador principal
+      // que se crea con la empresa). No se permiten más.
+      if (requested === Role.SUPER_ADMIN && user.companyId) {
+        const yaExiste = await this.prisma.user.findFirst({
+          where: {
+            companyId: user.companyId,
+            role: Role.SUPER_ADMIN,
+            status: { not: Status.ELIMINADO },
+          },
+          select: { id: true },
+        });
+        if (yaExiste) {
+          throw new ForbiddenException(
+            'Ya existe el administrador principal de la empresa. Solo puede haber uno.',
+          );
+        }
       }
     }
 

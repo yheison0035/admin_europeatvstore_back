@@ -10,6 +10,7 @@ import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { CreateExpenseDto } from './dto/create-expenses.dto';
 import { UpdateExpenseDto } from './dto/update-expenses.dto';
 import { applyLocalFilter } from '@/common/local-filter.util';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 import { AuditService } from '@/audit/audit.service';
 
 @Injectable()
@@ -17,9 +18,12 @@ export class ExpensesService {
   constructor(
     private readonly prisma: PrismaService,
     private audit: AuditService,
+    private planLimits: PlanLimitsService,
   ) {}
 
   async findAllPaginated(user: any, query: any) {
+    await this.planLimits.assertModule(user.companyId, 'expenses');
+
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;

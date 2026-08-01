@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma.service';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
@@ -15,6 +16,7 @@ export class ServicesService {
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
+    private planLimits: PlanLimitsService,
   ) {}
 
   async findAllPaginated(user: any, query: any) {
@@ -202,6 +204,8 @@ export class ServicesService {
   }
 
   async create(dto: CreateServiceDto, user: any) {
+    await this.planLimits.assertModule(user.companyId, 'services');
+
     const service = await this.prisma.service.create({
       data: {
         name: dto.name,

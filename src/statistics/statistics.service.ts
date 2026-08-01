@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 
 const TZ = 'America/Bogota';
 const CONSUMIDOR_FINAL = '222222222222';
@@ -43,9 +44,13 @@ function pairs(map: Record<string, number>, keyName: string) {
 
 @Injectable()
 export class StatisticsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private planLimits: PlanLimitsService,
+  ) {}
 
   async getDashboard(user: any, dto: any) {
+    await this.planLimits.assertModule(user.companyId, 'statistics');
     const companyId = user.companyId;
     const localId = dto.localId ? Number(dto.localId) : null;
 

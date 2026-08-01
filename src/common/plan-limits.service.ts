@@ -27,6 +27,39 @@ const PLAN_NAMES: Record<string, string> = {
   ORBITA: 'Órbita',
 };
 
+// Orden de los planes (para comparar niveles).
+const PLAN_RANK: Record<string, number> = {
+  DESPEGUE: 1,
+  IMPULSO: 2,
+  ALTURA: 3,
+  ORBITA: 4,
+};
+
+// Plan mínimo requerido por módulo/función. Los módulos que no aparecen aquí
+// son base (disponibles en todos los planes). Debe coincidir con el front
+// (src/lib/plans.js). Empresas sin plan o con plan desconocido = sin gating.
+export const MODULE_MIN_PLAN: Record<string, string> = {
+  expenses: 'IMPULSO',
+  appointments: 'IMPULSO',
+  services: 'IMPULSO',
+  users: 'IMPULSO',
+  statistics: 'IMPULSO',
+  website: 'ALTURA',
+  shipping: 'ALTURA',
+};
+
+export function planAllowsModule(
+  plan: string | null | undefined,
+  moduleKey: string,
+): boolean {
+  const min = MODULE_MIN_PLAN[moduleKey];
+  if (!min) return true; // módulo base
+  if (!plan) return true; // sin plan → sin gating (empresas existentes)
+  const rank = PLAN_RANK[plan];
+  if (!rank) return true; // plan desconocido → sin gating
+  return rank >= PLAN_RANK[min];
+}
+
 export type PlanResource = 'users' | 'locals' | 'products' | 'customers';
 
 const RESOURCE_LABEL: Record<PlanResource, string> = {
@@ -70,6 +103,29 @@ export class PlanLimitsService {
           'Actualiza tu plan para agregar más.',
       );
     }
+  }
+
+  // Lanza ForbiddenException si el plan de la empresa NO incluye el módulo.
+  // Empresas sin plan (o plan desconocido) no se restringen.
+  async assertModule(
+    companyId: number | null | undefined,
+    moduleKey: string,
+  ): Promise<void> {
+    if (!companyId) return;
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { plan: true },
+    });
+
+    if (planAllowsModule(company?.plan, moduleKey)) return;
+
+    const min = MODULE_MIN_PLAN[moduleKey];
+    throw new ForbiddenException(
+      `Tu plan actual no incluye esta función. Disponible desde el plan ${
+        PLAN_NAMES[min] ?? min
+      }.`,
+    );
   }
 
   private countResource(
