@@ -44,9 +44,13 @@ export const MODULE_MIN_PLAN: Record<string, string> = {
   services: 'IMPULSO',
   users: 'IMPULSO',
   statistics: 'IMPULSO',
+  fiado: 'IMPULSO', // ventas a crédito / fiado
   website: 'ALTURA',
   shipping: 'ALTURA',
 };
+
+// Orden ascendente de planes.
+export const PLAN_ORDER = ['DESPEGUE', 'IMPULSO', 'ALTURA', 'ORBITA'];
 
 export function planAllowsModule(
   plan: string | null | undefined,
@@ -98,11 +102,32 @@ export class PlanLimitsService {
     const count = await this.countResource(companyId, resource);
     if (count >= max) {
       const planName = PLAN_NAMES[plan] ?? plan;
-      throw new ForbiddenException(
-        `Tu plan ${planName} permite hasta ${max} ${RESOURCE_LABEL[resource]}. ` +
-          'Actualiza tu plan para agregar más.',
-      );
+      // Siguiente plan que sube (o quita) el límite de este recurso.
+      const requiredPlan = this.nextPlanForResource(plan, resource, max);
+      throw new ForbiddenException({
+        error: 'PLAN_LIMIT',
+        requiredPlan,
+        resource,
+        message:
+          `Tu plan ${planName} permite hasta ${max} ${RESOURCE_LABEL[resource]}. ` +
+          (requiredPlan
+            ? `Mejora al plan ${PLAN_NAMES[requiredPlan]} para agregar más.`
+            : 'Contacta a soporte para ampliar tu plan.'),
+      });
     }
+  }
+
+  private nextPlanForResource(
+    plan: string,
+    resource: PlanResource,
+    currentMax: number,
+  ): string | null {
+    const idx = PLAN_ORDER.indexOf(plan);
+    for (let i = idx + 1; i < PLAN_ORDER.length; i++) {
+      const l = PLAN_LIMITS[PLAN_ORDER[i]][resource];
+      if (l == null || l > currentMax) return PLAN_ORDER[i];
+    }
+    return null;
   }
 
   // Lanza ForbiddenException si el plan de la empresa NO incluye el módulo.
@@ -121,11 +146,14 @@ export class PlanLimitsService {
     if (planAllowsModule(company?.plan, moduleKey)) return;
 
     const min = MODULE_MIN_PLAN[moduleKey];
-    throw new ForbiddenException(
-      `Tu plan actual no incluye esta función. Disponible desde el plan ${
+    throw new ForbiddenException({
+      error: 'PLAN_FEATURE',
+      requiredPlan: min,
+      module: moduleKey,
+      message: `Esta función está disponible desde el plan ${
         PLAN_NAMES[min] ?? min
-      }.`,
-    );
+      }. Mejora tu plan para usarla.`,
+    });
   }
 
   private countResource(

@@ -10,6 +10,7 @@ import { UpdateSaleDto } from './dto/update-sale.dto';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { PaymentMethod, PaymentStatus, Status } from '@prisma/client';
 import { StockService } from '@/inventory/stock.service';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 import {
   formatLocalDate,
   getDayRange,
@@ -24,7 +25,17 @@ export class SalesService {
     private prisma: PrismaService,
     private stockService: StockService,
     private audit: AuditService,
+    private planLimits: PlanLimitsService,
   ) {}
+
+  // Fiado / crédito solo desde el plan Impulso. Se valida al crear/editar venta.
+  private async assertFiadoAllowed(dto: any, user: any) {
+    const usaFiado =
+      dto?.paymentStatus === 'FIADO' || dto?.paymentMethod === 'CREDITO';
+    if (usaFiado) {
+      await this.planLimits.assertModule(user.companyId, 'fiado');
+    }
+  }
 
   private calculateSubtotal(price: number, quantity: number, discount = 0) {
     if (discount < 0) {
@@ -280,6 +291,9 @@ export class SalesService {
       throw new BadRequestException('Faltan datos obligatorios');
     }
 
+    // El fiado/crédito requiere plan Impulso o superior.
+    await this.assertFiadoAllowed(dto, user);
+
     const local = await this.prisma.local.findFirst({
       where: {
         id: dto.localId,
@@ -453,6 +467,9 @@ export class SalesService {
   }
 
   async update(id: number, dto: UpdateSaleDto, user: any) {
+    // El fiado/crédito requiere plan Impulso o superior.
+    await this.assertFiadoAllowed(dto, user);
+
     return this.prisma.$transaction(async (tx) => {
       const sale = await tx.sale.findUnique({
         where: { id },
