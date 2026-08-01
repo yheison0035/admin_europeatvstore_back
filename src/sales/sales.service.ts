@@ -926,7 +926,9 @@ export class SalesService {
     const sales = await this.prisma.sale.findMany({
       where: {
         localId: Number(localId),
-        userId: Number(userId),
+        // El asesor es opcional: si no se indica, se agregan las ventas de
+        // todos los vendedores del rango (reporte semanal completo).
+        ...(userId ? { userId: Number(userId) } : {}),
         saleDate: {
           gte: start,
           lte: end,
