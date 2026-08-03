@@ -211,14 +211,16 @@ export class SalesService {
     };
   }
 
-  // Clientes que no vuelven: su última compra fue hace entre minDays y maxDays
-  // (por defecto 10 a 15 días). Pensado para reactivarlos por WhatsApp desde
-  // "ventas realizadas". Excluye ventas anuladas y el cliente genérico.
-  async getInactiveCustomers(user: any, minDays = 10, maxDays = 15) {
+  // Clientes por reactivar: su última visita fue hace `minDays` días o más (por
+  // defecto 20; un hombre rara vez tarda tanto en volver a motilarse). Si volvió
+  // antes de ese umbral, no aparece. Marca `contacted` si ya se le escribió en
+  // los últimos 7 días. Ordenados del que lleva más tiempo sin volver primero.
+  async getInactiveCustomers(user: any, minDays = 20, maxDays?: number) {
     const localIds = await getAccessibleLocalIds(this.prisma, user);
     const now = Date.now();
-    const oldest = new Date(now - maxDays * 86400000); // límite más antiguo
-    const newest = new Date(now - minDays * 86400000); // límite más reciente
+    const cutoff = new Date(now - minDays * 86400000); // última visita <= aquí
+    const oldest = maxDays ? new Date(now - maxDays * 86400000) : null;
+    const WEEK = 7 * 86400000;
 
     // Sale no tiene companyId: se escopa por la empresa del local relacionado.
     const where: any = {
@@ -237,10 +239,13 @@ export class SalesService {
       _count: { _all: true },
     });
 
-    // Última visita dentro de la ventana [oldest, newest].
+    // Última visita hace `minDays` días o más (y no más antigua que maxDays si se pasó).
     const candidates = grouped.filter((g) => {
       const last = g._max.saleDate;
-      return last && last >= oldest && last <= newest;
+      if (!last) return false;
+      if (last > cutoff) return false;
+      if (oldest && last < oldest) return false;
+      return true;
     });
 
     if (!candidates.length) return { success: true, data: [] };
@@ -251,7 +256,13 @@ export class SalesService {
         companyId: user.companyId,
         phone: { not: null },
       },
-      select: { id: true, name: true, phone: true, document: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        document: true,
+        lastWinbackAt: true,
+      },
     });
 
     const map = new Map(customers.map((c) => [c.id, c]));
@@ -263,6 +274,10 @@ export class SalesService {
         if (!cust.phone || cust.document === '222222222222') return null;
         const last = c._max.saleDate as Date;
         const days = Math.floor((now - last.getTime()) / 86400000);
+        // "Escrito" si se le contactó dentro de la última semana.
+        const contacted =
+          !!cust.lastWinbackAt &&
+          now - new Date(cust.lastWinbackAt).getTime() <= WEEK;
         return {
           id: cust.id,
           name: cust.name,
@@ -270,12 +285,32 @@ export class SalesService {
           lastVisit: last.toISOString(),
           days,
           visits: c._count._all,
+          contacted,
+          contactedAt: contacted
+            ? new Date(cust.lastWinbackAt as Date).toISOString()
+            : null,
         };
       })
       .filter(Boolean)
       .sort((a: any, b: any) => b.days - a.days);
 
     return { success: true, data };
+  }
+
+  // Registra que ya se le escribió al cliente (campaña de reactivación).
+  async markWinbackContacted(customerId: number, user: any) {
+    const cust = await this.prisma.customer.findFirst({
+      where: { id: customerId, companyId: user.companyId },
+    });
+    if (!cust) throw new NotFoundException('Cliente no encontrado');
+
+    const now = new Date();
+    await this.prisma.customer.update({
+      where: { id: customerId },
+      data: { lastWinbackAt: now },
+    });
+
+    return { success: true, data: { id: customerId, contactedAt: now.toISOString() } };
   }
 
   async findOne(id: number, user: any) {

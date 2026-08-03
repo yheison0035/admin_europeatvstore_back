@@ -275,6 +275,9 @@ model Customer {
   address       String?
   status        Status  @default(ACTIVO)
 
+  // Última vez que se le escribió para reactivarlo (campaña de win-back).
+  lastWinbackAt DateTime?
+
   localId Int?
   local   Local? @relation(fields: [localId], references: [id], onDelete: SetNull)
 

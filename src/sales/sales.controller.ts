@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   Put,
+  Patch,
   Query,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
@@ -37,9 +38,16 @@ export class SalesController {
   @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
   @Get('inactive-customers')
   inactiveCustomers(@Req() req, @Query() query) {
-    const minDays = Number(query.minDays) || 10;
-    const maxDays = Number(query.maxDays) || 15;
+    const minDays = Number(query.minDays) || 20;
+    const maxDays = query.maxDays ? Number(query.maxDays) : undefined;
     return this.salesService.getInactiveCustomers(req.user, minDays, maxDays);
+  }
+
+  // Marca que ya se le escribió al cliente para reactivarlo.
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
+  @Patch('inactive-customers/:id/contacted')
+  markContacted(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.salesService.markWinbackContacted(id, req.user);
   }
 
   @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
