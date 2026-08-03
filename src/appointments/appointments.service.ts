@@ -358,6 +358,36 @@ export class AppointmentsService {
     return updated;
   }
 
+  // Marca (o desmarca) que la cita fue confirmada con el cliente.
+  async setClientConfirmed(id: number, confirmed: boolean, user: any) {
+    const appt = await this.prisma.appointment.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    if (!appt) throw new NotFoundException('Cita no encontrada');
+
+    const updated = await this.prisma.appointment.update({
+      where: { id },
+      data: { clientConfirmed: confirmed },
+    });
+
+    const changes = this.audit.diff(appt, { clientConfirmed: confirmed }, [
+      'clientConfirmed',
+    ]);
+    await this.audit.log({
+      entity: 'appointment',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes,
+    });
+
+    return {
+      success: true,
+      data: { id, clientConfirmed: updated.clientConfirmed },
+    };
+  }
+
   async remove(id: number, user: any) {
     const appt = await this.prisma.appointment.findFirst({
       where: { id, companyId: user.companyId },
@@ -491,6 +521,7 @@ export class AppointmentsService {
         status: a.status,
         startTime: a.startTime,
         notes: a.notes,
+        clientConfirmed: a.clientConfirmed,
         startAt: start.toISOString(),
         endAt: end.toISOString(),
         service: a.service,

@@ -669,6 +669,9 @@ model Appointment {
   status AppointmentStatus @default(CONFIRMADA)
   notes  String?
 
+  // Confirmación explícita con el cliente (p. ej. tras contactarlo por WhatsApp).
+  clientConfirmed Boolean @default(false)
+
   serviceId Int
   service   Service @relation(fields: [serviceId], references: [id])
 

@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Param,
   Put,
+  Patch,
   Delete,
   Query,
 } from '@nestjs/common';
@@ -57,6 +58,16 @@ export class AppointmentsController {
     @Req() req,
   ) {
     return this.service.update(id, dto, req.user);
+  }
+
+  // Marca la cita como confirmada (o no) con el cliente. Body: { confirmed }.
+  @Patch(':id/client-confirm')
+  clientConfirm(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { confirmed?: boolean },
+    @Req() req,
+  ) {
+    return this.service.setClientConfirmed(id, body?.confirmed !== false, req.user);
   }
 
   @Delete(':id')
