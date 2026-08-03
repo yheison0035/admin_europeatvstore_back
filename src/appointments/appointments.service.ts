@@ -2,7 +2,10 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { AppointmentStatus } from '@prisma/client';
 import { PrismaService } from '@/prisma.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { applyLocalFilter } from '@/common/local-filter.util';
@@ -11,15 +14,48 @@ import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { minutesToColombiaHour, timeToMinutes } from '@/utils/format';
 import { AuditService } from '@/audit/audit.service';
 
+// Colombia es UTC-5 fijo (sin horario de verano).
+const COLOMBIA_OFFSET_MIN = 300;
+// Estados "activos" que pueden avanzar automáticamente con el tiempo.
+const ACTIVE_STATUSES: AppointmentStatus[] = [
+  AppointmentStatus.PENDIENTE,
+  AppointmentStatus.CONFIRMADA,
+  AppointmentStatus.EN_PROCESO,
+];
+
 @Injectable()
 export class AppointmentsService {
+  private readonly logger = new Logger(AppointmentsService.name);
+
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
     private planLimits: PlanLimitsService,
   ) {}
 
+  // Instante UTC real de inicio de una cita. `date` se guarda como medianoche
+  // UTC del día (calendario Colombia) y `startTime` es la hora local Colombia,
+  // así que sumamos los minutos locales + el offset de Colombia.
+  private startInstant(date: Date, startTime: string): Date {
+    const localMin = timeToMinutes(startTime);
+    return new Date(
+      date.getTime() + (localMin + COLOMBIA_OFFSET_MIN) * 60000,
+    );
+  }
+
+  // Medianoche UTC del día de hoy en calendario Colombia (base de `date`).
+  private colombiaTodayMidnightUtc(): Date {
+    const col = new Date(Date.now() - COLOMBIA_OFFSET_MIN * 60000);
+    return new Date(
+      Date.UTC(col.getUTCFullYear(), col.getUTCMonth(), col.getUTCDate()),
+    );
+  }
+
   async findAllPaginated(user: any, query: any) {
+    // Antes de listar, actualiza estados vencidos de esta empresa para que la
+    // tabla siempre refleje EN_PROCESO / COMPLETADA sin esperar al cron.
+    await this.runAutoTransitions(user.companyId).catch(() => null);
+
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -199,8 +235,8 @@ export class AppointmentsService {
         customerId: dto.customerId,
         localId: dto.localId,
         companyId: user.companyId,
-        // Respeta el estado elegido (si no llega, Prisma usa PENDIENTE).
-        ...(dto.status && { status: dto.status }),
+        // Toda cita nace CONFIRMADA salvo que se elija otro estado en el form.
+        status: dto.status || AppointmentStatus.CONFIRMADA,
       },
     });
 
@@ -339,6 +375,138 @@ export class AppointmentsService {
     });
 
     return { success: true };
+  }
+
+  // Avanza automáticamente los estados de las citas según la hora actual:
+  //   - Llegada su hora de inicio (y aún no termina) → EN_PROCESO
+  //   - Pasada su hora de fin (inicio + duración del servicio) → COMPLETADA
+  // Nunca toca estados manuales/terminales (CANCELADA, NO_ASISTIO). Si se pasa
+  // companyId solo procesa esa empresa; sin él, todas (uso del cron).
+  async runAutoTransitions(companyId?: number) {
+    const now = new Date();
+
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        status: { in: ACTIVE_STATUSES },
+        ...(companyId ? { companyId } : {}),
+      },
+      include: { service: { select: { duration: true } } },
+    });
+
+    const toEnProceso: number[] = [];
+    const toCompletada: number[] = [];
+
+    for (const a of appointments) {
+      const start = this.startInstant(a.date, a.startTime);
+      const end = new Date(
+        start.getTime() + (a.service?.duration || 0) * 60000,
+      );
+
+      if (now >= end) {
+        if (a.status !== AppointmentStatus.COMPLETADA) toCompletada.push(a.id);
+      } else if (now >= start) {
+        if (a.status !== AppointmentStatus.EN_PROCESO) toEnProceso.push(a.id);
+      }
+    }
+
+    if (toEnProceso.length) {
+      await this.prisma.appointment.updateMany({
+        where: { id: { in: toEnProceso } },
+        data: { status: AppointmentStatus.EN_PROCESO },
+      });
+    }
+
+    if (toCompletada.length) {
+      await this.prisma.appointment.updateMany({
+        where: { id: { in: toCompletada } },
+        data: { status: AppointmentStatus.COMPLETADA },
+      });
+    }
+
+    return {
+      enProceso: toEnProceso.length,
+      completadas: toCompletada.length,
+    };
+  }
+
+  // Cron global: mantiene los estados al día aunque nadie abra la tabla.
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleAutoTransitionsCron() {
+    try {
+      const res = await this.runAutoTransitions();
+      if (res.enProceso || res.completadas) {
+        this.logger.log(
+          `Auto-transición: ${res.enProceso} en proceso, ${res.completadas} completadas`,
+        );
+      }
+    } catch (e: any) {
+      this.logger.error(`Auto-transición falló: ${e?.message}`);
+    }
+  }
+
+  // Agenda para el modal de inicio de sesión y los recordatorios: citas de hoy
+  // y mañana (calendario Colombia), excluyendo las canceladas. Solo empresas
+  // con el módulo de citas habilitado por su plan.
+  async getAgenda(user: any) {
+    await this.planLimits.assertModule(user.companyId, 'appointments');
+    await this.runAutoTransitions(user.companyId).catch(() => null);
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    const today = this.colombiaTodayMidnightUtc();
+    const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
+    const dayAfter = new Date(today.getTime() + 48 * 3600 * 1000);
+
+    const where: any = {
+      companyId: user.companyId,
+      date: { gte: today, lt: dayAfter },
+      status: { not: AppointmentStatus.CANCELADA },
+    };
+
+    applyLocalFilter(where, user, localIds);
+
+    const items = await this.prisma.appointment.findMany({
+      where,
+      include: {
+        service: { select: { id: true, name: true, duration: true } },
+        barber: { select: { id: true, name: true } },
+        customer: { select: { id: true, name: true, phone: true } },
+        local: { select: { id: true, name: true } },
+      },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+    });
+
+    const tomorrowMs = tomorrow.getTime();
+    const todayList: any[] = [];
+    const tomorrowList: any[] = [];
+
+    for (const a of items) {
+      const start = this.startInstant(a.date, a.startTime);
+      const end = new Date(
+        start.getTime() + (a.service?.duration || 0) * 60000,
+      );
+
+      const item = {
+        id: a.id,
+        status: a.status,
+        startTime: a.startTime,
+        notes: a.notes,
+        startAt: start.toISOString(),
+        endAt: end.toISOString(),
+        service: a.service,
+        barber: a.barber,
+        customer: a.customer,
+        local: a.local,
+      };
+
+      if (a.date.getTime() < tomorrowMs) todayList.push(item);
+      else tomorrowList.push(item);
+    }
+
+    return {
+      success: true,
+      data: { today: todayList, tomorrow: tomorrowList },
+    };
   }
 
   // Devuelve los horarios disponibles para un barbero, fecha y servicio dado

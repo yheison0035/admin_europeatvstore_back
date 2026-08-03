@@ -33,6 +33,13 @@ export class AppointmentsController {
     return this.service.getAvailability(query);
   }
 
+  // Agenda de hoy + mañana (modal de inicio y recordatorios). Debe declararse
+  // antes de :id para que "agenda" no se interprete como un id.
+  @Get('agenda')
+  agenda(@Req() req) {
+    return this.service.getAgenda(req.user);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.findOne(id, req.user);

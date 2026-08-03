@@ -666,7 +666,7 @@ model Appointment {
   date      DateTime
   startTime String
 
-  status AppointmentStatus @default(PENDIENTE)
+  status AppointmentStatus @default(CONFIRMADA)
   notes  String?
 
   serviceId Int
