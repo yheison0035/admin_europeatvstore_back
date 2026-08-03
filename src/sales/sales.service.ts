@@ -220,11 +220,14 @@ export class SalesService {
     const oldest = new Date(now - maxDays * 86400000); // límite más antiguo
     const newest = new Date(now - minDays * 86400000); // límite más reciente
 
+    // Sale no tiene companyId: se escopa por la empresa del local relacionado.
     const where: any = {
-      companyId: user.companyId,
       customerId: { not: null },
       saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
     };
+    if (user.role !== 'SUPER_PLATFORM_ADMIN') {
+      where.local = { is: { companyId: user.companyId } };
+    }
     applyLocalFilter(where, user, localIds, 'sale');
 
     const grouped = await this.prisma.sale.groupBy({
