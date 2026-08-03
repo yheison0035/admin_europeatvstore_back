@@ -44,7 +44,9 @@ export class SalesController {
     return this.salesService.create(dto, req.user);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
+  // El RECEPCIONISTA puede crear ventas (Realizar Factura) pero NO editar las
+  // ventas ya realizadas.
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
