@@ -250,9 +250,11 @@ export class SalesService {
 
     if (!candidates.length) return { success: true, data: [] };
 
+    const candidateIds = candidates.map((c) => c.customerId as number);
+
     const customers = await this.prisma.customer.findMany({
       where: {
-        id: { in: candidates.map((c) => c.customerId as number) },
+        id: { in: candidateIds },
         companyId: user.companyId,
         phone: { not: null },
       },
@@ -266,6 +268,36 @@ export class SalesService {
     });
 
     const map = new Map(customers.map((c) => [c.id, c]));
+
+    // Último servicio realizado por cada cliente: se toma de su venta más
+    // reciente (los ítems con servicio). Sirve para que la recepcionista sepa
+    // qué se hizo y agende más rápido.
+    const recentSales = await this.prisma.sale.findMany({
+      where: { ...where, customerId: { in: candidateIds } },
+      orderBy: { saleDate: 'desc' },
+      select: {
+        customerId: true,
+        items: {
+          where: { serviceId: { not: null } },
+          select: { service: { select: { name: true } } },
+        },
+      },
+    });
+
+    // Vienen ordenadas por fecha desc: para cada cliente se guarda el servicio
+    // de su venta más reciente que tenga servicios (si la última fue solo de
+    // productos, se busca hacia atrás).
+    const lastServiceByCustomer = new Map<number, string>();
+    for (const s of recentSales) {
+      if (s.customerId == null) continue;
+      if (lastServiceByCustomer.has(s.customerId)) continue;
+      const names = s.items
+        .map((it) => it.service?.name)
+        .filter((n): n is string => !!n);
+      if (names.length) {
+        lastServiceByCustomer.set(s.customerId, names.join(', '));
+      }
+    }
 
     const data = candidates
       .map((c) => {
@@ -285,6 +317,7 @@ export class SalesService {
           lastVisit: last.toISOString(),
           days,
           visits: c._count._all,
+          lastService: lastServiceByCustomer.get(cust.id) || null,
           contacted,
           contactedAt: contacted
             ? new Date(cust.lastWinbackAt as Date).toISOString()
