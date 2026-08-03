@@ -82,11 +82,25 @@ export class InventoryController {
     @Param('id', ParseIntPipe) id: number,
     @UploadedFiles() files: Express.Multer.File[],
     @Body('keepImageIds') keepImageIds: string[],
+    @Body('order') order: string[],
     @Req() req,
   ) {
-    const ids = Array.isArray(keepImageIds) ? keepImageIds.map(Number) : [];
+    const ids = Array.isArray(keepImageIds)
+      ? keepImageIds.map(Number)
+      : keepImageIds
+        ? [Number(keepImageIds)]
+        : [];
 
-    return this.inventoryService.syncProductImages(id, files, ids, req.user);
+    // El orden puede llegar como un solo string si hay un único elemento.
+    const orderArr = Array.isArray(order) ? order : order ? [order] : [];
+
+    return this.inventoryService.syncProductImages(
+      id,
+      files,
+      ids,
+      orderArr,
+      req.user,
+    );
   }
 
   @Roles(

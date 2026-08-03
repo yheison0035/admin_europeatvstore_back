@@ -379,7 +379,7 @@ export class InventoryService {
         },
       },
       include: {
-        images: true,
+        images: { orderBy: { position: 'asc' } },
         variants: { where: { isActive: true } },
         brand: true,
         category: true,
@@ -643,6 +643,7 @@ export class InventoryService {
     inventoryId: number,
     files: Express.Multer.File[],
     keepImageIds: number[],
+    order: string[],
     user: any,
   ) {
     const product = await this.prisma.inventory.findFirst({
@@ -664,33 +665,69 @@ export class InventoryService {
     const folder = `inventory/${product.category?.name || 'general'}`;
 
     await this.prisma.$transaction(async (tx) => {
+      // 1) Eliminar las que ya no se conservan (de Cloudinary y de la BD).
       if (Array.isArray(keepImageIds)) {
         const toDelete = product.images.filter(
           (img) => !keepImageIds.includes(img.id),
         );
 
         for (const img of toDelete) {
-          await this.cloudinaryService.deleteImage(img.publicId);
+          await this.cloudinaryService.deleteImage(img.publicId).catch(() => null);
           await tx.inventoryImage.delete({ where: { id: img.id } });
         }
       }
 
-      let start = keepImageIds?.length ?? 0;
-
+      // 2) Subir las nuevas (posición temporal alta para no chocar).
+      const newImageIds: number[] = [];
       if (files) {
         for (let i = 0; i < files.length; i++) {
           const upload = await this.cloudinaryService.uploadImage(
             files[i],
             folder,
           );
-
-          await tx.inventoryImage.create({
+          const created = await tx.inventoryImage.create({
             data: {
               inventoryId,
               url: upload.url,
               publicId: upload.publicId,
-              position: start + i,
+              position: 1000 + i,
             },
+          });
+          newImageIds.push(created.id);
+        }
+      }
+
+      // 3) Reposicionar TODO según el orden final (id existente o 'NEW'). Así se
+      // persiste el reordenar y la imagen "Principal" (posición 0).
+      if (Array.isArray(order) && order.length) {
+        let newIdx = 0;
+        for (let pos = 0; pos < order.length; pos++) {
+          const token = order[pos];
+          if (token === 'NEW') {
+            const imgId = newImageIds[newIdx++];
+            if (imgId != null) {
+              await tx.inventoryImage.update({
+                where: { id: imgId },
+                data: { position: pos },
+              });
+            }
+          } else {
+            const imgId = Number(token);
+            if (keepImageIds.includes(imgId)) {
+              await tx.inventoryImage.update({
+                where: { id: imgId },
+                data: { position: pos },
+              });
+            }
+          }
+        }
+      } else {
+        // Compatibilidad: sin orden, las nuevas quedan al final.
+        const start = keepImageIds?.length ?? 0;
+        for (let i = 0; i < newImageIds.length; i++) {
+          await tx.inventoryImage.update({
+            where: { id: newImageIds[i] },
+            data: { position: start + i },
           });
         }
       }
