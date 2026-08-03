@@ -32,6 +32,16 @@ export class SalesController {
     return this.salesService.findAllPaginated(req.user, query);
   }
 
+  // Clientes por reactivar (sin volver hace 10-15 días por defecto). Debe ir
+  // antes de :id para no interpretarse como un id.
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
+  @Get('inactive-customers')
+  inactiveCustomers(@Req() req, @Query() query) {
+    const minDays = Number(query.minDays) || 10;
+    const maxDays = Number(query.maxDays) || 15;
+    return this.salesService.getInactiveCustomers(req.user, minDays, maxDays);
+  }
+
   @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {

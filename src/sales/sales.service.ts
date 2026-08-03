@@ -211,6 +211,70 @@ export class SalesService {
     };
   }
 
+  // Clientes que no vuelven: su última compra fue hace entre minDays y maxDays
+  // (por defecto 10 a 15 días). Pensado para reactivarlos por WhatsApp desde
+  // "ventas realizadas". Excluye ventas anuladas y el cliente genérico.
+  async getInactiveCustomers(user: any, minDays = 10, maxDays = 15) {
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+    const now = Date.now();
+    const oldest = new Date(now - maxDays * 86400000); // límite más antiguo
+    const newest = new Date(now - minDays * 86400000); // límite más reciente
+
+    const where: any = {
+      companyId: user.companyId,
+      customerId: { not: null },
+      saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
+    };
+    applyLocalFilter(where, user, localIds, 'sale');
+
+    const grouped = await this.prisma.sale.groupBy({
+      by: ['customerId'],
+      where,
+      _max: { saleDate: true },
+      _count: { _all: true },
+    });
+
+    // Última visita dentro de la ventana [oldest, newest].
+    const candidates = grouped.filter((g) => {
+      const last = g._max.saleDate;
+      return last && last >= oldest && last <= newest;
+    });
+
+    if (!candidates.length) return { success: true, data: [] };
+
+    const customers = await this.prisma.customer.findMany({
+      where: {
+        id: { in: candidates.map((c) => c.customerId as number) },
+        companyId: user.companyId,
+        phone: { not: null },
+      },
+      select: { id: true, name: true, phone: true, document: true },
+    });
+
+    const map = new Map(customers.map((c) => [c.id, c]));
+
+    const data = candidates
+      .map((c) => {
+        const cust = map.get(c.customerId as number);
+        if (!cust) return null;
+        if (!cust.phone || cust.document === '222222222222') return null;
+        const last = c._max.saleDate as Date;
+        const days = Math.floor((now - last.getTime()) / 86400000);
+        return {
+          id: cust.id,
+          name: cust.name,
+          phone: cust.phone,
+          lastVisit: last.toISOString(),
+          days,
+          visits: c._count._all,
+        };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => b.days - a.days);
+
+    return { success: true, data };
+  }
+
   async findOne(id: number, user: any) {
     const sale = await this.prisma.sale.findUnique({
       where: { id },
