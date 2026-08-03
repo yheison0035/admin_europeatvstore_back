@@ -18,7 +18,13 @@ export class VariantsService {
     incoming: InventoryVariantSyncInput[],
     user: any,
   ) {
-    if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN])) {
+    if (
+      !hasRole(user.role, [
+        Role.SUPER_ADMIN,
+        Role.ADMIN,
+        Role.RECEPCIONISTA,
+      ])
+    ) {
       throw new BadRequestException('No tienes permisos');
     }
 
