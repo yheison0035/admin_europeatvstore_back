@@ -146,6 +146,7 @@ export class ComandasService {
       include: {
         items: true,
         mesa: { select: { id: true, name: true } },
+        user: { select: { id: true, name: true } },
       },
     });
     return { success: true, data: comandas };
@@ -160,7 +161,10 @@ export class ComandasService {
         status: { notIn: ['COBRADA', 'CANCELADA'] },
       },
       orderBy: { createdAt: 'asc' },
-      include: { items: true },
+      include: {
+        items: true,
+        user: { select: { id: true, name: true } },
+      },
     });
     return { success: true, data: comandas };
   }
@@ -170,10 +174,28 @@ export class ComandasService {
       where: { id, companyId: user.companyId },
     });
     if (!comanda) throw new NotFoundException('Comanda no encontrada');
+
     const updated = await this.prisma.comanda.update({
       where: { id },
       data: { status },
     });
+
+    // Al cancelar, si la mesa no tiene otras comandas abiertas, se libera.
+    if (status === 'CANCELADA' && comanda.mesaId) {
+      const others = await this.prisma.comanda.count({
+        where: {
+          mesaId: comanda.mesaId,
+          status: { notIn: ['COBRADA', 'CANCELADA'] },
+        },
+      });
+      if (others === 0) {
+        await this.prisma.mesa.update({
+          where: { id: comanda.mesaId },
+          data: { status: 'LIBRE' },
+        });
+      }
+    }
+
     return { success: true, data: updated };
   }
 
