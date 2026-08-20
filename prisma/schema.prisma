@@ -146,19 +146,19 @@ enum DiscountType {
 // Cupones de descuento gestionados por el SUPER_PLATFORM_ADMIN. Se pueden
 // aplicar en el registro para descontar sobre el precio del plan elegido.
 model Coupon {
-  id            Int          @id @default(autoincrement())
-  code          String       @unique
-  description   String?
-  discountType  DiscountType @default(PERCENT)
-  discountValue Int          @default(0) // % (0-100) o monto fijo en COP
-  appliesToPlan String? // null = todos los planes; o un id de plan (DESPEGUE, IMPULSO, ...)
+  id             Int          @id @default(autoincrement())
+  code           String       @unique
+  description    String?
+  discountType   DiscountType @default(PERCENT)
+  discountValue  Int          @default(0) // % (0-100) o monto fijo en COP
+  appliesToPlan  String? // null = todos los planes; o un id de plan (DESPEGUE, IMPULSO, ...)
   maxRedemptions Int? // null = ilimitado
-  timesRedeemed Int          @default(0)
-  expiresAt     DateTime? // null = sin vencimiento
-  active        Boolean      @default(true)
-  status        Status       @default(ACTIVO) // para borrado lógico
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  timesRedeemed  Int          @default(0)
+  expiresAt      DateTime? // null = sin vencimiento
+  active         Boolean      @default(true)
+  status         Status       @default(ACTIVO) // para borrado lógico
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 enum AppointmentStatus {
@@ -208,32 +208,34 @@ model Company {
   // WEBSITE
   //////////////////////////////////////////////////
 
-  domain           String? @unique
-  slug             String? @unique
-  websiteEnabled   Boolean @default(false)
-  websiteName      String?
-  favicon          String?
-  theme            String @default("default")
-  fontFamily       String? // tipografía de la tienda (clave, no la fuente completa)
-  primaryColor     String?
-  secondaryColor   String?
-  accentColor      String?
-  ctaColor         String? // color de los botones de compra
-  heroTitle        String?
-  heroSubtitle     String?
+  domain         String? @unique
+  slug           String? @unique
+  websiteEnabled Boolean @default(false)
+  websiteName    String?
+  favicon        String?
+  theme          String  @default("default")
+  fontFamily     String? // tipografía de la tienda (clave, no la fuente completa)
+  primaryColor   String?
+  secondaryColor String?
+  accentColor    String?
+  ctaColor       String? // color de los botones de compra
+  heroTitle      String?
+  heroSubtitle   String?
 
   //////////////////////////////////////////////////
 
-  users        User[]
-  locals       Local[]
-  provider     Provider[]
-  categories   Category[]
-  brand        Brand[]
-  customers    Customer[]
-  services     Service[]
-  appointments Appointment[]
+  users          User[]
+  locals         Local[]
+  provider       Provider[]
+  categories     Category[]
+  brand          Brand[]
+  customers      Customer[]
+  services       Service[]
+  appointments   Appointment[]
   websiteBanners WebsiteBanner[]
   websiteSetting WebsiteSetting?
+  mesas          Mesa[]
+  comandas       Comanda[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -271,7 +273,8 @@ model User {
   services           Service[]     @relation("BarberServices")
   appointments       Appointment[] @relation("BarberAppointments")
 
-  sales Sale[] @relation("UserSales")
+  sales    Sale[]    @relation("UserSales")
+  comandas Comanda[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -293,8 +296,8 @@ model Customer {
 
   // Fecha de nacimiento (para campañas de cumpleaños) y notas del asesor
   // (preferencias, observaciones del cliente).
-  birthday      DateTime?
-  notes         String?
+  birthday DateTime?
+  notes    String?
 
   // Fidelización: sellos acumulados hacia el próximo premio y premios ganados
   // pendientes de canjear.
@@ -360,16 +363,18 @@ model Local {
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  users         User[]         @relation("LocalUsers")
-  inventories   Inventory[]    @relation("LocalInventory")
-  expenses      Expense[]      @relation("LocalExpenses")
-  sales         Sale[]         @relation("LocalSales")
-  categories    Category[]     @relation("LocalCategory")
-  brand         Brand[]        @relation("LocalBrand")
-  appointments  Appointment[]
-  customers     Customer[]
-  serviceLocals ServiceLocal[]
+  users           User[]           @relation("LocalUsers")
+  inventories     Inventory[]      @relation("LocalInventory")
+  expenses        Expense[]        @relation("LocalExpenses")
+  sales           Sale[]           @relation("LocalSales")
+  categories      Category[]       @relation("LocalCategory")
+  brand           Brand[]          @relation("LocalBrand")
+  appointments    Appointment[]
+  customers       Customer[]
+  serviceLocals   ServiceLocal[]
   websiteSettings WebsiteSetting[]
+  mesas           Mesa[]
+  comandas        Comanda[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -416,27 +421,27 @@ model Brand {
 //////////////////////////////////////////////////
 
 model Inventory {
-  id            Int     @id @default(autoincrement())
-  name          String
-  description   String?
-  slug          String? @unique
-  purchasePrice Float
-  oldPrice      Float?
-  salePrice     Float
-  status        Status  @default(ACTIVO)
-  barcode       String? @unique
+  id                 Int     @id @default(autoincrement())
+  name               String
+  description        String?
+  slug               String? @unique
+  purchasePrice      Float
+  oldPrice           Float?
+  salePrice          Float
+  status             Status  @default(ACTIVO)
+  barcode            String? @unique
   publishInEcommerce Boolean @default(false)
 
   // Umbral de alerta de stock bajo (0 = sin alerta). Se compara contra el stock
   // total del producto (suma de variantes).
-  minStock      Int     @default(0)
+  minStock Int @default(0)
 
   // Unidad de venta: UNIDAD (por unidad) o PESO (por kg, admite decimales).
-  unit          String  @default("UNIDAD")
+  unit String @default("UNIDAD")
 
   // Vencimiento y lote (droguería / perecederos). Opcionales.
-  expiryDate    DateTime?
-  lot           String?
+  expiryDate DateTime?
+  lot        String?
 
   localId    Int?
   providerId Int?
@@ -463,7 +468,7 @@ model Inventory {
 }
 
 model InventoryVariant {
-  id       Int    @id @default(autoincrement())
+  id       Int     @id @default(autoincrement())
   sequence Int     @unique @default(autoincrement())
   color    String
   size     String? // talla (ropa/calzado); opcional
@@ -599,7 +604,7 @@ model SaleItem {
 
   saleId             Int
   inventoryVariantId Int?
-  serviceId Int?
+  serviceId          Int?
 
   sale    Sale              @relation("SaleItems", fields: [saleId], references: [id], onDelete: Cascade)
   variant InventoryVariant? @relation(fields: [inventoryVariantId], references: [id])
@@ -741,36 +746,36 @@ model Appointment {
 }
 
 model WebsiteBanner {
-  id Int @id @default(autoincrement())
-  title String?
-  subtitle String?
-  image String
+  id         Int               @id @default(autoincrement())
+  title      String?
+  subtitle   String?
+  image      String
   buttonText String?
-  buttonUrl String?
-  order Int @default(0)
-  active Boolean @default(true)
-  companyId Int
-  type WebsiteBannerType @default(HOME)
+  buttonUrl  String?
+  order      Int               @default(0)
+  active     Boolean           @default(true)
+  companyId  Int
+  type       WebsiteBannerType @default(HOME)
 
-  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model WebsiteSetting {
-  id Int @id @default(autoincrement())
-  companyId Int @unique
-  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
-  facebook String?
-  instagram String?
-  whatsapp String?
-  youtube String?
-  tiktok String?
-  address String?
-  schedule String?
-  footerText String?
-  metaTitle String?
+  id              Int     @id @default(autoincrement())
+  companyId       Int     @unique
+  company         Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  facebook        String?
+  instagram       String?
+  whatsapp        String?
+  youtube         String?
+  tiktok          String?
+  address         String?
+  schedule        String?
+  footerText      String?
+  metaTitle       String?
   metaDescription String?
 
   ecommerceLocalId Int?
@@ -779,4 +784,72 @@ model WebsiteSetting {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ==========================================================================
+// RESTAURANTE / COMIDAS: mesas y comandas (pedidos a cocina)
+// ==========================================================================
+
+model Mesa {
+  id     Int    @id @default(autoincrement())
+  name   String
+  status String @default("LIBRE") // LIBRE | OCUPADA
+
+  localId   Int
+  local     Local   @relation(fields: [localId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  comandas Comanda[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([localId])
+}
+
+model Comanda {
+  id     Int     @id @default(autoincrement())
+  // PENDIENTE | PREPARANDO | LISTO | ENTREGADO | COBRADA | CANCELADA
+  status String  @default("PENDIENTE")
+  notes  String?
+  total  Float   @default(0)
+  saleId Int? // venta generada al cobrar
+
+  mesaId    Int?
+  mesa      Mesa?   @relation(fields: [mesaId], references: [id], onDelete: SetNull)
+  localId   Int
+  local     Local   @relation(fields: [localId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    Int?
+  user      User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  items ComandaItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+  @@index([mesaId])
+}
+
+model ComandaItem {
+  id        Int     @id @default(autoincrement())
+  comandaId Int
+  comanda   Comanda @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+
+  inventoryVariantId Int?
+  serviceId          Int?
+  name               String
+  quantity           Float   @default(1)
+  price              Float
+  subtotal           Float
+  notes              String?
+
+  createdAt DateTime @default(now())
+
+  @@index([comandaId])
 }

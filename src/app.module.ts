@@ -22,6 +22,8 @@ import { WompiModule } from './wompi/wompi.module';
 import { CompaniesModule } from './companies/companies.module';
 import { ServicesModule } from './services/services.module';
 import { AppointmentsModule } from './appointments/appointments.module';
+import { MesasModule } from './mesas/mesas.module';
+import { ComandasModule } from './comandas/comandas.module';
 import { WebsiteModule } from './modules/website/website.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { AuditModule } from './audit/audit.module';
@@ -52,6 +54,8 @@ import { SubscriptionModule } from './subscription/subscription.module';
     CompaniesModule,
     ServicesModule,
     AppointmentsModule,
+    MesasModule,
+    ComandasModule,
     WebsiteModule,
     StatisticsModule,
     AuditModule,
