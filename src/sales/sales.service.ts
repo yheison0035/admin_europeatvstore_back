@@ -422,8 +422,18 @@ export class SalesService {
       throw new BadRequestException('La venta debe tener items');
     }
 
-    if (!dto.customerId || !dto.localId || !dto.paymentMethod) {
+    if (!dto.localId || !dto.paymentMethod) {
       throw new BadRequestException('Faltan datos obligatorios');
+    }
+
+    // Venta de mostrador: si no se eligió cliente, se asigna el "Consumidor
+    // Final" de la empresa (document 222222222222).
+    if (!dto.customerId) {
+      const consumidorFinal = await this.prisma.customer.findFirst({
+        where: { companyId: user.companyId, document: '222222222222' },
+        select: { id: true },
+      });
+      if (consumidorFinal) dto.customerId = consumidorFinal.id;
     }
 
     // El fiado/crédito requiere plan Impulso o superior.

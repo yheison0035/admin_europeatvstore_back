@@ -37,8 +37,10 @@ export class CreateSaleDto {
   @IsOptional()
   saleStatus?: SaleStatus;
 
+  // Opcional: venta de mostrador sin cliente => backend asigna Consumidor Final.
+  @IsOptional()
   @IsInt()
-  customerId: number;
+  customerId?: number;
 
   @IsInt()
   localId: number;
