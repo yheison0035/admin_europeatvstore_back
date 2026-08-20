@@ -382,6 +382,48 @@ export class UsersService {
     return { success: true, data: updated };
   }
 
+  // Autoservicio: cualquier usuario autenticado edita SUS propios datos
+  // personales (incluida la contraseña). Nunca puede cambiar su rol, correo,
+  // estado, local ni empresa: esos campos se ignoran aunque lleguen en el body.
+  async updateOwnProfile(user: any, dto: any) {
+    const found = await this.prisma.user.findFirst({
+      where: { id: user.id },
+    });
+
+    if (!found) throw new NotFoundException('Usuario no encontrado');
+
+    const allowed = [
+      'name',
+      'phone',
+      'address',
+      'document',
+      'department',
+      'city',
+      'avatar',
+    ];
+
+    const data: any = {};
+    for (const field of allowed) {
+      if (dto[field] !== undefined) data[field] = dto[field];
+    }
+
+    if (dto.birthdate) {
+      const d = new Date(dto.birthdate);
+      if (!isNaN(d.getTime())) data.birthdate = d;
+    }
+
+    if (dto.password) {
+      data.password = await bcrypt.hash(dto.password, 10);
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: user.id },
+      data,
+    });
+
+    return { success: true, data: sanitizeUser(updated) };
+  }
+
   async deleteUser(id: number, user: any) {
     const found = await this.prisma.user.findFirst({
       where: {

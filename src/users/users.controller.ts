@@ -41,6 +41,22 @@ export class UsersController {
     return this.usersService.deleteAvatar(req.user.id, req.user);
   }
 
+  // Autoservicio de perfil: cualquier usuario autenticado, sin importar su rol,
+  // puede ver y editar SUS propios datos personales (y su contraseña). El
+  // servicio ignora rol/correo aunque lleguen en el body. Va antes de '/:id'
+  // para que la ruta 'me' no la capture el parámetro.
+  @UseGuards(JwtAuthGuard)
+  @Get('me/profile')
+  getMyProfile(@Req() req) {
+    return this.usersService.getUserId(req.user.id, req.user);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/profile')
+  updateMyProfile(@Req() req, @Body() dto: any) {
+    return this.usersService.updateOwnProfile(req.user, dto);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'ASESOR', 'RECEPCIONISTA')
   @Get()
