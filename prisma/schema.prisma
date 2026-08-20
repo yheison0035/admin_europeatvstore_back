@@ -23,6 +23,8 @@ enum Role {
   BARBERO
   CAJA
   RECEPCIONISTA
+  MESERO
+  COCINERO
 }
 
 enum AuditAction {
