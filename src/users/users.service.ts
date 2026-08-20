@@ -420,7 +420,15 @@ export class UsersService {
     }
 
     if (query.role) {
-      where.role = query.role.toUpperCase();
+      const requested = query.role.toUpperCase();
+      // El "profesional" que atiende puede estar guardado como PROFESIONAL
+      // (rol genérico nuevo) o BARBERO (alias heredado): se tratan igual.
+      const PROFESSIONAL = ['PROFESIONAL', 'BARBERO'];
+      if (PROFESSIONAL.includes(requested)) {
+        where.role = { in: PROFESSIONAL };
+      } else {
+        where.role = requested;
+      }
     }
 
     return this.prisma.user.findMany({

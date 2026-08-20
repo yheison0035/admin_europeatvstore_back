@@ -25,6 +25,7 @@ enum Role {
   RECEPCIONISTA
   MESERO
   COCINERO
+  PROFESIONAL
 }
 
 enum AuditAction {
