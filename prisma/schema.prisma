@@ -245,6 +245,7 @@ model Company {
   comandas       Comanda[]
   cashRegisters  CashRegister[]
   purchases      Purchase[]
+  quotes         Quote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -289,6 +290,7 @@ model User {
   cashClosed    CashRegister[] @relation("CashClosedBy")
   cashMovements CashMovement[] @relation("CashMovementUser")
   purchases     Purchase[]     @relation("PurchaseUser")
+  quotes        Quote[]        @relation("QuoteUser")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -329,6 +331,7 @@ model Customer {
 
   sales        Sale[]        @relation("CustomerSales")
   appointments Appointment[]
+  quotes       Quote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -392,6 +395,7 @@ model Local {
   comandas        Comanda[]
   cashRegisters   CashRegister[]
   purchases       Purchase[]
+  quotes          Quote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -986,4 +990,58 @@ model PurchaseItem {
   subtotal           Float
 
   @@index([purchaseId])
+}
+
+//////////////////////////////////////////////////
+// COTIZACIONES / PRESUPUESTOS
+//////////////////////////////////////////////////
+
+enum QuoteStatus {
+  PENDIENTE
+  ACEPTADA
+  RECHAZADA
+  CONVERTIDA
+  VENCIDA
+}
+
+model Quote {
+  id         Int         @id @default(autoincrement())
+  code       String
+  status     QuoteStatus @default(PENDIENTE)
+  total      Float       @default(0)
+  notes      String?
+  validUntil DateTime?
+  saleId     Int? // venta generada al convertir (informativo)
+
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  localId    Int
+  local      Local     @relation(fields: [localId], references: [id], onDelete: Cascade)
+  companyId  Int
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId     Int?
+  user       User?     @relation("QuoteUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  items QuoteItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([localId])
+  @@index([status])
+}
+
+model QuoteItem {
+  id                 Int    @id @default(autoincrement())
+  quoteId            Int
+  quote              Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  inventoryVariantId Int? // snapshot: referencia a la variante (para convertir)
+  serviceId          Int?
+  name               String
+  quantity           Float
+  price              Float
+  subtotal           Float
+
+  @@index([quoteId])
 }

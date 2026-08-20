@@ -9,5 +9,6 @@ import { PlanLimitsModule } from '@/common/plan-limits.module';
   imports: [InventoryModule, PlanLimitsModule],
   controllers: [SalesController],
   providers: [SalesService, PrismaService],
+  exports: [SalesService],
 })
 export class SalesModule {}
