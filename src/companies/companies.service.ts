@@ -28,6 +28,7 @@ export class CompaniesService {
         phone: true,
         email: true,
         type: true,
+        nit: true,
         loyaltyEnabled: true,
         loyaltyStampsRequired: true,
         loyaltyReward: true,
@@ -41,18 +42,25 @@ export class CompaniesService {
   // Datos básicos de la empresa (nombre, logo, contacto).
   async updateProfile(
     user: any,
-    dto: { name?: string; logo?: string; phone?: string; email?: string },
+    dto: {
+      name?: string;
+      logo?: string;
+      phone?: string;
+      email?: string;
+      nit?: string;
+    },
   ) {
     const data: any = {};
     if (dto.name?.trim()) data.name = dto.name.trim();
     if (dto.logo !== undefined) data.logo = dto.logo || null;
     if (dto.phone !== undefined) data.phone = dto.phone || null;
     if (dto.email !== undefined) data.email = dto.email || null;
+    if (dto.nit !== undefined) data.nit = dto.nit || null;
 
     const company = await this.prisma.company.update({
       where: { id: user.companyId },
       data,
-      select: { name: true, logo: true, phone: true, email: true },
+      select: { name: true, logo: true, phone: true, email: true, nit: true },
     });
     return { success: true, data: company };
   }
