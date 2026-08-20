@@ -972,8 +972,20 @@ export class SalesService {
           },
         },
         customer: true,
-        user: true,
-        local: true,
+        user: { select: { name: true } },
+        local: {
+          include: {
+            company: {
+              select: {
+                name: true,
+                logo: true,
+                nit: true,
+                phone: true,
+                email: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -981,17 +993,52 @@ export class SalesService {
       throw new NotFoundException('Factura no encontrada');
     }
 
+    const placeholders = ['ÚNICO', 'UNICO', 'GENERAL'];
+    const items = sale.items.map((item) => {
+      const color = item.variant?.color;
+      return {
+        name: item.variant?.inventory?.name || item.service?.name || 'ÍTEM',
+        color:
+          color && !placeholders.includes(color.toUpperCase()) ? color : null,
+        quantity: item.quantity,
+        price: item.price,
+        discount: item.discount,
+        subtotal: item.subtotal,
+      };
+    });
+
+    const subtotal = items.reduce((a, i) => a + i.price * i.quantity, 0);
+    const discount = items.reduce((a, i) => a + (i.discount || 0), 0);
+
     return {
       valid: true,
       code: sale.code,
       saleDate: sale.saleDate,
-      customer: sale.customer?.name || 'CONSUMIDOR FINAL',
+      paymentMethod: sale.paymentMethod,
+      paymentStatus: sale.paymentStatus,
+      notes: sale.notes || null,
+      subtotal,
+      discount,
       totalAmount: sale.totalAmount,
-      items: sale.items.map((item) => ({
-        product: item.variant?.inventory?.name || item.service?.name || 'ITEM',
-        quantity: item.quantity,
-        subtotal: item.subtotal,
-      })),
+      customer: {
+        name: sale.customer?.name || 'CONSUMIDOR FINAL',
+        document: sale.customer?.document || null,
+      },
+      seller: sale.user?.name || null,
+      local: {
+        name: sale.local?.name || null,
+        address: sale.local?.address || null,
+        city: sale.local?.city || null,
+        phone: sale.local?.phone || null,
+      },
+      company: {
+        name: sale.local?.company?.name || null,
+        logo: sale.local?.company?.logo || null,
+        nit: sale.local?.company?.nit || null,
+        phone: sale.local?.company?.phone || null,
+        email: sale.local?.company?.email || null,
+      },
+      items,
     };
   }
 
