@@ -52,6 +52,60 @@ export class StatisticsService {
 
   async getDashboard(user: any, dto: any) {
     await this.planLimits.assertModule(user.companyId, 'statistics');
+    return this.dashboardInternal(user, dto);
+  }
+
+  // Resumen ligero para el Home del dashboard (universal, sin gate de plan):
+  // ventas de hoy (cobradas) + conteos para el checklist de primeros pasos.
+  async homeSummary(user: any) {
+    const companyId = user.companyId;
+    const today = colombiaDay(new Date());
+    const [y, m, d] = today.split('-').map(Number);
+    const start = dayStartUtc(y, m, d);
+    const end = dayStartUtc(y, m, d + 1);
+
+    const accessible = await getAccessibleLocalIds(this.prisma, user);
+    const localFilter: any = accessible ? { localId: { in: accessible } } : {};
+
+    const todayAgg = await this.prisma.sale.aggregate({
+      where: {
+        local: { companyId },
+        ...localFilter,
+        saleDate: { gte: start, lt: end },
+        paymentStatus: 'PAGADA' as any,
+      },
+      _sum: { totalAmount: true },
+      _count: { _all: true },
+    });
+
+    const [localsCount, productsCount, servicesCount, salesEver] =
+      await Promise.all([
+        this.prisma.local.count({ where: { companyId } }),
+        this.prisma.inventory.count({ where: { local: { companyId } } }),
+        this.prisma.service.count({
+          where: { companyId, status: 'ACTIVO' as any },
+        }),
+        this.prisma.sale.count({ where: { local: { companyId } } }),
+      ]);
+
+    return {
+      success: true,
+      data: {
+        today: {
+          total: todayAgg._sum.totalAmount || 0,
+          count: todayAgg._count._all,
+        },
+        setup: {
+          locals: localsCount,
+          products: productsCount,
+          services: servicesCount,
+          sales: salesEver,
+        },
+      },
+    };
+  }
+
+  private async dashboardInternal(user: any, dto: any) {
     const companyId = user.companyId;
     const localId = dto.localId ? Number(dto.localId) : null;
 
