@@ -1,4 +1,9 @@
-import { IsEmail, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEmail,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { Status } from '@prisma/client';
 
 export class CreateCustomerDto {
@@ -32,6 +37,14 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsDateString()
+  birthday?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 
   @IsOptional()
   status?: Status;

@@ -361,11 +361,12 @@ export class CustomersService {
       localId = local ? local.id : null; // si no es de la empresa, se ignora
     }
 
-    const { localId: _, ...rest } = dto;
+    const { localId: _, birthday, ...rest } = dto;
 
     const customer = await this.prisma.customer.create({
       data: {
         ...rest,
+        ...(birthday ? { birthday: new Date(birthday) } : {}),
         // Valores por defecto cuando se crea rápido (modal): cédula, un
         // documento dinámico no repetido y ubicación Itagüí, Antioquia.
         type_document: rest.type_document || 'CC',
@@ -410,12 +411,16 @@ export class CustomersService {
       throw new ForbiddenException('No tienes permiso');
     }
 
-    const { localId, ...rest } = dto;
+    const { localId, birthday, ...rest } = dto;
 
     const updated = await this.prisma.customer.update({
       where: { id },
       data: {
         ...rest,
+
+        ...(birthday !== undefined && {
+          birthday: birthday ? new Date(birthday) : null,
+        }),
 
         ...(localId !== undefined && {
           local: localId ? { connect: { id: localId } } : { disconnect: true },
@@ -432,6 +437,8 @@ export class CustomersService {
       'department',
       'city',
       'address',
+      'birthday',
+      'notes',
       'status',
       'localId',
     ]);

@@ -275,6 +275,11 @@ model Customer {
   address       String?
   status        Status  @default(ACTIVO)
 
+  // Fecha de nacimiento (para campañas de cumpleaños) y notas del asesor
+  // (preferencias, observaciones del cliente).
+  birthday      DateTime?
+  notes         String?
+
   // Última vez que se le escribió para reactivarlo (campaña de win-back).
   lastWinbackAt DateTime?
 
