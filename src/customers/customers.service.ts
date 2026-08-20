@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -314,10 +315,29 @@ export class CustomersService {
       },
     });
 
+    const company = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        loyaltyEnabled: true,
+        loyaltyStampsRequired: true,
+        loyaltyReward: true,
+      },
+    });
+    const loyalty = company?.loyaltyEnabled
+      ? {
+          enabled: true,
+          stamps: customer.loyaltyStamps,
+          required: company.loyaltyStampsRequired,
+          rewards: customer.loyaltyRewards,
+          reward: company.loyaltyReward,
+        }
+      : { enabled: false };
+
     return {
       success: true,
       data: {
         customer,
+        loyalty,
         metrics: {
           ltv,
           visits,
@@ -342,6 +362,22 @@ export class CustomersService {
         appointments,
       },
     };
+  }
+
+  // Canjea un premio de fidelización (descuenta 1 premio disponible).
+  async redeemLoyaltyReward(id: number, user: any) {
+    const cust = await this.prisma.customer.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+    if (!cust) throw new NotFoundException('Cliente no encontrado');
+    if (cust.loyaltyRewards <= 0) {
+      throw new BadRequestException('El cliente no tiene premios por canjear');
+    }
+    const updated = await this.prisma.customer.update({
+      where: { id },
+      data: { loyaltyRewards: { decrement: 1 } },
+    });
+    return { success: true, data: { id, loyaltyRewards: updated.loyaltyRewards } };
   }
 
   async create(dto: CreateCustomerDto, user: any) {

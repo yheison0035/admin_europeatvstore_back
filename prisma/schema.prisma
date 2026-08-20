@@ -182,6 +182,12 @@ model Company {
   phone   String?
   manager String?
 
+  // Fidelización (tarjeta de sellos): activar, cuántas visitas para un premio,
+  // y el nombre del premio (ej. "1 servicio gratis").
+  loyaltyEnabled        Boolean @default(false)
+  loyaltyStampsRequired Int     @default(10)
+  loyaltyReward         String  @default("1 servicio gratis")
+
   // Facturación / suscripción (control de la plataforma)
   plan       String?
   paidUntil  DateTime? // fecha hasta la que la empresa está al día; si vence, se auto-suspende
@@ -279,6 +285,11 @@ model Customer {
   // (preferencias, observaciones del cliente).
   birthday      DateTime?
   notes         String?
+
+  // Fidelización: sellos acumulados hacia el próximo premio y premios ganados
+  // pendientes de canjear.
+  loyaltyStamps  Int @default(0)
+  loyaltyRewards Int @default(0)
 
   // Última vez que se le escribió para reactivarlo (campaña de win-back).
   lastWinbackAt DateTime?

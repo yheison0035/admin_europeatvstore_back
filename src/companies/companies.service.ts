@@ -18,6 +18,54 @@ export class CompaniesService {
 
   constructor(private prisma: PrismaService) {}
 
+  // Configuración self-service que ve/edita el dueño de la empresa.
+  async getOwnSettings(user: any) {
+    const company = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        name: true,
+        loyaltyEnabled: true,
+        loyaltyStampsRequired: true,
+        loyaltyReward: true,
+      },
+    });
+    return { success: true, data: company };
+  }
+
+  async updateLoyalty(
+    user: any,
+    dto: {
+      loyaltyEnabled?: boolean;
+      loyaltyStampsRequired?: number;
+      loyaltyReward?: string;
+    },
+  ) {
+    const data: any = {};
+    if (typeof dto.loyaltyEnabled === 'boolean') {
+      data.loyaltyEnabled = dto.loyaltyEnabled;
+    }
+    if (dto.loyaltyStampsRequired != null) {
+      data.loyaltyStampsRequired = Math.max(
+        1,
+        Math.floor(Number(dto.loyaltyStampsRequired) || 10),
+      );
+    }
+    if (typeof dto.loyaltyReward === 'string') {
+      data.loyaltyReward = dto.loyaltyReward.trim() || '1 servicio gratis';
+    }
+
+    const company = await this.prisma.company.update({
+      where: { id: user.companyId },
+      data,
+      select: {
+        loyaltyEnabled: true,
+        loyaltyStampsRequired: true,
+        loyaltyReward: true,
+      },
+    });
+    return { success: true, data: company };
+  }
+
   // AUTO-SUSPENSIÓN POR IMPAGO: cada día se desactivan las empresas activas
   // cuya fecha de pago (paidUntil) ya venció. Reactivar = extender paidUntil a
   // futuro y volver a ACTIVO desde el panel. Las empresas sin paidUntil (null)

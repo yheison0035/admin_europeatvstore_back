@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
   Put,
+  Patch,
   Query,
 } from '@nestjs/common';
 import { CustomersService } from './customers.service';
@@ -82,6 +83,13 @@ export class CustomersController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.customersService.findOne(id, req.user);
+  }
+
+  // Canjear un premio de fidelización
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
+  @Patch(':id/redeem-reward')
+  redeemReward(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.customersService.redeemLoyaltyReward(id, req.user);
   }
 
   // Crear
