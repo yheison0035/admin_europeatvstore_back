@@ -126,6 +126,15 @@ enum BusinessType {
   ECOMMERCE
   DISTRIBUCION
   ZORVEX
+  // Verticales específicas (multi-negocio)
+  ODONTOLOGIA
+  SUPERMERCADO
+  DROGUERIA
+  ROPA
+  FRUVER
+  FLORISTERIA
+  COMIDA_RAPIDA
+  CAFETERIA
 }
 
 enum DiscountType {

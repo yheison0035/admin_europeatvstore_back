@@ -278,24 +278,25 @@ export class SalesService {
       select: {
         customerId: true,
         items: {
-          where: { serviceId: { not: null } },
-          select: { service: { select: { name: true } } },
+          select: {
+            service: { select: { name: true } },
+            variant: { select: { inventory: { select: { name: true } } } },
+          },
         },
       },
     });
 
-    // Vienen ordenadas por fecha desc: para cada cliente se guarda el servicio
-    // de su venta más reciente que tenga servicios (si la última fue solo de
-    // productos, se busca hacia atrás).
+    // Vienen ordenadas por fecha desc: para cada cliente se guarda lo último que
+    // consumió (servicio o producto) de su venta más reciente con ítems.
     const lastServiceByCustomer = new Map<number, string>();
     for (const s of recentSales) {
       if (s.customerId == null) continue;
       if (lastServiceByCustomer.has(s.customerId)) continue;
       const names = s.items
-        .map((it) => it.service?.name)
+        .map((it) => it.service?.name || it.variant?.inventory?.name)
         .filter((n): n is string => !!n);
       if (names.length) {
-        lastServiceByCustomer.set(s.customerId, names.join(', '));
+        lastServiceByCustomer.set(s.customerId, names.slice(0, 2).join(', '));
       }
     }
 
