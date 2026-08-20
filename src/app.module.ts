@@ -27,6 +27,7 @@ import { ComandasModule } from './comandas/comandas.module';
 import { CashModule } from './cash/cash.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { QuotesModule } from './quotes/quotes.module';
+import { ReturnsModule } from './returns/returns.module';
 import { WebsiteModule } from './modules/website/website.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { AuditModule } from './audit/audit.module';
@@ -62,6 +63,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     CashModule,
     PurchasesModule,
     QuotesModule,
+    ReturnsModule,
     WebsiteModule,
     StatisticsModule,
     AuditModule,

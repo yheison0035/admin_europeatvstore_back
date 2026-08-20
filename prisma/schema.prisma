@@ -246,6 +246,7 @@ model Company {
   cashRegisters  CashRegister[]
   purchases      Purchase[]
   quotes         Quote[]
+  returns        Return[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -291,6 +292,7 @@ model User {
   cashMovements CashMovement[] @relation("CashMovementUser")
   purchases     Purchase[]     @relation("PurchaseUser")
   quotes        Quote[]        @relation("QuoteUser")
+  returns       Return[]       @relation("ReturnUser")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -396,6 +398,7 @@ model Local {
   cashRegisters   CashRegister[]
   purchases       Purchase[]
   quotes          Quote[]
+  returns         Return[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -606,6 +609,7 @@ model Sale {
   shipment Shipment?
 
   cashMovements CashMovement[]
+  returns       Return[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1044,4 +1048,51 @@ model QuoteItem {
   subtotal           Float
 
   @@index([quoteId])
+}
+
+//////////////////////////////////////////////////
+// DEVOLUCIONES / NOTAS CREDITO
+//////////////////////////////////////////////////
+
+enum ReturnStatus {
+  REGISTRADA
+  ANULADA
+}
+
+model Return {
+  id        Int          @id @default(autoincrement())
+  code      String
+  reason    String?
+  total     Float        @default(0) // monto devuelto
+  status    ReturnStatus @default(REGISTRADA)
+
+  saleId    Int
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  localId   Int
+  local     Local   @relation(fields: [localId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    Int?
+  user      User?   @relation("ReturnUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  items ReturnItem[]
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([saleId])
+}
+
+model ReturnItem {
+  id                 Int    @id @default(autoincrement())
+  returnId           Int
+  return             Return @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  saleItemId         Int?
+  inventoryVariantId Int?
+  name               String
+  quantity           Float
+  price              Float
+  subtotal           Float
+
+  @@index([returnId])
 }
