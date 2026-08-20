@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -36,6 +37,12 @@ export class CompanySettingsController {
     @Req() req,
   ) {
     return this.service.updateLoyalty(req.user, dto);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Post('loyalty/sync')
+  syncLoyalty(@Req() req) {
+    return this.service.syncLoyaltyFromSales(req.user);
   }
 
   @Roles('SUPER_ADMIN', 'ADMIN')

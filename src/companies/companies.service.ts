@@ -3,9 +3,11 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { applyLoyaltyVisit } from '@/common/loyalty.util';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -92,6 +94,82 @@ export class CompaniesService {
       select: { openHour: true, closeHour: true },
     });
     return { success: true, data: company };
+  }
+
+  // Sincroniza la fidelización con el historial de ventas: reproduce, cliente
+  // por cliente y en orden cronológico, todas sus ventas completadas por la
+  // lógica de escalones (respetando la ventana de días). Deja a cada cliente en
+  // su posición real del ciclo. Es re-ejecutable (recalcula desde cero).
+  async syncLoyaltyFromSales(user: any) {
+    const company = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        loyaltyEnabled: true,
+        loyaltyTier1Visits: true,
+        loyaltyTier1Percent: true,
+        loyaltyTier2Visits: true,
+        loyaltyTier2Percent: true,
+        loyaltyMaxDays: true,
+      },
+    });
+    if (!company?.loyaltyEnabled) {
+      throw new BadRequestException(
+        'Activa la fidelización antes de sincronizar.',
+      );
+    }
+
+    // Ventas identificadas y completadas (no anuladas/devueltas), ordenadas por
+    // cliente y fecha. El "Consumidor Final" (222222222222) no acumula.
+    const sales = await this.prisma.sale.findMany({
+      where: {
+        customerId: { not: null },
+        saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
+        local: { is: { companyId: user.companyId } },
+        customer: { is: { document: { not: '222222222222' } } },
+      },
+      select: { customerId: true, saleDate: true },
+      orderBy: [{ customerId: 'asc' }, { saleDate: 'asc' }],
+    });
+
+    // Reproduce el historial por cliente.
+    const state = new Map<number, { stamps: number; last: Date | null }>();
+    for (const s of sales) {
+      const cid = s.customerId as number;
+      const cur = state.get(cid) || { stamps: 0, last: null };
+      const { newCount } = applyLoyaltyVisit(
+        company as any,
+        { loyaltyStamps: cur.stamps, loyaltyLastVisit: cur.last },
+        new Date(s.saleDate),
+      );
+      state.set(cid, { stamps: newCount, last: new Date(s.saleDate) });
+    }
+
+    // Reinicia a cero los clientes de la empresa que no tuvieron ventas (para
+    // que un re-cálculo sea consistente) y aplica el estado calculado.
+    const ops: any[] = [];
+    for (const [cid, st] of state) {
+      ops.push(
+        this.prisma.customer.update({
+          where: { id: cid },
+          data: { loyaltyStamps: st.stamps, loyaltyLastVisit: st.last },
+        }),
+      );
+    }
+
+    // Ejecuta en lotes para no saturar la conexión.
+    const chunkSize = 100;
+    for (let i = 0; i < ops.length; i += chunkSize) {
+      await this.prisma.$transaction(ops.slice(i, i + chunkSize));
+    }
+
+    return {
+      success: true,
+      message: 'Fidelización sincronizada con las ventas',
+      data: {
+        customersUpdated: state.size,
+        salesProcessed: sales.length,
+      },
+    };
   }
 
   // Tema de diseño del panel/CRM (colores). Solo valores permitidos.
