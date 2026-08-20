@@ -51,6 +51,14 @@ export class CreateInventoryDto {
   unit?: string;
 
   @IsOptional()
+  @IsString()
+  expiryDate?: string;
+
+  @IsOptional()
+  @IsString()
+  lot?: string;
+
+  @IsOptional()
   status?: Status;
 
   @IsOptional()

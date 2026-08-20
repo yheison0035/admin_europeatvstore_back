@@ -53,6 +53,20 @@ export class InventoryController {
     return this.inventoryService.getLowStock(req.user);
   }
 
+  // Productos por vencer (droguería / perecederos). Antes de :id.
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN', 'RECEPCIONISTA',
+    'COORDINADOR',
+    'AUXILIAR',
+    'ASESOR',
+    'BODEGUERO',
+  )
+  @Get('expiring')
+  expiring(@Req() req) {
+    return this.inventoryService.getExpiring(req.user);
+  }
+
   @Roles(
     'SUPER_ADMIN',
     'ADMIN', 'RECEPCIONISTA',

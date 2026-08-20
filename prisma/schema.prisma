@@ -433,6 +433,10 @@ model Inventory {
   // Unidad de venta: UNIDAD (por unidad) o PESO (por kg, admite decimales).
   unit          String  @default("UNIDAD")
 
+  // Vencimiento y lote (droguería / perecederos). Opcionales.
+  expiryDate    DateTime?
+  lot           String?
+
   localId    Int?
   providerId Int?
   categoryId Int?

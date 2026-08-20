@@ -438,6 +438,50 @@ export class InventoryService {
     return { success: true, data: low };
   }
 
+  // Productos por vencer: con fecha de vencimiento dentro de los próximos
+  // `days` días (o ya vencidos). Ordenados por el más próximo a vencer.
+  async getExpiring(user: any, days = 30) {
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+    const now = new Date();
+    const limit = new Date(now.getTime() + days * 86400000);
+
+    const where: any = {
+      status: 'ACTIVO',
+      expiryDate: { not: null, lte: limit },
+      local: { companyId: user.companyId },
+    };
+    if (localIds !== null) {
+      where.localId = localIds.length === 0 ? -1 : { in: localIds };
+    }
+
+    const products = await this.prisma.inventory.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        expiryDate: true,
+        lot: true,
+        local: { select: { name: true } },
+      },
+      orderBy: { expiryDate: 'asc' },
+    });
+
+    const data = products.map((p) => {
+      const exp = p.expiryDate as Date;
+      const daysLeft = Math.ceil((exp.getTime() - now.getTime()) / 86400000);
+      return {
+        id: p.id,
+        name: p.name,
+        expiryDate: exp.toISOString(),
+        lot: p.lot,
+        local: p.local?.name || null,
+        daysLeft,
+      };
+    });
+
+    return { success: true, data };
+  }
+
   // Verifica que la categoría, marca y proveedor indicados pertenezcan a la
   // empresa del usuario (evita asignar referencias de otra empresa).
   private async assertRefsOwnership(dto: any, companyId: number) {
@@ -516,6 +560,8 @@ export class InventoryService {
           status: dto.status,
           minStock: dto.minStock ?? 0,
           unit: dto.unit ?? 'UNIDAD',
+          ...(dto.expiryDate ? { expiryDate: new Date(dto.expiryDate) } : {}),
+          ...(dto.lot !== undefined && { lot: dto.lot || null }),
           slug,
 
           ...(dto.localId && {
@@ -603,6 +649,10 @@ export class InventoryService {
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.minStock !== undefined && { minStock: dto.minStock }),
         ...(dto.unit !== undefined && { unit: dto.unit }),
+        ...(dto.expiryDate !== undefined && {
+          expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
+        }),
+        ...(dto.lot !== undefined && { lot: dto.lot || null }),
 
         ...(dto.localId && {
           local: { connect: { id: dto.localId } },
