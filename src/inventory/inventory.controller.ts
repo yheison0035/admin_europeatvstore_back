@@ -39,6 +39,20 @@ export class InventoryController {
     return this.inventoryService.findAllPaginated(req.user, query);
   }
 
+  // Productos con stock bajo (para el dashboard/alertas). Antes de :id.
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN', 'RECEPCIONISTA',
+    'COORDINADOR',
+    'AUXILIAR',
+    'ASESOR',
+    'BODEGUERO',
+  )
+  @Get('low-stock')
+  lowStock(@Req() req) {
+    return this.inventoryService.getLowStock(req.user);
+  }
+
   @Roles(
     'SUPER_ADMIN',
     'ADMIN', 'RECEPCIONISTA',

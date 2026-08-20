@@ -401,6 +401,10 @@ model Inventory {
   barcode       String? @unique
   publishInEcommerce Boolean @default(false)
 
+  // Umbral de alerta de stock bajo (0 = sin alerta). Se compara contra el stock
+  // total del producto (suma de variantes).
+  minStock      Int     @default(0)
+
   localId    Int?
   providerId Int?
   categoryId Int?

@@ -39,6 +39,10 @@ export class CreateInventoryDto {
   salePrice: number;
 
   @IsOptional()
+  @IsNumber()
+  minStock?: number;
+
+  @IsOptional()
   status?: Status;
 
   @IsOptional()

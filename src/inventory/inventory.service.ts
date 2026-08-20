@@ -397,6 +397,45 @@ export class InventoryService {
     return { success: true, data: { ...product, stock } };
   }
 
+  // Productos con alerta de stock bajo: minStock > 0 y stock total <= minStock.
+  // Ordenados por los más críticos primero (mayor faltante).
+  async getLowStock(user: any) {
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    const where: any = {
+      status: 'ACTIVO',
+      minStock: { gt: 0 },
+      local: { companyId: user.companyId },
+    };
+    if (localIds !== null) {
+      where.localId = localIds.length === 0 ? -1 : { in: localIds };
+    }
+
+    const products = await this.prisma.inventory.findMany({
+      where,
+      include: {
+        variants: { where: { isActive: true }, select: { stock: true } },
+        local: { select: { name: true } },
+      },
+    });
+
+    const low = products
+      .map((p) => {
+        const stock = p.variants.reduce((s, v) => s + v.stock, 0);
+        return {
+          id: p.id,
+          name: p.name,
+          stock,
+          minStock: p.minStock,
+          local: p.local?.name || null,
+        };
+      })
+      .filter((p) => p.stock <= p.minStock)
+      .sort((a, b) => a.stock - a.minStock - (b.stock - b.minStock));
+
+    return { success: true, data: low };
+  }
+
   // Verifica que la categoría, marca y proveedor indicados pertenezcan a la
   // empresa del usuario (evita asignar referencias de otra empresa).
   private async assertRefsOwnership(dto: any, companyId: number) {
@@ -473,6 +512,7 @@ export class InventoryService {
           oldPrice: dto.oldPrice ?? null,
           salePrice: dto.salePrice,
           status: dto.status,
+          minStock: dto.minStock ?? 0,
           slug,
 
           ...(dto.localId && {
@@ -557,6 +597,7 @@ export class InventoryService {
         ...(dto.oldPrice !== undefined && { oldPrice: dto.oldPrice }),
         ...(dto.salePrice !== undefined && { salePrice: dto.salePrice }),
         ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.minStock !== undefined && { minStock: dto.minStock }),
 
         ...(dto.localId && {
           local: { connect: { id: dto.localId } },

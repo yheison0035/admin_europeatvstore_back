@@ -49,6 +49,10 @@ export class UpdateInventoryDto {
   salePrice?: number;
 
   @IsOptional()
+  @IsInt()
+  minStock?: number;
+
+  @IsOptional()
   status?: Status;
 
   @IsOptional()
