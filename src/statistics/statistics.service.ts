@@ -119,8 +119,15 @@ export class StatisticsService {
     const [sy, sm, sd] = startStr.split('-').map(Number);
     const [ey, em, ed] = endStr.split('-').map(Number);
 
-    const start = dayStartUtc(sy, sm, sd);
     const end = dayStartUtc(ey, em, ed + 1); // exclusivo (día siguiente 00:00 Col)
+    let start = dayStartUtc(sy, sm, sd);
+
+    // Tope de seguridad: máximo ~13 meses por consulta para no cargar en memoria
+    // años de ventas si alguien pide un rango enorme.
+    const MAX_MS = 400 * 24 * 60 * 60 * 1000;
+    if (end.getTime() - start.getTime() > MAX_MS) {
+      start = new Date(end.getTime() - MAX_MS);
+    }
 
     const lengthMs = end.getTime() - start.getTime();
     const prevStart = new Date(start.getTime() - lengthMs);

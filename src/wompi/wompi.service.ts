@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 
+// URL base de la API de Wompi. Sandbox por defecto; en producción se define
+// WOMPI_API_URL=https://production.wompi.co/v1 en las variables de entorno.
+const WOMPI_BASE = process.env.WOMPI_API_URL || 'https://sandbox.wompi.co/v1';
+
 @Injectable()
 export class WompiService {
   generateSignature({
@@ -33,19 +37,41 @@ export class WompiService {
   }
 
   async getTransaction(transactionId: string) {
-    const response = await fetch(
-      `https://sandbox.wompi.co/v1/transactions/${transactionId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.WOMPI_PRIVATE_KEY}`,
-        },
+    const response = await fetch(`${WOMPI_BASE}/transactions/${transactionId}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.WOMPI_PRIVATE_KEY}`,
       },
-    );
+    });
 
     if (!response.ok) {
       throw new Error('Error consultando transacción en Wompi');
     }
 
     return response.json();
+  }
+
+  // Verifica la firma (checksum) de un evento de webhook de Wompi.
+  verifyEventChecksum(event: any): boolean {
+    const secret = process.env.WOMPI_EVENTS_SECRET;
+    if (!secret) return false;
+    const props: string[] = event?.signature?.properties || [];
+    const timestamp = event?.timestamp;
+    const checksum = event?.signature?.checksum;
+    if (!props.length || !checksum) return false;
+
+    const concatenated =
+      props
+        .map((p) => p.split('.').reduce((o: any, k) => o?.[k], event?.data))
+        .join('') +
+      `${timestamp}` +
+      secret;
+
+    const computed = crypto
+      .createHash('sha256')
+      .update(concatenated)
+      .digest('hex')
+      .toUpperCase();
+
+    return computed === String(checksum).toUpperCase();
   }
 }
