@@ -27,7 +27,7 @@ import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto'
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
-  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA', 'VENTAS')
   @Get()
   findAll(@Req() req, @Query() query) {
     return this.salesService.findAllPaginated(req.user, query);
@@ -73,13 +73,13 @@ export class SalesController {
     return this.salesService.updateOrderFulfillment(id, req.user, dto);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA', 'VENTAS')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.salesService.findOne(id, req.user);
   }
 
-  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA', 'VENTAS')
   @Post()
   create(@Body() dto: CreateSaleDto, @Req() req) {
     return this.salesService.create(dto, req.user);

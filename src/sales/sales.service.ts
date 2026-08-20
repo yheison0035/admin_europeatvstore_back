@@ -807,6 +807,31 @@ export class SalesService {
         });
       }
 
+      // Caja: si la venta es en efectivo y hay una caja abierta en el local, se
+      // registra el ingreso automáticamente para que el arqueo cuadre.
+      if (dto.paymentMethod === 'EFECTIVO') {
+        const openReg = await tx.cashRegister.findFirst({
+          where: {
+            localId: dto.localId,
+            companyId: user.companyId,
+            status: 'ABIERTA',
+          },
+          select: { id: true },
+        });
+        if (openReg) {
+          await tx.cashMovement.create({
+            data: {
+              cashRegisterId: openReg.id,
+              type: 'INGRESO',
+              amount: total,
+              concept: 'Venta en efectivo',
+              saleId: sale.id,
+              userId: dto.userId ?? user.id,
+            },
+          });
+        }
+      }
+
       await this.audit.log({
         entity: 'sale',
         entityId: sale.id,

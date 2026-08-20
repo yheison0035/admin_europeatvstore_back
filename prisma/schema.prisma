@@ -243,6 +243,7 @@ model Company {
   websiteSetting WebsiteSetting?
   mesas          Mesa[]
   comandas       Comanda[]
+  cashRegisters  CashRegister[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -282,6 +283,10 @@ model User {
 
   sales    Sale[]    @relation("UserSales")
   comandas Comanda[]
+
+  cashOpened    CashRegister[] @relation("CashOpenedBy")
+  cashClosed    CashRegister[] @relation("CashClosedBy")
+  cashMovements CashMovement[] @relation("CashMovementUser")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -382,6 +387,7 @@ model Local {
   websiteSettings WebsiteSetting[]
   mesas           Mesa[]
   comandas        Comanda[]
+  cashRegisters   CashRegister[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -589,6 +595,8 @@ model Sale {
   items SaleItem[] @relation("SaleItems")
 
   shipment Shipment?
+
+  cashMovements CashMovement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -859,4 +867,68 @@ model ComandaItem {
   createdAt DateTime @default(now())
 
   @@index([comandaId])
+}
+
+//////////////////////////////////////////////////
+// CAJA / ARQUEO
+//////////////////////////////////////////////////
+
+enum CashRegisterStatus {
+  ABIERTA
+  CERRADA
+}
+
+enum CashMovementType {
+  INGRESO
+  EGRESO
+}
+
+model CashRegister {
+  id             Int                @id @default(autoincrement())
+  status         CashRegisterStatus @default(ABIERTA)
+  openingAmount  Float              @default(0) // fondo/base inicial
+  countedAmount  Float? // efectivo contado al cierre (arqueo)
+  expectedAmount Float? // esperado = base + ingresos - egresos
+  difference     Float? // contado - esperado
+  notes          String?
+  openedAt       DateTime           @default(now())
+  closedAt       DateTime?
+
+  localId    Int
+  local      Local @relation(fields: [localId], references: [id], onDelete: Cascade)
+  companyId  Int
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  openedById Int?
+  openedBy   User?  @relation("CashOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
+  closedById Int?
+  closedBy   User?  @relation("CashClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+
+  movements CashMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([localId])
+  @@index([status])
+}
+
+model CashMovement {
+  id      Int              @id @default(autoincrement())
+  type    CashMovementType
+  amount  Float
+  concept String?
+
+  cashRegisterId Int
+  cashRegister   CashRegister @relation(fields: [cashRegisterId], references: [id], onDelete: Cascade)
+
+  saleId Int?
+  sale   Sale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  userId Int?
+  user   User? @relation("CashMovementUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([cashRegisterId])
 }
