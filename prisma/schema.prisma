@@ -135,6 +135,7 @@ enum BusinessType {
   FLORISTERIA
   COMIDA_RAPIDA
   CAFETERIA
+  CARNICERIA
 }
 
 enum DiscountType {
