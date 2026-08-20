@@ -187,7 +187,11 @@ export class StatisticsService {
           items: {
             include: {
               service: { select: { name: true } },
-              variant: { include: { inventory: { select: { name: true } } } },
+              variant: {
+                include: {
+                  inventory: { select: { name: true, purchasePrice: true } },
+                },
+              },
             },
           },
         },
@@ -234,6 +238,7 @@ export class StatisticsService {
     const productMap: Record<string, { quantity: number; total: number }> = {};
     const serviceMap: Record<string, { quantity: number; total: number }> = {};
 
+    let costOfGoods = 0; // costo de la mercancía vendida (solo productos)
     for (const sale of sales) {
       totalSales += sale.totalAmount;
       const day = colombiaDay(sale.saleDate);
@@ -258,6 +263,8 @@ export class StatisticsService {
           if (!productMap[n]) productMap[n] = { quantity: 0, total: 0 };
           productMap[n].quantity += item.quantity;
           productMap[n].total += item.subtotal;
+          costOfGoods +=
+            item.quantity * (item.variant.inventory.purchasePrice || 0);
         }
       }
     }
@@ -290,6 +297,9 @@ export class StatisticsService {
     const salesCount = sales.length;
     const avgTicket = salesCount ? totalSales / salesCount : 0;
     const profit = totalSales - totalExpenses;
+    // Margen bruto = ventas - costo de la mercancía vendida (sin gastos).
+    const grossMargin = totalSales - costOfGoods;
+    const grossMarginPct = totalSales ? (grossMargin / totalSales) * 100 : 0;
 
     const prevTotalSales = prevSales.reduce((a, s) => a + s.totalAmount, 0);
     const prevSalesCount = prevSales.length;
@@ -340,6 +350,9 @@ export class StatisticsService {
           avgTicket: Math.round(avgTicket),
           totalExpenses: Math.round(totalExpenses),
           profit: Math.round(profit),
+          costOfGoods: Math.round(costOfGoods),
+          grossMargin: Math.round(grossMargin),
+          grossMarginPct: Math.round(grossMarginPct),
           newCustomers,
           itemsSold,
           deltas: {
