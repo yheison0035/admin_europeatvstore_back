@@ -244,6 +244,8 @@ export class UsersService {
             // El CRM las usa para mostrar (o no) el módulo de tienda online.
             websiteEnabled: true,
             domain: true,
+            // Tema de diseño del panel elegido por el dueño.
+            crmTheme: true,
           },
         },
         local: true,

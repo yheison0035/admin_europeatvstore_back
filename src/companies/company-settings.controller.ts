@@ -39,6 +39,12 @@ export class CompanySettingsController {
   }
 
   @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('theme')
+  updateTheme(@Body('theme') theme: string, @Req() req) {
+    return this.service.updateCrmTheme(req.user, theme);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch('profile')
   updateProfile(
     @Body()

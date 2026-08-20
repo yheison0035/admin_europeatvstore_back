@@ -29,6 +29,7 @@ export class CompaniesService {
         email: true,
         type: true,
         nit: true,
+        crmTheme: true,
         loyaltyEnabled: true,
         loyaltyStampsRequired: true,
         loyaltyReward: true,
@@ -86,6 +87,18 @@ export class CompaniesService {
       where: { id: user.companyId },
       data,
       select: { openHour: true, closeHour: true },
+    });
+    return { success: true, data: company };
+  }
+
+  // Tema de diseño del panel/CRM (colores). Solo valores permitidos.
+  async updateCrmTheme(user: any, theme: string) {
+    const allowed = ['orange', 'blue', 'emerald'];
+    const value = allowed.includes(theme) ? theme : 'orange';
+    const company = await this.prisma.company.update({
+      where: { id: user.companyId },
+      data: { crmTheme: value },
+      select: { crmTheme: true },
     });
     return { success: true, data: company };
   }
