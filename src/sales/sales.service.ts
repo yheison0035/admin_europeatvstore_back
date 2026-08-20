@@ -23,6 +23,7 @@ import {
 } from '@/common/date-range.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
 import { AuditService } from '@/audit/audit.service';
+import { applyLoyaltyVisit } from '@/common/loyalty.util';
 
 @Injectable()
 export class SalesService {
@@ -782,28 +783,34 @@ export class SalesService {
         },
       });
 
-      // Fidelización: suma un sello al cliente identificado (no Consumidor
-      // Final) si la empresa tiene la tarjeta de sellos activada. Al completar
-      // los sellos requeridos, gana un premio y el contador se reinicia.
+      // Fidelización por visitas: cada venta a un cliente identificado (no
+      // Consumidor Final) cuenta como una visita, siempre que no hayan pasado
+      // más de loyaltyMaxDays desde la anterior (si se pasa, la racha reinicia).
+      // Al llegar al escalón 2 (ej. visita 8) el ciclo se reinicia.
       const company = await tx.company.findUnique({
         where: { id: user.companyId },
-        select: { loyaltyEnabled: true, loyaltyStampsRequired: true },
+        select: {
+          loyaltyEnabled: true,
+          loyaltyTier1Visits: true,
+          loyaltyTier1Percent: true,
+          loyaltyTier2Visits: true,
+          loyaltyTier2Percent: true,
+          loyaltyMaxDays: true,
+        },
       });
       if (
         company?.loyaltyEnabled &&
         dto.customerId &&
         sale.customer?.document !== '222222222222'
       ) {
-        const required = company.loyaltyStampsRequired || 10;
-        let stamps = (sale.customer?.loyaltyStamps ?? 0) + 1;
-        let rewards = sale.customer?.loyaltyRewards ?? 0;
-        if (required > 0 && stamps >= required) {
-          rewards += Math.floor(stamps / required);
-          stamps = stamps % required;
-        }
+        const { newCount } = applyLoyaltyVisit(
+          company as any,
+          sale.customer,
+          new Date(),
+        );
         await tx.customer.update({
           where: { id: dto.customerId },
-          data: { loyaltyStamps: stamps, loyaltyRewards: rewards },
+          data: { loyaltyStamps: newCount, loyaltyLastVisit: new Date() },
         });
       }
 

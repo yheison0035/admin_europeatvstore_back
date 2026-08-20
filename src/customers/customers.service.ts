@@ -12,6 +12,7 @@ import { AuditService } from '@/audit/audit.service';
 import { PlanLimitsService } from '@/common/plan-limits.service';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
+import { loyaltyStatus } from '@/common/loyalty.util';
 
 // Segmento comercial del cliente según recencia y frecuencia.
 function computeSegment(visits: number, lastVisit: Date | null): string {
@@ -217,7 +218,24 @@ export class CustomersService {
       include: { local: true },
     });
 
-    return { success: true, data: customer || null };
+    if (!customer) return { success: true, data: null };
+
+    // Estado de fidelización (descuento aplicable en la próxima visita) para
+    // mostrarlo al facturar.
+    const company = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        loyaltyEnabled: true,
+        loyaltyTier1Visits: true,
+        loyaltyTier1Percent: true,
+        loyaltyTier2Visits: true,
+        loyaltyTier2Percent: true,
+        loyaltyMaxDays: true,
+      },
+    });
+    const loyalty = loyaltyStatus(company as any, customer, new Date());
+
+    return { success: true, data: { ...customer, loyalty } };
   }
 
   async findOne(id: number, user: any) {
@@ -319,19 +337,16 @@ export class CustomersService {
       where: { id: user.companyId },
       select: {
         loyaltyEnabled: true,
-        loyaltyStampsRequired: true,
-        loyaltyReward: true,
+        loyaltyTier1Visits: true,
+        loyaltyTier1Percent: true,
+        loyaltyTier2Visits: true,
+        loyaltyTier2Percent: true,
+        loyaltyMaxDays: true,
       },
     });
-    const loyalty = company?.loyaltyEnabled
-      ? {
-          enabled: true,
-          stamps: customer.loyaltyStamps,
-          required: company.loyaltyStampsRequired,
-          rewards: customer.loyaltyRewards,
-          reward: company.loyaltyReward,
-        }
-      : { enabled: false };
+    const loyalty = loyaltyStatus(company as any, customer, new Date()) || {
+      enabled: false,
+    };
 
     return {
       success: true,
@@ -375,12 +390,8 @@ export class CustomersService {
     const where: any = {
       companyId: user.companyId,
       status: { not: Status.ELIMINADO },
-      OR: [{ loyaltyRewards: { gt: 0 } }, { loyaltyStamps: { gt: 0 } }],
+      loyaltyStamps: { gt: 0 },
     };
-
-    if (query.onlyRewards === 'true') {
-      where.OR = [{ loyaltyRewards: { gt: 0 } }];
-    }
 
     if (query.search) {
       where.AND = [
@@ -399,14 +410,14 @@ export class CustomersService {
         where,
         skip,
         take: limit,
-        orderBy: [{ loyaltyRewards: 'desc' }, { loyaltyStamps: 'desc' }],
+        orderBy: [{ loyaltyStamps: 'desc' }],
         select: {
           id: true,
           name: true,
           phone: true,
           document: true,
           loyaltyStamps: true,
-          loyaltyRewards: true,
+          loyaltyLastVisit: true,
         },
       }),
       this.prisma.customer.count({ where }),
@@ -414,15 +425,24 @@ export class CustomersService {
         where: { id: user.companyId },
         select: {
           loyaltyEnabled: true,
-          loyaltyStampsRequired: true,
-          loyaltyReward: true,
+          loyaltyTier1Visits: true,
+          loyaltyTier1Percent: true,
+          loyaltyTier2Visits: true,
+          loyaltyTier2Percent: true,
+          loyaltyMaxDays: true,
         },
       }),
     ]);
 
+    const now = new Date();
+    const data = items.map((c) => ({
+      ...c,
+      loyalty: loyaltyStatus(company as any, c, now),
+    }));
+
     return {
       success: true,
-      data: items,
+      data,
       config: company,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };

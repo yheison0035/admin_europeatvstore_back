@@ -31,8 +31,11 @@ export class CompaniesService {
         nit: true,
         crmTheme: true,
         loyaltyEnabled: true,
-        loyaltyStampsRequired: true,
-        loyaltyReward: true,
+        loyaltyTier1Visits: true,
+        loyaltyTier1Percent: true,
+        loyaltyTier2Visits: true,
+        loyaltyTier2Percent: true,
+        loyaltyMaxDays: true,
         openHour: true,
         closeHour: true,
       },
@@ -107,14 +110,33 @@ export class CompaniesService {
     user: any,
     dto: {
       loyaltyEnabled?: boolean;
+      loyaltyTier1Visits?: number;
+      loyaltyTier1Percent?: number;
+      loyaltyTier2Visits?: number;
+      loyaltyTier2Percent?: number;
+      loyaltyMaxDays?: number;
+      // legado
       loyaltyStampsRequired?: number;
       loyaltyReward?: string;
     },
   ) {
     const data: any = {};
+    const int = (v: any, min: number, max: number, def: number) =>
+      Math.min(max, Math.max(min, Math.floor(Number(v) || def)));
+
     if (typeof dto.loyaltyEnabled === 'boolean') {
       data.loyaltyEnabled = dto.loyaltyEnabled;
     }
+    if (dto.loyaltyTier1Visits != null)
+      data.loyaltyTier1Visits = int(dto.loyaltyTier1Visits, 1, 99, 4);
+    if (dto.loyaltyTier1Percent != null)
+      data.loyaltyTier1Percent = int(dto.loyaltyTier1Percent, 0, 100, 50);
+    if (dto.loyaltyTier2Visits != null)
+      data.loyaltyTier2Visits = int(dto.loyaltyTier2Visits, 1, 99, 8);
+    if (dto.loyaltyTier2Percent != null)
+      data.loyaltyTier2Percent = int(dto.loyaltyTier2Percent, 0, 100, 100);
+    if (dto.loyaltyMaxDays != null)
+      data.loyaltyMaxDays = int(dto.loyaltyMaxDays, 1, 365, 25);
     if (dto.loyaltyStampsRequired != null) {
       data.loyaltyStampsRequired = Math.max(
         1,
@@ -130,8 +152,11 @@ export class CompaniesService {
       data,
       select: {
         loyaltyEnabled: true,
-        loyaltyStampsRequired: true,
-        loyaltyReward: true,
+        loyaltyTier1Visits: true,
+        loyaltyTier1Percent: true,
+        loyaltyTier2Visits: true,
+        loyaltyTier2Percent: true,
+        loyaltyMaxDays: true,
       },
     });
     return { success: true, data: company };

@@ -195,11 +195,19 @@ model Company {
   phone   String?
   manager String?
 
-  // Fidelización (tarjeta de sellos): activar, cuántas visitas para un premio,
-  // y el nombre del premio (ej. "1 servicio gratis").
-  loyaltyEnabled        Boolean @default(false)
-  loyaltyStampsRequired Int     @default(10)
-  loyaltyReward         String  @default("1 servicio gratis")
+  // Fidelización por visitas con dos escalones de descuento. Ej. barbería:
+  // a la visita 4 -> 50% en ese corte, a la visita 8 -> 100% (y reinicia).
+  // Entre visita y visita hay un máximo de días; si se pasa, la racha reinicia.
+  loyaltyEnabled      Boolean @default(false)
+  loyaltyTier1Visits  Int     @default(4)
+  loyaltyTier1Percent Int     @default(50)
+  loyaltyTier2Visits  Int     @default(8)
+  loyaltyTier2Percent Int     @default(100)
+  loyaltyMaxDays      Int     @default(25)
+
+  // (Legado) esquema anterior de sellos + premio; se conserva por compatibilidad.
+  loyaltyStampsRequired Int    @default(10)
+  loyaltyReward         String @default("1 servicio gratis")
 
   // Horario de atención (hora 0-23) — usado por la disponibilidad de citas.
   openHour  Int @default(9)
@@ -322,8 +330,9 @@ model Customer {
 
   // Fidelización: sellos acumulados hacia el próximo premio y premios ganados
   // pendientes de canjear.
-  loyaltyStamps  Int @default(0)
-  loyaltyRewards Int @default(0)
+  loyaltyStamps  Int       @default(0)
+  loyaltyRewards Int       @default(0)
+  loyaltyLastVisit DateTime? // última visita que sumó a la fidelización
 
   // Última vez que se le escribió para reactivarlo (campaña de win-back).
   lastWinbackAt DateTime?
