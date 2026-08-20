@@ -9,6 +9,21 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { Status } from '@prisma/client';
 import { AuditService } from '@/audit/audit.service';
 import { PlanLimitsService } from '@/common/plan-limits.service';
+import { getAccessibleLocalIds } from '@/common/access-locals.util';
+import { applyLocalFilter } from '@/common/local-filter.util';
+
+// Segmento comercial del cliente según recencia y frecuencia.
+function computeSegment(visits: number, lastVisit: Date | null): string {
+  if (!visits) return 'NUEVO';
+  const daysSince = lastVisit
+    ? Math.floor((Date.now() - new Date(lastVisit).getTime()) / 86400000)
+    : 99999;
+  if (daysSince > 60) return 'PERDIDO';
+  if (daysSince > 20) return 'EN_RIESGO';
+  if (visits >= 5) return 'VIP';
+  if (visits >= 2) return 'FRECUENTE';
+  return 'NUEVO';
+}
 
 @Injectable()
 export class CustomersService {
@@ -221,6 +236,111 @@ export class CustomersService {
       success: true,
       message: 'Cliente obtenido correctamente',
       data: customer,
+    };
+  }
+
+  // Ficha 360°: métricas de relación (LTV, visitas, ticket promedio, última
+  // visita, lo que suele consumir), historial de ventas y citas, y segmento.
+  async getCustomerSummary(id: number, user: any) {
+    const customer = await this.prisma.customer.findFirst({
+      where: { id, companyId: user.companyId },
+      include: { local: { select: { name: true } } },
+    });
+    if (!customer) throw new NotFoundException('Cliente no encontrado');
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+
+    const saleWhere: any = {
+      customerId: id,
+      saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
+    };
+    if (user.role !== 'SUPER_PLATFORM_ADMIN') {
+      saleWhere.local = { is: { companyId: user.companyId } };
+    }
+    applyLocalFilter(saleWhere, user, localIds, 'sale');
+
+    const sales = await this.prisma.sale.findMany({
+      where: saleWhere,
+      orderBy: { saleDate: 'desc' },
+      select: {
+        id: true,
+        code: true,
+        saleDate: true,
+        totalAmount: true,
+        paymentStatus: true,
+        items: {
+          select: {
+            quantity: true,
+            service: { select: { name: true } },
+            variant: { select: { inventory: { select: { name: true } } } },
+          },
+        },
+      },
+    });
+
+    const visits = sales.length;
+    const ltv = sales.reduce((s, x) => s + x.totalAmount, 0);
+    const avgTicket = visits ? ltv / visits : 0;
+    const lastVisit = sales[0]?.saleDate || null;
+    const firstVisit = visits ? sales[visits - 1].saleDate : null;
+    const pendingFiado = sales
+      .filter((s) => s.paymentStatus === 'FIADO')
+      .reduce((a, s) => a + s.totalAmount, 0);
+
+    // Lo que suele consumir (productos y servicios más frecuentes).
+    const itemCount = new Map<string, number>();
+    for (const s of sales) {
+      for (const it of s.items) {
+        const name = it.service?.name || it.variant?.inventory?.name;
+        if (name) itemCount.set(name, (itemCount.get(name) || 0) + (it.quantity || 1));
+      }
+    }
+    const topItems = [...itemCount.entries()]
+      .map(([name, qty]) => ({ name, qty }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 5);
+
+    const appointments = await this.prisma.appointment.findMany({
+      where: { customerId: id, companyId: user.companyId },
+      orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
+      take: 15,
+      select: {
+        id: true,
+        date: true,
+        startTime: true,
+        status: true,
+        service: { select: { name: true } },
+        barber: { select: { name: true } },
+      },
+    });
+
+    return {
+      success: true,
+      data: {
+        customer,
+        metrics: {
+          ltv,
+          visits,
+          avgTicket,
+          firstVisit,
+          lastVisit,
+          pendingFiado,
+          segment: computeSegment(visits, lastVisit),
+        },
+        topItems,
+        sales: sales.slice(0, 20).map((s) => ({
+          id: s.id,
+          code: s.code,
+          saleDate: s.saleDate,
+          totalAmount: s.totalAmount,
+          paymentStatus: s.paymentStatus,
+          items: s.items.map((it) => ({
+            quantity: it.quantity,
+            name: it.service?.name || it.variant?.inventory?.name || 'Ítem',
+          })),
+        })),
+        appointments,
+      },
     };
   }
 

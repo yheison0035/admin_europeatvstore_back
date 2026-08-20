@@ -54,6 +54,21 @@ export class CustomersController {
     return this.customersService.findByDocument(document, req.user);
   }
 
+  // Ficha 360° del cliente (métricas, historial, segmento). Antes de :id.
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN', 'RECEPCIONISTA',
+    'COORDINADOR',
+    'AUXILIAR',
+    'ASESOR',
+    'VENTAS',
+    'BODEGUERO',
+  )
+  @Get(':id/summary')
+  summary(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.customersService.getCustomerSummary(id, req.user);
+  }
+
   // Ver uno
   @Roles(
     'SUPER_ADMIN',
