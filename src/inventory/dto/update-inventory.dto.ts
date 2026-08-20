@@ -18,6 +18,10 @@ class UpdateVariantDto {
   @IsString()
   color: string;
 
+  @IsOptional()
+  @IsString()
+  size?: string;
+
   // Stock: entero por unidad o decimal (kg) para venta por peso.
   @IsNumber()
   @Min(0)

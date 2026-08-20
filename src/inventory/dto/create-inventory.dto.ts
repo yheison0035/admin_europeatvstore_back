@@ -12,6 +12,10 @@ class VariantDto {
   @IsString()
   color: string;
 
+  @IsOptional()
+  @IsString()
+  size?: string;
+
   @IsNumber()
   stock: number;
 }

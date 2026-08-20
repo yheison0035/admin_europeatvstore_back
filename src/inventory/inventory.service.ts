@@ -165,6 +165,7 @@ export class InventoryService {
           id: variant.id,
           name: product.name,
           color: variant.color,
+          size: variant.size,
           sku: variant.sku,
           stock: variant.stock,
           price: product.salePrice,
@@ -545,6 +546,7 @@ export class InventoryService {
           data: {
             inventoryId: product.id,
             color: v.color,
+            size: v.size ?? null,
             stock: v.stock,
             sku: 'PENDING',
           },

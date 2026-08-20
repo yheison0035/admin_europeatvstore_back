@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Min,
@@ -15,7 +16,12 @@ export class InventoryVariantSyncInput {
   @IsString()
   color: string;
 
-  @IsInt()
+  @IsOptional()
+  @IsString()
+  size?: string;
+
+  // Decimal para soportar venta por peso (kg).
+  @IsNumber()
   @Min(0)
   stock: number;
 }

@@ -459,10 +459,11 @@ model Inventory {
 
 model InventoryVariant {
   id       Int    @id @default(autoincrement())
-  sequence Int    @unique @default(autoincrement())
+  sequence Int     @unique @default(autoincrement())
   color    String
-  stock    Float  @default(0) // admite decimales para venta por peso (kg)
-  sku      String @unique
+  size     String? // talla (ropa/calzado); opcional
+  stock    Float   @default(0) // admite decimales para venta por peso (kg)
+  sku      String  @unique
 
   isActive Boolean @default(true)
 

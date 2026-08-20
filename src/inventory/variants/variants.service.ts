@@ -60,6 +60,7 @@ export class VariantsService {
         where: { id: v.id },
         data: {
           color: v.color,
+          size: v.size ?? null,
           isActive: true,
           stock: v.stock ?? 0, // 🔥 permitir cero
         },
@@ -71,6 +72,7 @@ export class VariantsService {
         data: {
           inventoryId,
           color: v.color,
+          size: v.size ?? null,
           stock: v.stock ?? 0,
           sku: 'PENDING',
         },
