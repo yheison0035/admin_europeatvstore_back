@@ -55,6 +55,13 @@ export class CustomersController {
     return this.customersService.findByDocument(document, req.user);
   }
 
+  // Fidelización: clientes con sellos/premios. Antes de :id.
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
+  @Get('loyalty')
+  loyalty(@Req() req, @Query() query) {
+    return this.customersService.loyaltyCustomers(req.user, query);
+  }
+
   // Ficha 360° del cliente (métricas, historial, segmento). Antes de :id.
   @Roles(
     'SUPER_ADMIN',

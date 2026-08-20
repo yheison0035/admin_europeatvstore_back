@@ -365,6 +365,69 @@ export class CustomersService {
   }
 
   // Canjea un premio de fidelización (descuenta 1 premio disponible).
+  // Clientes con actividad de fidelización (sellos acumulados o premios por
+  // canjear). Ordena primero los que ya tienen premio.
+  async loyaltyCustomers(user: any, query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      companyId: user.companyId,
+      status: { not: Status.ELIMINADO },
+      OR: [{ loyaltyRewards: { gt: 0 } }, { loyaltyStamps: { gt: 0 } }],
+    };
+
+    if (query.onlyRewards === 'true') {
+      where.OR = [{ loyaltyRewards: { gt: 0 } }];
+    }
+
+    if (query.search) {
+      where.AND = [
+        {
+          OR: [
+            { name: { contains: query.search, mode: 'insensitive' } },
+            { phone: { contains: query.search, mode: 'insensitive' } },
+            { document: { contains: query.search, mode: 'insensitive' } },
+          ],
+        },
+      ];
+    }
+
+    const [items, total, company] = await this.prisma.$transaction([
+      this.prisma.customer.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ loyaltyRewards: 'desc' }, { loyaltyStamps: 'desc' }],
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          document: true,
+          loyaltyStamps: true,
+          loyaltyRewards: true,
+        },
+      }),
+      this.prisma.customer.count({ where }),
+      this.prisma.company.findUnique({
+        where: { id: user.companyId },
+        select: {
+          loyaltyEnabled: true,
+          loyaltyStampsRequired: true,
+          loyaltyReward: true,
+        },
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: items,
+      config: company,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
   async redeemLoyaltyReward(id: number, user: any) {
     const cust = await this.prisma.customer.findFirst({
       where: { id, companyId: user.companyId },
