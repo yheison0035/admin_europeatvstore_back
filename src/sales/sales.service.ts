@@ -8,7 +8,12 @@ import { PrismaService } from '@/prisma.service';
 import { CreateSaleDto, CreateSaleItemDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
-import { PaymentMethod, PaymentStatus, Status } from '@prisma/client';
+import {
+  PaymentMethod,
+  PaymentStatus,
+  Status,
+  ShippingStatus,
+} from '@prisma/client';
 import { StockService } from '@/inventory/stock.service';
 import { PlanLimitsService } from '@/common/plan-limits.service';
 import {
@@ -345,6 +350,182 @@ export class SalesService {
     });
 
     return { success: true, data: { id: customerId, contactedAt: now.toISOString() } };
+  }
+
+  // ============================ PEDIDOS (WEB) ============================
+  // Los pedidos son ventas originadas en la tienda online (source = ECOMMERCE).
+  // Se listan/gestionan aparte de las ventas de mostrador.
+  async findOrders(user: any, query: any) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Los pedidos web pertenecen a la tienda online de TODA la empresa (viven
+    // en el local de ecommerce), no al local físico del usuario: se escopan por
+    // empresa para que cualquier miembro con permiso los gestione.
+    const where: any = {
+      source: 'ECOMMERCE',
+      local: { is: { companyId: user.companyId } },
+    };
+
+    if (query.code) {
+      where.code = { contains: query.code, mode: 'insensitive' };
+    }
+
+    if (query.shippingStatus) where.shippingStatus = query.shippingStatus;
+    if (query.paymentStatus) where.paymentStatus = query.paymentStatus;
+
+    if (query.customer) {
+      where.OR = [
+        {
+          ecommerceCustomer: {
+            is: {
+              OR: [
+                { firstName: { contains: query.customer, mode: 'insensitive' } },
+                { lastName: { contains: query.customer, mode: 'insensitive' } },
+                { phone: { contains: query.customer, mode: 'insensitive' } },
+                { email: { contains: query.customer, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+        {
+          customer: {
+            is: {
+              OR: [
+                { name: { contains: query.customer, mode: 'insensitive' } },
+                { phone: { contains: query.customer, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+      ];
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.sale.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ saleDate: 'desc' }, { createdAt: 'desc' }],
+        include: {
+          ecommerceCustomer: true,
+          customer: true,
+          shipment: true,
+          local: true,
+          _count: { select: { items: true } },
+        },
+      }),
+      this.prisma.sale.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: items,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async findOrderOne(id: number, user: any) {
+    const order = await this.prisma.sale.findFirst({
+      where: {
+        id,
+        source: 'ECOMMERCE',
+        local: { is: { companyId: user.companyId } },
+      },
+      include: {
+        items: {
+          include: {
+            variant: { include: { inventory: true } },
+            service: true,
+          },
+        },
+        ecommerceCustomer: true,
+        customer: true,
+        user: true,
+        local: true,
+        shipment: true,
+      },
+    });
+
+    if (!order) throw new NotFoundException('Pedido no encontrado');
+
+    return { success: true, data: order };
+  }
+
+  // Actualiza el cumplimiento del pedido: estado de envío + datos de la guía
+  // (transportadora, número, fechas). Crea el Shipment si no existe.
+  async updateOrderFulfillment(id: number, user: any, dto: any) {
+    const order = await this.prisma.sale.findFirst({
+      where: {
+        id,
+        source: 'ECOMMERCE',
+        local: { is: { companyId: user.companyId } },
+      },
+      include: { shipment: true },
+    });
+
+    if (!order) throw new NotFoundException('Pedido no encontrado');
+
+    const status: ShippingStatus | undefined =
+      dto.shippingStatus && ShippingStatus[dto.shippingStatus]
+        ? dto.shippingStatus
+        : undefined;
+
+    // Fechas automáticas según el estado, respetando lo que llegue explícito.
+    const now = new Date();
+    const shippedAt =
+      dto.shippedAt !== undefined
+        ? dto.shippedAt
+          ? new Date(dto.shippedAt)
+          : null
+        : status === 'EN_CAMINO' && !order.shipment?.shippedAt
+          ? now
+          : undefined;
+    const deliveredAt =
+      dto.deliveredAt !== undefined
+        ? dto.deliveredAt
+          ? new Date(dto.deliveredAt)
+          : null
+        : status === 'ENTREGADO' && !order.shipment?.deliveredAt
+          ? now
+          : undefined;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (status) {
+        await tx.sale.update({
+          where: { id },
+          data: { shippingStatus: status },
+        });
+      }
+
+      const shipmentData: any = {};
+      if (dto.carrier !== undefined) shipmentData.carrier = dto.carrier;
+      if (dto.trackingNumber !== undefined)
+        shipmentData.trackingNumber = dto.trackingNumber;
+      if (dto.notes !== undefined) shipmentData.notes = dto.notes;
+      if (status) shipmentData.status = status;
+      if (shippedAt !== undefined) shipmentData.shippedAt = shippedAt;
+      if (deliveredAt !== undefined) shipmentData.deliveredAt = deliveredAt;
+
+      if (Object.keys(shipmentData).length > 0) {
+        await tx.shipment.upsert({
+          where: { saleId: id },
+          create: { saleId: id, ...shipmentData },
+          update: shipmentData,
+        });
+      }
+    });
+
+    await this.audit.log({
+      entity: 'sale',
+      entityId: id,
+      action: 'UPDATE',
+      user,
+      changes: { fulfillment: dto },
+    });
+
+    return this.findOrderOne(id, user);
   }
 
   async findOne(id: number, user: any) {

@@ -50,6 +50,29 @@ export class SalesController {
     return this.salesService.markWinbackContacted(id, req.user);
   }
 
+  // ---- PEDIDOS (ventas de la tienda online). Van antes de :id ----
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'VENTAS', 'CAJA')
+  @Get('orders/list')
+  findOrders(@Req() req, @Query() query) {
+    return this.salesService.findOrders(req.user, query);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'VENTAS', 'CAJA')
+  @Get('orders/:id')
+  findOrderOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.salesService.findOrderOne(id, req.user);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'VENTAS', 'CAJA')
+  @Patch('orders/:id/fulfillment')
+  updateOrderFulfillment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: any,
+    @Req() req,
+  ) {
+    return this.salesService.updateOrderFulfillment(id, req.user, dto);
+  }
+
   @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
