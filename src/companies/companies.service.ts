@@ -24,10 +24,60 @@ export class CompaniesService {
       where: { id: user.companyId },
       select: {
         name: true,
+        logo: true,
+        phone: true,
+        email: true,
+        type: true,
         loyaltyEnabled: true,
         loyaltyStampsRequired: true,
         loyaltyReward: true,
+        openHour: true,
+        closeHour: true,
       },
+    });
+    return { success: true, data: company };
+  }
+
+  // Datos básicos de la empresa (nombre, logo, contacto).
+  async updateProfile(
+    user: any,
+    dto: { name?: string; logo?: string; phone?: string; email?: string },
+  ) {
+    const data: any = {};
+    if (dto.name?.trim()) data.name = dto.name.trim();
+    if (dto.logo !== undefined) data.logo = dto.logo || null;
+    if (dto.phone !== undefined) data.phone = dto.phone || null;
+    if (dto.email !== undefined) data.email = dto.email || null;
+
+    const company = await this.prisma.company.update({
+      where: { id: user.companyId },
+      data,
+      select: { name: true, logo: true, phone: true, email: true },
+    });
+    return { success: true, data: company };
+  }
+
+  // Horario de atención (para disponibilidad de citas).
+  async updateHours(
+    user: any,
+    dto: { openHour?: number; closeHour?: number },
+  ) {
+    const clamp = (h: number) => Math.min(23, Math.max(0, Math.floor(h)));
+    const data: any = {};
+    if (dto.openHour != null) data.openHour = clamp(Number(dto.openHour));
+    if (dto.closeHour != null) data.closeHour = clamp(Number(dto.closeHour));
+    if (
+      data.openHour != null &&
+      data.closeHour != null &&
+      data.closeHour <= data.openHour
+    ) {
+      data.closeHour = data.openHour + 1;
+    }
+
+    const company = await this.prisma.company.update({
+      where: { id: user.companyId },
+      data,
+      select: { openHour: true, closeHour: true },
     });
     return { success: true, data: company };
   }

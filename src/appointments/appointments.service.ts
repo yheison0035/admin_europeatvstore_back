@@ -565,8 +565,14 @@ export class AppointmentsService {
 
     const duration = service.duration;
 
-    const startHour = 9;
-    const endHour = 20;
+    // Horario de atención configurable de la empresa (por defecto 9–20).
+    const company = await this.prisma.company.findUnique({
+      where: { id: service.companyId },
+      select: { openHour: true, closeHour: true },
+    });
+
+    const startHour = company?.openHour ?? 9;
+    const endHour = company?.closeHour ?? 20;
     const interval = 10;
 
     const slots: number[] = [];

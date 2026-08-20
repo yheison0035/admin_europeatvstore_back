@@ -198,6 +198,10 @@ model Company {
   loyaltyStampsRequired Int     @default(10)
   loyaltyReward         String  @default("1 servicio gratis")
 
+  // Horario de atención (hora 0-23) — usado por la disponibilidad de citas.
+  openHour  Int @default(9)
+  closeHour Int @default(20)
+
   // Facturación / suscripción (control de la plataforma)
   plan       String?
   paidUntil  DateTime? // fecha hasta la que la empresa está al día; si vence, se auto-suspende

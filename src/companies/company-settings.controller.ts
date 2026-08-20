@@ -37,4 +37,23 @@ export class CompanySettingsController {
   ) {
     return this.service.updateLoyalty(req.user, dto);
   }
+
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('profile')
+  updateProfile(
+    @Body()
+    dto: { name?: string; logo?: string; phone?: string; email?: string },
+    @Req() req,
+  ) {
+    return this.service.updateProfile(req.user, dto);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('hours')
+  updateHours(
+    @Body() dto: { openHour?: number; closeHour?: number },
+    @Req() req,
+  ) {
+    return this.service.updateHours(req.user, dto);
+  }
 }
