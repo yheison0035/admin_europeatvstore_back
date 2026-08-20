@@ -25,6 +25,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { MesasModule } from './mesas/mesas.module';
 import { ComandasModule } from './comandas/comandas.module';
 import { CashModule } from './cash/cash.module';
+import { PurchasesModule } from './purchases/purchases.module';
 import { WebsiteModule } from './modules/website/website.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { AuditModule } from './audit/audit.module';
@@ -58,6 +59,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     MesasModule,
     ComandasModule,
     CashModule,
+    PurchasesModule,
     WebsiteModule,
     StatisticsModule,
     AuditModule,

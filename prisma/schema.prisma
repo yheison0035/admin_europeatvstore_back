@@ -244,6 +244,7 @@ model Company {
   mesas          Mesa[]
   comandas       Comanda[]
   cashRegisters  CashRegister[]
+  purchases      Purchase[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -287,6 +288,7 @@ model User {
   cashOpened    CashRegister[] @relation("CashOpenedBy")
   cashClosed    CashRegister[] @relation("CashClosedBy")
   cashMovements CashMovement[] @relation("CashMovementUser")
+  purchases     Purchase[]     @relation("PurchaseUser")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -353,6 +355,7 @@ model Provider {
 
   inventories Inventory[] @relation("ProviderProducts")
   expenses    Expense[]   @relation("ProviderExpenses")
+  purchases   Purchase[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -388,6 +391,7 @@ model Local {
   mesas           Mesa[]
   comandas        Comanda[]
   cashRegisters   CashRegister[]
+  purchases       Purchase[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -494,7 +498,8 @@ model InventoryVariant {
 
   inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
 
-  saleItems SaleItem[]
+  saleItems     SaleItem[]
+  purchaseItems PurchaseItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -931,4 +936,54 @@ model CashMovement {
   createdAt DateTime @default(now())
 
   @@index([cashRegisterId])
+}
+
+//////////////////////////////////////////////////
+// COMPRAS / ORDENES DE COMPRA
+//////////////////////////////////////////////////
+
+enum PurchaseStatus {
+  PENDIENTE
+  RECIBIDA
+  CANCELADA
+}
+
+model Purchase {
+  id         Int            @id @default(autoincrement())
+  code       String
+  status     PurchaseStatus @default(PENDIENTE)
+  total      Float          @default(0)
+  notes      String?
+  receivedAt DateTime?
+
+  providerId Int?
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  localId    Int
+  local      Local     @relation(fields: [localId], references: [id], onDelete: Cascade)
+  companyId  Int
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId     Int?
+  user       User?     @relation("PurchaseUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  items PurchaseItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([localId])
+  @@index([status])
+}
+
+model PurchaseItem {
+  id                 Int              @id @default(autoincrement())
+  purchaseId         Int
+  purchase           Purchase         @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  inventoryVariantId Int
+  variant            InventoryVariant @relation(fields: [inventoryVariantId], references: [id])
+  quantity           Float
+  unitCost           Float
+  subtotal           Float
+
+  @@index([purchaseId])
 }
