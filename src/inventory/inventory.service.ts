@@ -168,6 +168,7 @@ export class InventoryService {
           sku: variant.sku,
           stock: variant.stock,
           price: product.salePrice,
+          unit: product.unit,
           localId: product.localId,
           score,
         };
@@ -513,6 +514,7 @@ export class InventoryService {
           salePrice: dto.salePrice,
           status: dto.status,
           minStock: dto.minStock ?? 0,
+          unit: dto.unit ?? 'UNIDAD',
           slug,
 
           ...(dto.localId && {
@@ -598,6 +600,7 @@ export class InventoryService {
         ...(dto.salePrice !== undefined && { salePrice: dto.salePrice }),
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.minStock !== undefined && { minStock: dto.minStock }),
+        ...(dto.unit !== undefined && { unit: dto.unit }),
 
         ...(dto.localId && {
           local: { connect: { id: dto.localId } },

@@ -18,8 +18,9 @@ class UpdateVariantDto {
   @IsString()
   color: string;
 
-  @IsInt()
-  @Min(1)
+  // Stock: entero por unidad o decimal (kg) para venta por peso.
+  @IsNumber()
+  @Min(0)
   stock: number;
 }
 
@@ -51,6 +52,10 @@ export class UpdateInventoryDto {
   @IsOptional()
   @IsInt()
   minStock?: number;
+
+  @IsOptional()
+  @IsString()
+  unit?: string;
 
   @IsOptional()
   status?: Status;

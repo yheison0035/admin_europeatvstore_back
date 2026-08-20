@@ -43,6 +43,10 @@ export class CreateInventoryDto {
   minStock?: number;
 
   @IsOptional()
+  @IsString()
+  unit?: string;
+
+  @IsOptional()
   status?: Status;
 
   @IsOptional()

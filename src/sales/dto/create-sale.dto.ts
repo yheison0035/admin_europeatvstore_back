@@ -2,6 +2,7 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsNumber,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -18,7 +19,8 @@ export class CreateSaleItemDto {
   @IsInt()
   serviceId?: number;
 
-  @IsInt()
+  // Cantidad: entero para productos por unidad, decimal para venta por peso (kg).
+  @IsNumber()
   quantity: number;
 
   @IsOptional()

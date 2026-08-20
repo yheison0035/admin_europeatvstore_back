@@ -430,6 +430,9 @@ model Inventory {
   // total del producto (suma de variantes).
   minStock      Int     @default(0)
 
+  // Unidad de venta: UNIDAD (por unidad) o PESO (por kg, admite decimales).
+  unit          String  @default("UNIDAD")
+
   localId    Int?
   providerId Int?
   categoryId Int?
@@ -458,7 +461,7 @@ model InventoryVariant {
   id       Int    @id @default(autoincrement())
   sequence Int    @unique @default(autoincrement())
   color    String
-  stock    Int    @default(0)
+  stock    Float  @default(0) // admite decimales para venta por peso (kg)
   sku      String @unique
 
   isActive Boolean @default(true)
@@ -583,7 +586,7 @@ model Sale {
 
 model SaleItem {
   id       Int   @id @default(autoincrement())
-  quantity Int
+  quantity Float // admite decimales para venta por peso (kg)
   price    Float
   subtotal Float
   discount Float @default(0)
