@@ -55,6 +55,28 @@ export class CompaniesService {
     return { success: true, data: company };
   }
 
+  // Config fiscal mínima para el punto de venta (accesible a cualquier vendedor,
+  // no solo dueño/admin): el POS la necesita para mostrar el IVA y el total real
+  // a cobrar. Devuelve solo lo justo, nunca datos sensibles de facturación.
+  async getFiscalConfig(user: any) {
+    const c = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        responsableIVA: true,
+        preciosIncluyenIVA: true,
+        defaultTaxRate: true,
+      },
+    });
+    return {
+      success: true,
+      data: c || {
+        responsableIVA: false,
+        preciosIncluyenIVA: true,
+        defaultTaxRate: 0,
+      },
+    };
+  }
+
   // Datos básicos de la empresa (nombre, logo, contacto).
   async updateProfile(
     user: any,

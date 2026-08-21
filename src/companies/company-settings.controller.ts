@@ -25,6 +25,13 @@ export class CompanySettingsController {
     return this.service.getOwnSettings(req.user);
   }
 
+  // Sin @Roles: cualquier usuario autenticado (incluida la caja/cajero) puede
+  // leer la config fiscal mínima que el POS necesita para calcular el IVA.
+  @Get('fiscal-config')
+  getFiscalConfig(@Req() req) {
+    return this.service.getFiscalConfig(req.user);
+  }
+
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch('loyalty')
   updateLoyalty(
