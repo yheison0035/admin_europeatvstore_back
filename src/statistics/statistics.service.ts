@@ -112,9 +112,22 @@ export class StatisticsService {
     // ---- Rango de fechas (Colombia) ----
     const today = colombiaDay(new Date());
     const endStr: string = dto.endDate || today;
-    const startStr: string =
-      dto.startDate ||
-      colombiaDay(new Date(Date.now() - 29 * 24 * 60 * 60 * 1000));
+    // Por defecto (sin fecha inicial), el rango arranca en la PRIMERA venta
+    // registrada de la empresa; si no hay ventas, en los últimos 30 días.
+    let startStr: string = dto.startDate;
+    if (!startStr) {
+      const firstSale = await this.prisma.sale.findFirst({
+        where: {
+          local: { companyId },
+          saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
+        },
+        orderBy: { saleDate: 'asc' },
+        select: { saleDate: true },
+      });
+      startStr = firstSale
+        ? colombiaDay(firstSale.saleDate)
+        : colombiaDay(new Date(Date.now() - 29 * 24 * 60 * 60 * 1000));
+    }
 
     const [sy, sm, sd] = startStr.split('-').map(Number);
     const [ey, em, ed] = endStr.split('-').map(Number);
