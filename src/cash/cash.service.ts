@@ -36,16 +36,23 @@ export class CashService {
     if (!localId) throw new BadRequestException('localId es obligatorio');
     await this.assertLocalInCompany(localId, user.companyId);
 
-    const register = await this.prisma.cashRegister.findFirst({
+    const base = await this.prisma.cashRegister.findFirst({
       where: { localId, companyId: user.companyId, status: 'ABIERTA' },
+    });
+
+    if (!base) return { success: true, data: null };
+
+    // Se auto-reconcilia con las ventas del día antes de mostrarla.
+    await this.reconcileCashSales(base);
+
+    const register = await this.prisma.cashRegister.findUnique({
+      where: { id: base.id },
       include: {
         movements: { orderBy: { createdAt: 'desc' } },
         openedBy: { select: { id: true, name: true } },
         local: { select: { id: true, name: true } },
       },
     });
-
-    if (!register) return { success: true, data: null };
 
     return {
       success: true,
@@ -79,11 +86,9 @@ export class CashService {
       },
     });
 
-    // Al abrir, importa las ventas en efectivo de HOY (día Colombia) de este
-    // local que aún no estén en ninguna caja. Así, si abren la caja después de
-    // haber vendido, el efectivo del día igual queda reflejado y el arqueo
-    // cuadra con el reporte de ventas.
-    await this.importPendingCashSales(register.id, dto.localId, user.id);
+    // Al abrir, importa las ventas en efectivo del día que aún no estén en
+    // ninguna caja (por si vendieron antes de abrir), para que el arqueo cuadre.
+    await this.reconcileCashSales(register);
 
     const full = await this.prisma.cashRegister.findUnique({
       where: { id: register.id },
@@ -97,46 +102,54 @@ export class CashService {
     };
   }
 
-  // Registra como ingreso las ventas en efectivo del día que aún no están en
-  // ninguna caja (evita duplicar: solo las que no tienen movimiento asociado).
-  private async importPendingCashSales(
-    cashRegisterId: number,
-    localId: number,
-    userId: number,
-  ) {
-    // Ventana del día en zona Colombia (UTC-5), expresada en UTC.
-    const now = new Date();
-    const col = new Date(now.getTime() - 5 * 3600 * 1000);
-    const y = col.getUTCFullYear();
-    const m = col.getUTCMonth();
-    const d = col.getUTCDate();
-    const start = new Date(Date.UTC(y, m, d, 5, 0, 0));
-    const end = new Date(Date.UTC(y, m, d + 1, 5, 0, 0));
+  // Inicio del día (zona Colombia UTC-5) de una fecha, expresado en UTC.
+  private colombiaDayStart(date: Date): Date {
+    const col = new Date(date.getTime() - 5 * 3600 * 1000);
+    return new Date(
+      Date.UTC(col.getUTCFullYear(), col.getUTCMonth(), col.getUTCDate(), 5, 0, 0),
+    );
+  }
+
+  // AUTO-RECONCILIACIÓN: registra como ingreso las ventas en efectivo del local
+  // —desde el día en que se abrió la caja— que aún no estén en ninguna caja.
+  // Es idempotente (solo importa ventas sin movimiento asociado), así la caja
+  // SIEMPRE cuadra con las ventas del reporte, sin importar si la venta ocurrió
+  // antes de abrir, después de cerrar o durante un reinicio del servidor.
+  private async reconcileCashSales(register: {
+    id: number;
+    localId: number;
+    openedAt: Date;
+    openedById: number | null;
+    closedAt: Date | null;
+  }) {
+    const saleDate: any = {
+      gte: this.colombiaDayStart(new Date(register.openedAt)),
+    };
+    if (register.closedAt) saleDate.lt = register.closedAt;
 
     const sales = await this.prisma.sale.findMany({
       where: {
-        localId,
+        localId: register.localId,
         paymentMethod: 'EFECTIVO',
         saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
-        saleDate: { gte: start, lt: end },
-        cashMovements: { none: {} }, // aún no registrada en ninguna caja
+        saleDate,
+        cashMovements: { none: {} },
       },
-      select: { id: true, code: true, totalAmount: true },
+      select: { id: true, totalAmount: true },
     });
 
     for (const s of sales) {
       await this.prisma.cashMovement.create({
         data: {
-          cashRegisterId,
+          cashRegisterId: register.id,
           type: 'INGRESO',
           amount: s.totalAmount,
-          concept: 'Venta en efectivo (del día)',
+          concept: 'Venta en efectivo',
           saleId: s.id,
-          userId,
+          userId: register.openedById,
         },
       });
     }
-
     return sales.length;
   }
 
@@ -165,14 +178,20 @@ export class CashService {
   async close(user: any, id: number, dto: CloseCashDto) {
     const register = await this.prisma.cashRegister.findFirst({
       where: { id, companyId: user.companyId },
-      include: { movements: true },
     });
     if (!register) throw new NotFoundException('Caja no encontrada');
     if (register.status !== 'ABIERTA') {
       throw new BadRequestException('La caja ya está cerrada');
     }
 
-    const { expected } = computeTotals(register);
+    // Antes del arqueo, se asegura de tener TODAS las ventas en efectivo del día.
+    await this.reconcileCashSales(register);
+    const fresh = await this.prisma.cashRegister.findUnique({
+      where: { id },
+      include: { movements: true },
+    });
+
+    const { expected } = computeTotals(fresh);
     const difference = (dto.countedAmount ?? 0) - expected;
 
     const updated = await this.prisma.cashRegister.update({
