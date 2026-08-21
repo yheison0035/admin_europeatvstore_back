@@ -57,6 +57,13 @@ export class CashController {
     return this.cashService.addMovement(req.user, id, dto);
   }
 
+  // Reabrir una caja cerrada: solo dueño/administrador.
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Post(':id/reopen')
+  reopen(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.cashService.reopen(req.user, id);
+  }
+
   @Roles(...CASH_ROLES)
   @Post(':id/close')
   close(

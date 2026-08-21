@@ -196,6 +196,47 @@ export class CashService {
     };
   }
 
+  // Reabre una caja cerrada (por si se cerró por error). Solo si no hay otra
+  // caja abierta en ese local. Limpia los datos del cierre.
+  async reopen(user: any, id: number) {
+    const register = await this.prisma.cashRegister.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+    if (!register) throw new NotFoundException('Caja no encontrada');
+    if (register.status === 'ABIERTA') {
+      throw new BadRequestException('La caja ya está abierta.');
+    }
+    const other = await this.prisma.cashRegister.findFirst({
+      where: {
+        localId: register.localId,
+        companyId: user.companyId,
+        status: 'ABIERTA',
+      },
+    });
+    if (other) {
+      throw new BadRequestException(
+        'Ya hay otra caja abierta en este local. Ciérrala antes de reabrir esta.',
+      );
+    }
+    const updated = await this.prisma.cashRegister.update({
+      where: { id },
+      data: {
+        status: 'ABIERTA',
+        closedAt: null,
+        closedById: null,
+        countedAmount: null,
+        expectedAmount: null,
+        difference: null,
+      },
+      include: { movements: true },
+    });
+    return {
+      success: true,
+      message: 'Caja reabierta',
+      data: { ...updated, totals: computeTotals(updated) },
+    };
+  }
+
   async findAll(user: any, query: any) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
