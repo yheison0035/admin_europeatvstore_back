@@ -21,6 +21,7 @@ import { UpdateSaleDto } from './dto/update-sale.dto';
 import { Public } from '@/auth/decorators/public.decorator';
 import { DailySalesReportDto } from './dto/reports/daily/daily-sales-report.dto';
 import { RangeSalesReportDto } from './dto/reports/range/range-sales-report.dto';
+import { CreateSalePaymentDto } from './dto/create-sale-payment.dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -73,10 +74,34 @@ export class SalesController {
     return this.salesService.updateOrderFulfillment(id, req.user, dto);
   }
 
+  // ---- CARTERA / FIADO (antes de :id) ----
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA')
+  @Get('receivables/list')
+  receivables(@Req() req, @Query() query) {
+    return this.salesService.getReceivables(req.user, query);
+  }
+
   @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA', 'VENTAS')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.salesService.findOne(id, req.user);
+  }
+
+  // Abonos (pagos parciales) de una venta a crédito.
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA')
+  @Get(':id/payments')
+  getPayments(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.salesService.getPayments(id, req.user);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA')
+  @Post(':id/payments')
+  addPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateSalePaymentDto,
+    @Req() req,
+  ) {
+    return this.salesService.addPayment(id, dto, req.user);
   }
 
   @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA', 'VENTAS')

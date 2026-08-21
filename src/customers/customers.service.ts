@@ -287,6 +287,8 @@ export class CustomersService {
         saleDate: true,
         totalAmount: true,
         paymentStatus: true,
+        dueDate: true,
+        payments: { select: { amount: true } },
         items: {
           select: {
             quantity: true,
@@ -302,9 +304,16 @@ export class CustomersService {
     const avgTicket = visits ? ltv / visits : 0;
     const lastVisit = sales[0]?.saleDate || null;
     const firstVisit = visits ? sales[visits - 1].saleDate : null;
+    // Saldo pendiente = total de las ventas fiadas menos sus abonos.
     const pendingFiado = sales
       .filter((s) => s.paymentStatus === 'FIADO')
-      .reduce((a, s) => a + s.totalAmount, 0);
+      .reduce((a, s) => {
+        const paid = (s.payments || []).reduce(
+          (p, x) => p + Number(x.amount),
+          0,
+        );
+        return a + Math.max(0, Number(s.totalAmount) - paid);
+      }, 0);
 
     // Lo que suele consumir (productos y servicios más frecuentes).
     const itemCount = new Map<string, number>();

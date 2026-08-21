@@ -321,20 +321,30 @@ export class StatisticsService {
         code: true,
         totalAmount: true,
         saleDate: true,
+        dueDate: true,
+        payments: { select: { amount: true } },
         customer: { select: { name: true } },
         local: { select: { name: true } },
       },
       orderBy: { saleDate: 'desc' },
     });
 
+    // Saldo por venta = total menos abonos; solo cuentan las que aún deben.
+    const fiadoWithSaldo = fiadoSales
+      .map((s) => {
+        const paid = (s.payments || []).reduce((p, x) => p + Number(x.amount), 0);
+        return { ...s, saldo: Math.max(0, Number(s.totalAmount) - paid) };
+      })
+      .filter((s) => s.saldo > 0.01);
+
     const receivables = {
-      total: Math.round(fiadoSales.reduce((a, s) => a + s.totalAmount, 0)),
-      count: fiadoSales.length,
-      items: fiadoSales.map((s) => ({
+      total: Math.round(fiadoWithSaldo.reduce((a, s) => a + s.saldo, 0)),
+      count: fiadoWithSaldo.length,
+      items: fiadoWithSaldo.map((s) => ({
         id: s.id,
         code: s.code,
         customer: s.customer?.name || 'Consumidor final',
-        amount: Math.round(s.totalAmount),
+        amount: Math.round(s.saldo),
         date: s.saleDate,
         local: s.local?.name || '—',
       })),

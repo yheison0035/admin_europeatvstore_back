@@ -1224,7 +1224,10 @@ export class SalesService {
       // método de pago pueden haber cambiado, así que se borra el movimiento
       // anterior de esta venta y se recrea solo si quedó en EFECTIVO y hay una
       // caja abierta en su local. Así el arqueo cuadra siempre con la venta.
-      await tx.cashMovement.deleteMany({ where: { saleId: id } });
+      // Solo el ingreso automático de la venta; los abonos de fiado se respetan.
+      await tx.cashMovement.deleteMany({
+        where: { saleId: id, concept: 'Venta en efectivo' },
+      });
       if (updatedSale.paymentMethod === 'EFECTIVO') {
         const openReg = await tx.cashRegister.findFirst({
           where: {
@@ -1844,5 +1847,187 @@ export class SalesService {
       paymentBreakdown,
       data: usersMap,
     };
+  }
+
+  // ============================ CARTERA / FIADO ============================
+
+  // Registra un abono (pago parcial) contra una venta a crédito. Si con el abono
+  // se salda la venta, la marca PAGADA. Si el abono es en efectivo y hay caja
+  // abierta en la sede, lo suma a la caja para que el arqueo cuadre.
+  async addPayment(saleId: number, dto: any, user: any) {
+    const sale = await this.prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        local: { select: { companyId: true } },
+        payments: { select: { amount: true } },
+      },
+    });
+    if (!sale) throw new NotFoundException('Venta no encontrada');
+    if (sale.local.companyId !== user.companyId) {
+      throw new ForbiddenException('No tienes permiso');
+    }
+    if (['CANCELADA', 'RECHAZADA', 'DEVUELTA'].includes(sale.saleStatus as any)) {
+      throw new BadRequestException('La venta no admite abonos');
+    }
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const total = Number(sale.totalAmount) || 0;
+    const paid = sale.payments.reduce((a, p) => a + Number(p.amount), 0);
+    const saldo = r2(total - paid);
+    if (saldo <= 0) throw new BadRequestException('La venta ya está pagada');
+
+    const amount = r2(Number(dto.amount));
+    if (!amount || amount <= 0) {
+      throw new BadRequestException('El abono debe ser mayor a 0');
+    }
+    if (amount > saldo + 0.5) {
+      throw new BadRequestException(
+        `El abono supera el saldo pendiente ($${saldo}).`,
+      );
+    }
+
+    const method: PaymentMethod = dto.method || 'EFECTIVO';
+    const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const payment = await tx.salePayment.create({
+        data: {
+          saleId,
+          companyId: user.companyId,
+          amount,
+          method,
+          note: dto.note || null,
+          paidAt,
+          createdById: user.id ?? null,
+        },
+      });
+
+      const newPaid = r2(paid + amount);
+      const settled = newPaid >= total - 0.01;
+      if (settled && sale.paymentStatus !== 'PAGADA') {
+        await tx.sale.update({
+          where: { id: saleId },
+          data: { paymentStatus: 'PAGADA' },
+        });
+      }
+
+      // Caja: el efectivo del abono entra a la caja abierta de la sede.
+      if (method === 'EFECTIVO') {
+        const openReg = await tx.cashRegister.findFirst({
+          where: {
+            localId: sale.localId,
+            companyId: user.companyId,
+            status: 'ABIERTA',
+          },
+          select: { id: true },
+        });
+        if (openReg) {
+          await tx.cashMovement.create({
+            data: {
+              cashRegisterId: openReg.id,
+              type: 'INGRESO',
+              amount,
+              concept: 'Abono venta fiada',
+              saleId,
+              userId: user.id ?? null,
+            },
+          });
+        }
+      }
+
+      await this.audit.log({
+        entity: 'sale',
+        entityId: saleId,
+        action: 'UPDATE',
+        user,
+        changes: { abono: { before: null, after: amount } },
+      });
+
+      return {
+        success: true,
+        data: {
+          payment,
+          saldo: r2(saldo - amount),
+          pagada: settled,
+        },
+      };
+    });
+  }
+
+  // Lista los abonos de una venta + su saldo.
+  async getPayments(saleId: number, user: any) {
+    const sale = await this.prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        local: { select: { companyId: true } },
+        payments: {
+          orderBy: { paidAt: 'desc' },
+          include: { createdBy: { select: { name: true } } },
+        },
+      },
+    });
+    if (!sale) throw new NotFoundException('Venta no encontrada');
+    if (sale.local.companyId !== user.companyId) {
+      throw new ForbiddenException('No tienes permiso');
+    }
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const total = Number(sale.totalAmount) || 0;
+    const paid = sale.payments.reduce((a, p) => a + Number(p.amount), 0);
+    return {
+      success: true,
+      data: {
+        total,
+        paid: r2(paid),
+        saldo: r2(total - paid),
+        dueDate: sale.dueDate,
+        payments: sale.payments,
+      },
+    };
+  }
+
+  // Cartera: ventas a crédito con saldo pendiente. Opcional por cliente.
+  async getReceivables(user: any, query: any) {
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+    const where: any = { paymentStatus: 'FIADO' };
+    if (user.role !== 'SUPER_PLATFORM_ADMIN') {
+      where.local = { is: { companyId: user.companyId } };
+    }
+    applyLocalFilter(where, user, localIds, 'sale');
+    if (query.customerId) where.customerId = Number(query.customerId);
+
+    const sales = await this.prisma.sale.findMany({
+      where,
+      orderBy: [{ dueDate: 'asc' }, { saleDate: 'asc' }],
+      include: {
+        customer: { select: { id: true, name: true, phone: true, document: true } },
+        payments: { select: { amount: true } },
+      },
+    });
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const now = Date.now();
+    const rows = sales
+      .map((s) => {
+        const total = Number(s.totalAmount) || 0;
+        const paid = s.payments.reduce((a, p) => a + Number(p.amount), 0);
+        const saldo = r2(total - paid);
+        const ref = s.dueDate ? new Date(s.dueDate).getTime() : null;
+        const overdueDays = ref ? Math.floor((now - ref) / 86400000) : null;
+        return {
+          id: s.id,
+          code: s.code,
+          saleDate: s.saleDate,
+          dueDate: s.dueDate,
+          overdueDays: overdueDays && overdueDays > 0 ? overdueDays : 0,
+          total,
+          paid: r2(paid),
+          saldo,
+          customer: s.customer,
+        };
+      })
+      .filter((r) => r.saldo > 0.01);
+
+    const totalSaldo = r2(rows.reduce((a, r) => a + r.saldo, 0));
+    return { success: true, data: { totalSaldo, count: rows.length, rows } };
   }
 }

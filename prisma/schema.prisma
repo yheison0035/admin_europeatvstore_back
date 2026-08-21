@@ -227,9 +227,9 @@ model Company {
   requireCashOpen Boolean @default(false)
 
   // Configuración fiscal (facturación con impuestos / electrónica DIAN).
-  responsableIVA     Boolean  @default(false)
-  preciosIncluyenIVA Boolean  @default(false)
-  defaultTaxRate     Decimal  @default(0) @db.Decimal(5, 2)
+  responsableIVA     Boolean @default(false)
+  preciosIncluyenIVA Boolean @default(false)
+  defaultTaxRate     Decimal @default(0) @db.Decimal(5, 2)
   businessName       String?
   dv                 String?
   personType         String?
@@ -276,6 +276,7 @@ model Company {
   websiteSetting WebsiteSetting?
   mesas          Mesa[]
   comandas       Comanda[]
+  salePayments   SalePayment[]
   cashRegisters  CashRegister[]
   purchases      Purchase[]
   quotes         Quote[]
@@ -323,6 +324,7 @@ model User {
   cashOpened    CashRegister[] @relation("CashOpenedBy")
   cashClosed    CashRegister[] @relation("CashClosedBy")
   cashMovements CashMovement[] @relation("CashMovementUser")
+  salePayments  SalePayment[]  @relation("UserSalePayments")
   purchases     Purchase[]     @relation("PurchaseUser")
   quotes        Quote[]        @relation("QuoteUser")
   returns       Return[]       @relation("ReturnUser")
@@ -352,8 +354,8 @@ model Customer {
 
   // Fidelización: sellos acumulados hacia el próximo premio y premios ganados
   // pendientes de canjear.
-  loyaltyStamps  Int       @default(0)
-  loyaltyRewards Int       @default(0)
+  loyaltyStamps    Int       @default(0)
+  loyaltyRewards   Int       @default(0)
   loyaltyLastVisit DateTime? // última visita que sumó a la fidelización
 
   // Última vez que se le escribió para reactivarlo (campaña de win-back).
@@ -618,6 +620,7 @@ model Sale {
   saleStatus    SaleStatus    @default(NUEVA)
   paymentStatus PaymentStatus @default(PENDIENTE)
   saleDate      DateTime      @default(now())
+  dueDate       DateTime? // vencimiento de la venta a crédito (fiado)
   notes         String?
 
   source              OrderSource @default(CRM)
@@ -648,6 +651,7 @@ model Sale {
 
   cashMovements CashMovement[]
   returns       Return[]
+  payments      SalePayment[]  @relation("SalePayments")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -655,6 +659,33 @@ model Sale {
   @@index([localId])
   @@index([userId])
   @@index([saleDate])
+  @@index([customerId])
+  @@index([paymentStatus])
+}
+
+//////////////////////////////////////////////////
+// Abonos / pagos parciales de una venta a crédito (cartera / fiado)
+//////////////////////////////////////////////////
+
+model SalePayment {
+  id     Int           @id @default(autoincrement())
+  amount Decimal       @db.Decimal(14, 2)
+  method PaymentMethod @default(EFECTIVO)
+  note   String?
+  paidAt DateTime      @default(now())
+
+  saleId      Int
+  companyId   Int
+  createdById Int?
+
+  sale      Sale    @relation("SalePayments", fields: [saleId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("UserSalePayments", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([saleId])
+  @@index([companyId])
 }
 
 //////////////////////////////////////////////////
@@ -662,7 +693,7 @@ model Sale {
 //////////////////////////////////////////////////
 
 model SaleItem {
-  id       Int   @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   quantity  Float // admite decimales para venta por peso (kg)
   price     Float
   subtotal  Float
@@ -949,13 +980,13 @@ model CashRegister {
   closedAt       DateTime?
 
   localId    Int
-  local      Local @relation(fields: [localId], references: [id], onDelete: Cascade)
+  local      Local   @relation(fields: [localId], references: [id], onDelete: Cascade)
   companyId  Int
   company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   openedById Int?
-  openedBy   User?  @relation("CashOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
+  openedBy   User?   @relation("CashOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
   closedById Int?
-  closedBy   User?  @relation("CashClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedBy   User?   @relation("CashClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
 
   movements CashMovement[]
 
@@ -1101,11 +1132,11 @@ enum ReturnStatus {
 }
 
 model Return {
-  id        Int          @id @default(autoincrement())
-  code      String
-  reason    String?
-  total     Float        @default(0) // monto devuelto
-  status    ReturnStatus @default(REGISTRADA)
+  id     Int          @id @default(autoincrement())
+  code   String
+  reason String?
+  total  Float        @default(0) // monto devuelto
+  status ReturnStatus @default(REGISTRADA)
 
   saleId    Int
   sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
