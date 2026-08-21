@@ -12,7 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
-import { Role, Status } from '@prisma/client';
+import { Role, Status, Prisma } from '@prisma/client';
 
 @Injectable()
 export class CompaniesService {
@@ -32,6 +32,7 @@ export class CompaniesService {
         type: true,
         nit: true,
         crmTheme: true,
+        terminology: true,
         requireCashOpen: true,
         responsableIVA: true,
         preciosIncluyenIVA: true,
@@ -75,6 +76,41 @@ export class CompaniesService {
         defaultTaxRate: 0,
       },
     };
+  }
+
+  // Overrides de vocabulario propios de la empresa (se fusionan sobre los
+  // términos por tipo de negocio en el frontend con getTerms).
+  async updateTerminology(user: any, dto: any) {
+    const ALLOWED = [
+      'attendant',
+      'attendantPlural',
+      'service',
+      'servicePlural',
+      'product',
+      'productPlural',
+      'sale',
+      'salePlural',
+      'appointment',
+      'appointmentPlural',
+      'customer',
+      'customerPlural',
+      'catalogLabel',
+    ];
+    const clean: Record<string, string> = {};
+    if (dto && typeof dto === 'object') {
+      for (const k of ALLOWED) {
+        const v = dto[k];
+        if (typeof v === 'string' && v.trim()) {
+          clean[k] = v.trim().slice(0, 40);
+        }
+      }
+    }
+    const company = await this.prisma.company.update({
+      where: { id: user.companyId },
+      data: { terminology: Object.keys(clean).length ? clean : Prisma.DbNull },
+      select: { terminology: true },
+    });
+    return { success: true, data: company };
   }
 
   // Datos básicos de la empresa (nombre, logo, contacto).

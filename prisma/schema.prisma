@@ -222,6 +222,10 @@ model Company {
   // Tema de diseño del panel/CRM elegido por el dueño (orange | blue | emerald).
   crmTheme String @default("orange")
 
+  // Overrides de vocabulario propios de la empresa (barbería vs estética, etc.).
+  // Se fusionan sobre los términos por tipo de negocio. Ej: { "attendant": "Especialista" }
+  terminology Json?
+
   // Si está activo, no se puede vender sin haber "abierto el día" (caja abierta
   // de hoy en la sede). El dueño lo enciende/apaga en Configuración.
   requireCashOpen Boolean @default(false)

@@ -71,6 +71,12 @@ export class CompanySettingsController {
   }
 
   @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('terminology')
+  updateTerminology(@Body() dto: any, @Req() req) {
+    return this.service.updateTerminology(req.user, dto);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch('profile')
   updateProfile(
     @Body()
