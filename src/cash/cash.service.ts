@@ -110,11 +110,15 @@ export class CashService {
     );
   }
 
-  // AUTO-RECONCILIACIÓN: registra como ingreso las ventas en efectivo del local
-  // —desde el día en que se abrió la caja— que aún no estén en ninguna caja.
-  // Es idempotente (solo importa ventas sin movimiento asociado), así la caja
-  // SIEMPRE cuadra con las ventas del reporte, sin importar si la venta ocurrió
-  // antes de abrir, después de cerrar o durante un reinicio del servidor.
+  // AUTO-RECONCILIACIÓN de DOS VÍAS entre la caja y las ventas en efectivo del
+  // local (desde el día en que se abrió la caja). Deja la caja SIEMPRE cuadrada
+  // con el reporte de ventas, sin importar si la venta se creó, editó o eliminó,
+  // ni si ocurrió antes de abrir, después de cerrar o durante un reinicio:
+  //   1) PURGA los movimientos automáticos ("Venta en efectivo") que ya no
+  //      corresponden: venta eliminada (saleId quedó null), venta anulada, o el
+  //      importe cambió al editarla.
+  //   2) AÑADE las ventas en efectivo válidas que aún no tienen movimiento.
+  // Es idempotente.
   private async reconcileCashSales(register: {
     id: number;
     localId: number;
@@ -127,7 +131,51 @@ export class CashService {
     };
     if (register.closedAt) saleDate.lt = register.closedAt;
 
-    const sales = await this.prisma.sale.findMany({
+    // Ventas en efectivo VÁLIDAS de la ventana (id -> importe actual).
+    const validSales = await this.prisma.sale.findMany({
+      where: {
+        localId: register.localId,
+        paymentMethod: 'EFECTIVO',
+        saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
+        saleDate,
+      },
+      select: { id: true, totalAmount: true },
+    });
+    const validMap = new Map(validSales.map((s) => [s.id, s.totalAmount]));
+
+    // (1) PURGA: movimientos automáticos de esta caja que ya no cuadran.
+    const autoMovs = await this.prisma.cashMovement.findMany({
+      where: { cashRegisterId: register.id, concept: 'Venta en efectivo' },
+      select: { id: true, saleId: true, amount: true },
+    });
+    const toDelete: number[] = [];
+    for (const m of autoMovs) {
+      // Huérfano: la venta fue eliminada (SetNull dejó saleId en null).
+      if (m.saleId == null) {
+        toDelete.push(m.id);
+        continue;
+      }
+      const currentAmount = validMap.get(m.saleId);
+      // La venta ya no es válida (anulada, cambió de método o de fecha).
+      if (currentAmount == null) {
+        toDelete.push(m.id);
+        continue;
+      }
+      // El importe cambió al editar la venta → se borra y se recrea abajo.
+      if (Number(currentAmount) !== Number(m.amount)) {
+        toDelete.push(m.id);
+      }
+    }
+    if (toDelete.length) {
+      await this.prisma.cashMovement.deleteMany({
+        where: { id: { in: toDelete } },
+      });
+    }
+
+    // (2) AÑADE: ventas válidas que quedaron sin ningún movimiento asociado
+    // (nuevas, o recién purgadas por cambio de importe). Se excluyen las que ya
+    // tienen movimiento en cualquier caja para no duplicar.
+    const missing = await this.prisma.sale.findMany({
       where: {
         localId: register.localId,
         paymentMethod: 'EFECTIVO',
@@ -138,7 +186,7 @@ export class CashService {
       select: { id: true, totalAmount: true },
     });
 
-    for (const s of sales) {
+    for (const s of missing) {
       await this.prisma.cashMovement.create({
         data: {
           cashRegisterId: register.id,
@@ -150,7 +198,7 @@ export class CashService {
         },
       });
     }
-    return sales.length;
+    return { added: missing.length, removed: toDelete.length };
   }
 
   async addMovement(user: any, id: number, dto: CashMovementDto) {

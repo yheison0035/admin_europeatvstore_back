@@ -1220,6 +1220,34 @@ export class SalesService {
         },
       });
 
+      // Caja: re-sincroniza el ingreso automático tras editar. El importe o el
+      // método de pago pueden haber cambiado, así que se borra el movimiento
+      // anterior de esta venta y se recrea solo si quedó en EFECTIVO y hay una
+      // caja abierta en su local. Así el arqueo cuadra siempre con la venta.
+      await tx.cashMovement.deleteMany({ where: { saleId: id } });
+      if (updatedSale.paymentMethod === 'EFECTIVO') {
+        const openReg = await tx.cashRegister.findFirst({
+          where: {
+            localId: updatedSale.localId,
+            companyId: user.companyId,
+            status: 'ABIERTA',
+          },
+          select: { id: true },
+        });
+        if (openReg) {
+          await tx.cashMovement.create({
+            data: {
+              cashRegisterId: openReg.id,
+              type: 'INGRESO',
+              amount: updatedSale.totalAmount,
+              concept: 'Venta en efectivo',
+              saleId: id,
+              userId: updatedSale.userId ?? user.id,
+            },
+          });
+        }
+      }
+
       const changes = this.audit.diff(sale, dto, [
         'paymentMethod',
         'paymentStatus',
@@ -1270,6 +1298,11 @@ export class SalesService {
           );
         }
       }
+
+      // Caja: elimina el ingreso automático de esta venta para que el arqueo
+      // baje al instante (la relación es SetNull, así que sin esto quedaría un
+      // movimiento huérfano sumando de más).
+      await tx.cashMovement.deleteMany({ where: { saleId: id } });
 
       await tx.sale.delete({ where: { id } });
 
