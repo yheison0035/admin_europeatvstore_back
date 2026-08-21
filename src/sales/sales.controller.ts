@@ -81,6 +81,13 @@ export class SalesController {
     return this.salesService.getReceivables(req.user, query);
   }
 
+  // Historial de abonos (movimientos de cartera).
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA')
+  @Get('payments/history')
+  paymentsHistory(@Req() req, @Query() query) {
+    return this.salesService.getPaymentsHistory(req.user, query);
+  }
+
   @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA', 'VENTAS')
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {

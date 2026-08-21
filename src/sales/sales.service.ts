@@ -2031,4 +2031,51 @@ export class SalesService {
     const totalSaldo = r2(rows.reduce((a, r) => a + r.saldo, 0));
     return { success: true, data: { totalSaldo, count: rows.length, rows } };
   }
+
+  // Historial de abonos (movimientos de cartera) de la empresa. Persiste aunque
+  // la venta ya esté saldada, para tener trazabilidad de lo cobrado.
+  async getPaymentsHistory(user: any, query: any) {
+    const limit = Math.min(Number(query.limit) || 100, 300);
+    const where: any = { companyId: user.companyId };
+    if (query.customerId) {
+      where.sale = { is: { customerId: Number(query.customerId) } };
+    }
+
+    const payments = await this.prisma.salePayment.findMany({
+      where,
+      orderBy: { paidAt: 'desc' },
+      take: limit,
+      include: {
+        createdBy: { select: { name: true } },
+        sale: {
+          select: {
+            id: true,
+            code: true,
+            customer: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const total = r2(payments.reduce((a, p) => a + Number(p.amount), 0));
+    return {
+      success: true,
+      data: {
+        total,
+        count: payments.length,
+        rows: payments.map((p) => ({
+          id: p.id,
+          amount: Number(p.amount),
+          method: p.method,
+          note: p.note,
+          paidAt: p.paidAt,
+          saleId: p.saleId,
+          code: p.sale?.code,
+          customer: p.sale?.customer?.name || 'Consumidor final',
+          registeredBy: p.createdBy?.name || null,
+        })),
+      },
+    };
+  }
 }
