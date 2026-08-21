@@ -386,4 +386,87 @@ export class StatisticsService {
       },
     };
   }
+
+  // Reporte de IVA de un periodo: IVA generado (ventas) vs IVA descontable
+  // (compras) → neto a pagar o saldo a favor. Base de la declaración de IVA.
+  async getTaxReport(user: any, dto: any) {
+    const companyId = user.companyId;
+    const today = colombiaDay(new Date());
+    const endStr: string = dto?.endDate || today;
+    // Por defecto, desde el primer día del mes de la fecha final.
+    const startStr: string = dto?.startDate || `${endStr.slice(0, 7)}-01`;
+    const [sy, sm, sd] = startStr.split('-').map(Number);
+    const [ey, em, ed] = endStr.split('-').map(Number);
+    const start = dayStartUtc(sy, sm, sd);
+    const end = dayStartUtc(ey, em, ed + 1);
+
+    const accessible = await getAccessibleLocalIds(this.prisma, user);
+    const localFilter: any = accessible ? { localId: { in: accessible } } : {};
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+
+    // IVA generado (ventas)
+    const sales = await this.prisma.sale.findMany({
+      where: {
+        local: { companyId },
+        ...localFilter,
+        saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
+        saleDate: { gte: start, lt: end },
+      },
+      select: { subtotal: true, taxTotal: true, totalAmount: true },
+    });
+    let baseVentas = 0;
+    let ivaGenerado = 0;
+    let totalVentas = 0;
+    for (const s of sales) {
+      baseVentas += Number(s.subtotal ?? s.totalAmount) || 0;
+      ivaGenerado += Number(s.taxTotal) || 0;
+      totalVentas += Number(s.totalAmount) || 0;
+    }
+
+    // IVA descontable (compras)
+    const purchases = await this.prisma.purchase.findMany({
+      where: {
+        companyId,
+        ...localFilter,
+        status: { not: 'CANCELADA' as any },
+        createdAt: { gte: start, lt: end },
+      },
+      select: { subtotal: true, taxTotal: true, total: true },
+    });
+    let baseCompras = 0;
+    let ivaDescontable = 0;
+    let totalCompras = 0;
+    for (const p of purchases) {
+      baseCompras += Number(p.subtotal ?? 0) || 0;
+      ivaDescontable += Number(p.taxTotal) || 0;
+      totalCompras += Number(p.total) || 0;
+    }
+
+    const neto = r2(ivaGenerado - ivaDescontable);
+    return {
+      success: true,
+      data: {
+        range: { startDate: startStr, endDate: endStr },
+        ventas: {
+          base: r2(baseVentas),
+          iva: r2(ivaGenerado),
+          total: r2(totalVentas),
+          count: sales.length,
+        },
+        compras: {
+          base: r2(baseCompras),
+          iva: r2(ivaDescontable),
+          total: r2(totalCompras),
+          count: purchases.length,
+        },
+        iva: {
+          generado: r2(ivaGenerado),
+          descontable: r2(ivaDescontable),
+          neto,
+          aPagar: neto > 0 ? neto : 0,
+          aFavor: neto < 0 ? r2(-neto) : 0,
+        },
+      },
+    };
+  }
 }

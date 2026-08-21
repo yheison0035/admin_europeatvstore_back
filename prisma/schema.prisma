@@ -1036,7 +1036,9 @@ model Purchase {
   id         Int            @id @default(autoincrement())
   code       String
   status     PurchaseStatus @default(PENDIENTE)
-  total      Float          @default(0)
+  total      Float          @default(0) // total a pagar (base + IVA)
+  subtotal   Decimal?       @db.Decimal(14, 2) // base gravable (sin IVA)
+  taxTotal   Decimal        @default(0) @db.Decimal(14, 2) // IVA descontable
   notes      String?
   receivedAt DateTime?
 
@@ -1068,6 +1070,8 @@ model PurchaseItem {
   quantity           Float
   unitCost           Float
   subtotal           Float
+  taxRate            Decimal          @default(0) @db.Decimal(5, 2)
+  taxAmount          Decimal          @default(0) @db.Decimal(14, 2)
 
   @@index([purchaseId])
 }

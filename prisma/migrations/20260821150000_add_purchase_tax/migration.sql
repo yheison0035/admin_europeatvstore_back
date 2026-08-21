@@ -1,0 +1,5 @@
+-- IVA descontable en compras
+ALTER TABLE "Purchase" ADD COLUMN "subtotal" DECIMAL(14,2);
+ALTER TABLE "Purchase" ADD COLUMN "taxTotal" DECIMAL(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE "PurchaseItem" ADD COLUMN "taxRate" DECIMAL(5,2) NOT NULL DEFAULT 0;
+ALTER TABLE "PurchaseItem" ADD COLUMN "taxAmount" DECIMAL(14,2) NOT NULL DEFAULT 0;

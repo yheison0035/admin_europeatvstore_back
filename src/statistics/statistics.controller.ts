@@ -23,6 +23,13 @@ export class StatisticsController {
     return this.statisticsService.getDashboard(req.user, dto);
   }
 
+  // Reporte de IVA (generado vs descontable) de un periodo.
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Post('tax-report')
+  taxReport(@Req() req, @Body() dto: { startDate?: string; endDate?: string }) {
+    return this.statisticsService.getTaxReport(req.user, dto);
+  }
+
   // Resumen del Home (para cualquier usuario del dashboard).
   @Roles(
     'SUPER_ADMIN',

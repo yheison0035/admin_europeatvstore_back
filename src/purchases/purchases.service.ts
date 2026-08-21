@@ -27,9 +27,12 @@ export class PurchasesService {
         id: { in: variantIds },
         inventory: { is: { local: { is: { companyId: user.companyId } } } },
       },
-      select: { id: true },
+      select: { id: true, inventory: { select: { taxRate: true } } },
     });
     const validIds = new Set(variants.map((v) => v.id));
+    const rateByVariant = new Map(
+      variants.map((v) => [v.id, Number(v.inventory?.taxRate) || 0]),
+    );
     for (const it of dto.items) {
       if (!validIds.has(it.inventoryVariantId)) {
         throw new BadRequestException(
@@ -38,13 +41,38 @@ export class PurchasesService {
       }
     }
 
-    const itemsData = dto.items.map((it) => ({
-      inventoryVariantId: it.inventoryVariantId,
-      quantity: it.quantity,
-      unitCost: it.unitCost,
-      subtotal: it.quantity * it.unitCost,
-    }));
-    const total = itemsData.reduce((s, i) => s + i.subtotal, 0);
+    // Config fiscal: solo si la empresa es responsable de IVA se calcula el IVA
+    // descontable de la compra. El costo de compra (unitCost) es la base; el IVA
+    // se suma encima (como en la factura del proveedor).
+    const fiscal = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: { responsableIVA: true, defaultTaxRate: true },
+    });
+    const responsableIVA = !!fiscal?.responsableIVA;
+    const defRate = Number(fiscal?.defaultTaxRate) || 0;
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+
+    let saleSubtotal = 0;
+    let saleTax = 0;
+    const itemsData = dto.items.map((it) => {
+      const base = r2(it.quantity * it.unitCost);
+      const productRate = rateByVariant.get(it.inventoryVariantId) || 0;
+      const rate = responsableIVA ? (productRate > 0 ? productRate : defRate) : 0;
+      const taxAmount = rate > 0 ? r2((base * rate) / 100) : 0;
+      saleSubtotal += base;
+      saleTax += taxAmount;
+      return {
+        inventoryVariantId: it.inventoryVariantId,
+        quantity: it.quantity,
+        unitCost: it.unitCost,
+        subtotal: base,
+        taxRate: rate,
+        taxAmount,
+      };
+    });
+    const subtotal = r2(saleSubtotal);
+    const taxTotal = r2(saleTax);
+    const total = r2(subtotal + taxTotal);
 
     const purchase = await this.prisma.purchase.create({
       data: {
@@ -55,6 +83,8 @@ export class PurchasesService {
         notes: dto.notes,
         userId: user.id,
         total,
+        subtotal,
+        taxTotal,
         items: { create: itemsData },
       },
       include: { items: true },
