@@ -4,7 +4,8 @@ export class EcommerceOrderItemDto {
   @IsInt()
   inventoryVariantId: number;
 
-  @IsInt()
-  @Min(1)
+  // Número (no entero) para admitir venta por peso (ej. 1.5 kg).
+  @IsNumber()
+  @Min(0.01)
   quantity: number;
 }
