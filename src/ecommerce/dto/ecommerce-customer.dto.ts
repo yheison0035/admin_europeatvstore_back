@@ -17,14 +17,19 @@ export class EcommerceCustomerDto {
   @IsString()
   documentNumber?: string;
 
+  // Dirección: obligatoria solo en entregas a domicilio. En "recoger en tienda"
+  // o "mesa" no aplica, por eso son opcionales (el frontend valida por modo).
+  @IsOptional()
   @IsString()
-  department: string;
+  department?: string;
 
+  @IsOptional()
   @IsString()
-  city: string;
+  city?: string;
 
+  @IsOptional()
   @IsString()
-  address: string;
+  address?: string;
 
   @IsOptional()
   @IsString()
@@ -34,11 +39,13 @@ export class EcommerceCustomerDto {
   @IsString()
   neighborhood?: string;
 
+  @IsOptional()
   @IsBoolean()
-  isHardToAccess: boolean;
+  isHardToAccess?: boolean;
 
+  @IsOptional()
   @IsBoolean()
-  billingSameAsShipping: boolean;
+  billingSameAsShipping?: boolean;
 
   @IsOptional()
   @IsString()

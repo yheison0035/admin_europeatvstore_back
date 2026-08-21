@@ -687,12 +687,13 @@ export class EcommerceService {
             lastName: dto.customer.lastName,
             phone: dto.customer.phone,
             documentNumber: dto.customer.documentNumber,
-            department: dto.customer.department,
-            city: dto.customer.city,
-            address: dto.customer.address,
+            // En recoger en tienda / mesa no hay dirección: se guarda vacío.
+            department: dto.customer.department ?? '',
+            city: dto.customer.city ?? '',
+            address: dto.customer.address ?? '',
             addressDetail: dto.customer.addressDetail,
             neighborhood: dto.customer.neighborhood,
-            billingSameAsShipping: dto.customer.billingSameAsShipping,
+            billingSameAsShipping: dto.customer.billingSameAsShipping ?? true,
             billingFirstName: dto.customer.billingFirstName,
             billingLastName: dto.customer.billingLastName,
             billingPhone: dto.customer.billingPhone,
@@ -803,11 +804,28 @@ export class EcommerceService {
         systemUserId = su.id;
       }
 
+      // Nota del pedido con el modo de entrega + notas del cliente (visible en
+      // el detalle de Pedidos del CRM).
+      const METHOD_LABEL: Record<string, string> = {
+        shipping: 'Envío a domicilio',
+        local_delivery: 'Domicilio local',
+        pickup: 'Recoger en tienda',
+        dine_in: 'Consumo en el lugar',
+      };
+      const noteParts: string[] = [];
+      const methodLabel = dto.deliveryMethod
+        ? METHOD_LABEL[dto.deliveryMethod]
+        : null;
+      if (methodLabel) noteParts.push(`Entrega: ${methodLabel}`);
+      if (dto.notes?.trim()) noteParts.push(dto.notes.trim());
+      const saleNotes = noteParts.length ? noteParts.join(' · ') : null;
+
       /** CREAR VENTA (SALE) */
       const sale = await tx.sale.create({
         data: {
           code: `${this.buildOrderPrefix(website.company?.name)}-${Date.now()}`,
           totalAmount: total,
+          notes: saleNotes,
 
           paymentMethod: dto.paymentMethod,
           paymentStatus:

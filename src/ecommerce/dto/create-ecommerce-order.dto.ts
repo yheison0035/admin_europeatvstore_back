@@ -31,6 +31,16 @@ export class CreateEcommerceOrderDto {
   @Min(0)
   shippingCost?: number;
 
+  // Modo de entrega: shipping | local_delivery | pickup | dine_in.
+  @IsOptional()
+  @IsString()
+  deliveryMethod?: string;
+
+  // Notas del cliente (ej. referencias, nº de mesa, instrucciones).
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
   @IsOptional()
   @IsString()
   wompiTransactionId?: string;
