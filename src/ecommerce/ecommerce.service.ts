@@ -139,6 +139,7 @@ export class EcommerceService {
         .map((v) => ({
           variantId: v.id,
           name: v.color,
+          size: v.size,
           stock: v.stock,
         }));
 
@@ -429,7 +430,7 @@ export class EcommerceService {
 
       const colors = product.variants
         .filter((v) => v.stock > 0)
-        .map((v) => ({ variantId: v.id, name: v.color, stock: v.stock }));
+        .map((v) => ({ variantId: v.id, name: v.color, size: v.size, stock: v.stock }));
 
       const stock = colors.reduce((s, c) => s + c.stock, 0);
 
@@ -509,6 +510,7 @@ export class EcommerceService {
     const colors = product.variants.map((v) => ({
       variantId: v.id,
       name: v.color,
+          size: v.size,
       stock: v.stock,
     }));
 
