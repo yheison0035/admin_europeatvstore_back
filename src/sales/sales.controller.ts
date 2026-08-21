@@ -81,6 +81,13 @@ export class SalesController {
     return this.salesService.getReceivables(req.user, query);
   }
 
+  // Historial de todos los créditos (activos + pagados).
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA')
+  @Get('credits/history')
+  creditsHistory(@Req() req, @Query() query) {
+    return this.salesService.getCreditsHistory(req.user, query);
+  }
+
   // Historial de abonos (movimientos de cartera).
   @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA')
   @Get('payments/history')

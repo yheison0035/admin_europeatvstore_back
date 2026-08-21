@@ -2032,6 +2032,62 @@ export class SalesService {
     return { success: true, data: { totalSaldo, count: rows.length, rows } };
   }
 
+  // Historial de TODOS los créditos (ventas a crédito) de la empresa, estén
+  // activos (con saldo) o ya pagados. Se identifican por paymentMethod=CREDITO,
+  // que se conserva aunque la venta ya se haya saldado.
+  async getCreditsHistory(user: any, query: any) {
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+    const where: any = { paymentMethod: 'CREDITO' };
+    if (user.role !== 'SUPER_PLATFORM_ADMIN') {
+      where.local = { is: { companyId: user.companyId } };
+    }
+    applyLocalFilter(where, user, localIds, 'sale');
+    if (query.customerId) where.customerId = Number(query.customerId);
+
+    const sales = await this.prisma.sale.findMany({
+      where,
+      orderBy: [{ saleDate: 'desc' }],
+      include: {
+        customer: {
+          select: { id: true, name: true, phone: true, document: true },
+        },
+        payments: { select: { amount: true } },
+      },
+    });
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const now = Date.now();
+    const rows = sales.map((s) => {
+      const total = Number(s.totalAmount) || 0;
+      const paid = s.payments.reduce((a, p) => a + Number(p.amount), 0);
+      const saldo = r2(total - paid);
+      const pagada = s.paymentStatus === 'PAGADA' || saldo <= 0.01;
+      const ref = s.dueDate ? new Date(s.dueDate).getTime() : null;
+      const od = !pagada && ref ? Math.floor((now - ref) / 86400000) : 0;
+      return {
+        id: s.id,
+        code: s.code,
+        saleDate: s.saleDate,
+        dueDate: s.dueDate,
+        overdueDays: od > 0 ? od : 0,
+        total,
+        paid: r2(paid),
+        saldo: pagada ? 0 : saldo,
+        status: pagada ? 'PAGADA' : 'FIADO',
+        customer: s.customer,
+      };
+    });
+
+    const pendiente = r2(
+      rows.filter((r) => r.status === 'FIADO').reduce((a, r) => a + r.saldo, 0),
+    );
+    const cobrado = r2(rows.reduce((a, r) => a + r.paid, 0));
+    return {
+      success: true,
+      data: { count: rows.length, pendiente, cobrado, rows },
+    };
+  }
+
   // Historial de abonos (movimientos de cartera) de la empresa. Persiste aunque
   // la venta ya esté saldada, para tener trazabilidad de lo cobrado.
   async getPaymentsHistory(user: any, query: any) {
