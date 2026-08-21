@@ -170,6 +170,7 @@ export class InventoryService {
           stock: variant.stock,
           price: product.salePrice,
           unit: product.unit,
+          trackStock: product.trackStock,
           localId: product.localId,
           score,
         };
@@ -560,6 +561,7 @@ export class InventoryService {
           status: dto.status,
           minStock: dto.minStock ?? 0,
           unit: dto.unit ?? 'UNIDAD',
+          trackStock: dto.trackStock ?? true,
           ...(dto.expiryDate ? { expiryDate: new Date(dto.expiryDate) } : {}),
           ...(dto.lot !== undefined && { lot: dto.lot || null }),
           slug,
@@ -652,6 +654,7 @@ export class InventoryService {
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.minStock !== undefined && { minStock: dto.minStock }),
         ...(dto.unit !== undefined && { unit: dto.unit }),
+        ...(dto.trackStock !== undefined && { trackStock: dto.trackStock }),
         ...(dto.expiryDate !== undefined && {
           expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
         }),

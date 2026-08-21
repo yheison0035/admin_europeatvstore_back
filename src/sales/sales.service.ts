@@ -763,7 +763,11 @@ export class SalesService {
           );
           const { base, tax } = this.taxParts(subtotal, rate, includeIva);
 
-          await this.stockService.decrement(variant.id, item.quantity, tx);
+          // Solo se descuenta stock si el producto controla inventario. Los
+          // "elaborados" (platos de un menú) se venden sin descontar existencias.
+          if (variant.inventory.trackStock !== false) {
+            await this.stockService.decrement(variant.id, item.quantity, tx);
+          }
 
           itemsData.push({
             inventoryVariantId: variant.id,
@@ -1155,7 +1159,11 @@ export class SalesService {
           );
           const { base, tax } = this.taxParts(subtotal, rate, includeIva);
 
-          await this.stockService.decrement(variant.id, item.quantity, tx);
+          // Solo se descuenta stock si el producto controla inventario. Los
+          // "elaborados" (platos de un menú) se venden sin descontar existencias.
+          if (variant.inventory.trackStock !== false) {
+            await this.stockService.decrement(variant.id, item.quantity, tx);
+          }
 
           itemsData.push({
             inventoryVariantId: variant.id,

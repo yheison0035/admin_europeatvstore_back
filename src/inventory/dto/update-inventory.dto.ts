@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsString,
   IsOptional,
   IsNumber,
@@ -60,6 +61,10 @@ export class UpdateInventoryDto {
   @IsOptional()
   @IsString()
   unit?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  trackStock?: boolean;
 
   @IsOptional()
   @IsString()

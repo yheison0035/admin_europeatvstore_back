@@ -81,6 +81,7 @@ export class EcommerceService {
           description: product.description,
           price: product.salePrice,
           unit: product.unit ?? 'UNIDAD',
+          trackStock: product.trackStock,
           oldPrice,
           discount,
           stock,
@@ -135,7 +136,7 @@ export class EcommerceService {
 
     const data = fullProducts.map((product) => {
       const colors = product.variants
-        .filter((v) => v.stock > 0)
+        .filter((v) => product.trackStock === false || v.stock > 0)
         .map((v) => ({
           variantId: v.id,
           name: v.color,
@@ -159,6 +160,7 @@ export class EcommerceService {
         description: product.description,
         price: product.salePrice,
           unit: product.unit ?? 'UNIDAD',
+          trackStock: product.trackStock,
         oldPrice,
         discount,
         colors,
@@ -217,6 +219,7 @@ export class EcommerceService {
           slug: product.slug,
           price: product.salePrice,
           unit: product.unit ?? 'UNIDAD',
+          trackStock: product.trackStock,
           oldPrice,
           discount,
           stock,
@@ -263,6 +266,7 @@ export class EcommerceService {
           slug: product.slug,
           price: product.salePrice,
           unit: product.unit ?? 'UNIDAD',
+          trackStock: product.trackStock,
           oldPrice: product.oldPrice,
           discount,
           category: product.category?.name ?? null,
@@ -429,7 +433,7 @@ export class EcommerceService {
       maxPriceFound = Math.max(maxPriceFound, product.salePrice);
 
       const colors = product.variants
-        .filter((v) => v.stock > 0)
+        .filter((v) => product.trackStock === false || v.stock > 0)
         .map((v) => ({ variantId: v.id, name: v.color, size: v.size, stock: v.stock }));
 
       const stock = colors.reduce((s, c) => s + c.stock, 0);
@@ -449,6 +453,7 @@ export class EcommerceService {
         slug: product.slug,
         price: product.salePrice,
           unit: product.unit ?? 'UNIDAD',
+          trackStock: product.trackStock,
         oldPrice,
         discount,
         stock,
@@ -532,6 +537,7 @@ export class EcommerceService {
         description: product.description,
         price: product.salePrice,
           unit: product.unit ?? 'UNIDAD',
+          trackStock: product.trackStock,
         oldPrice,
         discount,
         images: product.images.map((i) => i.url),
@@ -617,6 +623,7 @@ export class EcommerceService {
         slug: product.slug,
         price: product.salePrice,
           unit: product.unit ?? 'UNIDAD',
+          trackStock: product.trackStock,
         oldPrice,
         discount,
         stock,
@@ -741,7 +748,11 @@ export class EcommerceService {
           );
         }
 
-        if (variant.stock < item.quantity) {
+        // Los "elaborados" (platos de un menú) no controlan stock: se pueden
+        // pedir siempre y no se validan ni descuentan existencias.
+        const tracksStock = variant.inventory.trackStock !== false;
+
+        if (tracksStock && variant.stock < item.quantity) {
           throw new BadRequestException(
             `Stock insuficiente para ${variant.inventory.name} (${variant.color}). Quedan ${variant.stock}.`,
           );
@@ -751,11 +762,13 @@ export class EcommerceService {
         const subtotal = price * item.quantity;
         total += subtotal;
 
-        // Descontar stock
-        await tx.inventoryVariant.update({
-          where: { id: variant.id },
-          data: { stock: { decrement: item.quantity } },
-        });
+        // Descontar stock (solo si controla inventario)
+        if (tracksStock) {
+          await tx.inventoryVariant.update({
+            where: { id: variant.id },
+            data: { stock: { decrement: item.quantity } },
+          });
+        }
 
         itemsData.push({
           inventoryVariantId: variant.id,

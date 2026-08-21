@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsNumber,
   IsArray,
+  IsBoolean,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -49,6 +50,11 @@ export class CreateInventoryDto {
   @IsOptional()
   @IsString()
   unit?: string;
+
+  // ¿Controla inventario/stock? (false = elaborado sin stock, ej. platos).
+  @IsOptional()
+  @IsBoolean()
+  trackStock?: boolean;
 
   @IsOptional()
   @IsString()

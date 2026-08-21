@@ -505,6 +505,11 @@ model Inventory {
   // Unidad de venta: UNIDAD (por unidad) o PESO (por kg, admite decimales).
   unit String @default("UNIDAD")
 
+  // ¿Se controla el inventario/stock de este producto? (como el "Track quantity"
+  // de Shopify/Square). true = producto con existencias (bebidas, retail); false
+  // = elaborado al momento sin stock (platos de un menú), se puede vender siempre.
+  trackStock Boolean @default(true)
+
   // Vencimiento y lote (droguería / perecederos). Opcionales.
   expiryDate DateTime?
   lot        String?
