@@ -10,12 +10,12 @@ import { Reflector } from '@nestjs/core';
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
-  // lee esa metadata y compara con req.user.role
+  // lee esa metadata (del método O de la clase) y compara con req.user.role
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.get<string[]>(
-      'roles',
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>('roles', [
       context.getHandler(),
-    );
+      context.getClass(),
+    ]);
     if (!requiredRoles) return true;
 
     // Si no coincide → lanza ForbiddenException.

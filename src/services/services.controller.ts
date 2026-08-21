@@ -14,6 +14,7 @@ import {
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { ServicesService } from './services.service';
 import { RolesGuard } from '@/auth/guards/roles.guard';
+import { Roles } from '@/auth/roles.decorator';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { Public } from '@/auth/decorators/public.decorator';
@@ -33,11 +34,13 @@ export class ServicesController {
     return this.service.findOne(id, req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Post()
   create(@Body() dto: CreateServiceDto, @Req() req) {
     return this.service.create(dto, req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -47,6 +50,7 @@ export class ServicesController {
     return this.service.update(id, dto, req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.remove(id, req.user);

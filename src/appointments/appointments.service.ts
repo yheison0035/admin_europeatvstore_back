@@ -193,21 +193,47 @@ export class AppointmentsService {
   async create(dto: CreateAppointmentDto, user: any) {
     await this.planLimits.assertModule(user.companyId, 'appointments');
 
-    const service = await this.prisma.service.findUnique({
-      where: { id: dto.serviceId },
+    // El servicio debe ser de la empresa del usuario.
+    const service = await this.prisma.service.findFirst({
+      where: { id: dto.serviceId, companyId: user.companyId },
     });
 
     if (!service) {
       throw new NotFoundException('Servicio no encontrado');
     }
 
+    // El barbero, el cliente y el local también deben pertenecer a la empresa.
+    const [barber, customer, local] = await Promise.all([
+      this.prisma.user.findFirst({
+        where: { id: dto.barberId, companyId: user.companyId },
+        select: { id: true },
+      }),
+      dto.customerId
+        ? this.prisma.customer.findFirst({
+            where: { id: dto.customerId, companyId: user.companyId },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      this.prisma.local.findFirst({
+        where: { id: dto.localId, companyId: user.companyId },
+        select: { id: true },
+      }),
+    ]);
+    if (!barber) throw new NotFoundException('Profesional no encontrado');
+    if (dto.customerId && !customer) {
+      throw new NotFoundException('Cliente no encontrado');
+    }
+    if (!local) throw new NotFoundException('Local no encontrado');
+
     const startMinutes = timeToMinutes(dto.startTime);
     const endMinutes = startMinutes + service.duration;
 
+    // El conflicto de horario se busca solo dentro de la misma empresa.
     const appointments = await this.prisma.appointment.findMany({
       where: {
         barberId: dto.barberId,
         date: new Date(dto.date),
+        companyId: user.companyId,
       },
       include: {
         service: true,

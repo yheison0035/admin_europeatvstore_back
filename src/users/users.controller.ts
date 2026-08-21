@@ -64,7 +64,8 @@ export class UsersController {
     return this.usersService.findAllPaginated(req.user, query);
   }
 
-  @Public()
+  // Requiere sesión: el servicio fuerza el filtro por la empresa del token.
+  @UseGuards(JwtAuthGuard)
   @Get('/by-role')
   getUsersByRole(@Req() req, @Query() query) {
     return this.usersService.getUsersByRole(req.user, query);

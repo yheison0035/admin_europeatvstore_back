@@ -461,9 +461,11 @@ export class UsersService {
     // =========================
     where.localId = localId;
 
-    if (user?.companyId) {
-      where.companyId = user.companyId;
+    // OBLIGATORIO: aislar por empresa del token (evita fuga entre empresas).
+    if (!user?.companyId) {
+      throw new BadRequestException('Sesión inválida');
     }
+    where.companyId = user.companyId;
 
     if (query.role) {
       const requested = query.role.toUpperCase();

@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/auth/guards/roles.guard';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { Public } from '@/auth/decorators/public.decorator';
+import { Roles } from '@/auth/roles.decorator';
 
 @Controller('appointments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -46,11 +47,13 @@ export class AppointmentsController {
     return this.service.findOne(id, req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Post()
   create(@Body() dto: CreateAppointmentDto, @Req() req) {
     return this.service.create(dto, req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -61,6 +64,7 @@ export class AppointmentsController {
   }
 
   // Marca la cita como confirmada (o no) con el cliente. Body: { confirmed }.
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'BARBERO', 'PROFESIONAL')
   @Patch(':id/client-confirm')
   clientConfirm(
     @Param('id', ParseIntPipe) id: number,
@@ -70,6 +74,7 @@ export class AppointmentsController {
     return this.service.setClientConfirmed(id, body?.confirmed !== false, req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.remove(id, req.user);

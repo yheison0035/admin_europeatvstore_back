@@ -12,6 +12,7 @@ import {
 import { ComandasService } from './comandas.service';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/auth/guards/roles.guard';
+import { Roles } from '@/auth/roles.decorator';
 
 @Controller('comandas')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -29,11 +30,13 @@ export class ComandasController {
     return this.service.byMesa(mesaId, req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA', 'MESERO')
   @Post()
   create(@Body() dto: any, @Req() req) {
     return this.service.create(dto, req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA', 'MESERO')
   @Post(':id/items')
   addItems(
     @Param('id', ParseIntPipe) id: number,
@@ -43,6 +46,7 @@ export class ComandasController {
     return this.service.addItems(id, body?.items || [], req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA', 'MESERO', 'COCINERO')
   @Patch(':id/status')
   setStatus(
     @Param('id', ParseIntPipe) id: number,
@@ -52,6 +56,7 @@ export class ComandasController {
     return this.service.setStatus(id, status, req.user);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA')
   @Post(':id/charge')
   charge(@Param('id', ParseIntPipe) id: number, @Body() dto: any, @Req() req) {
     return this.service.charge(id, dto, req.user);
