@@ -77,14 +77,67 @@ export class CashService {
         notes: dto.notes,
         openedById: user.id,
       },
+    });
+
+    // Al abrir, importa las ventas en efectivo de HOY (día Colombia) de este
+    // local que aún no estén en ninguna caja. Así, si abren la caja después de
+    // haber vendido, el efectivo del día igual queda reflejado y el arqueo
+    // cuadra con el reporte de ventas.
+    await this.importPendingCashSales(register.id, dto.localId, user.id);
+
+    const full = await this.prisma.cashRegister.findUnique({
+      where: { id: register.id },
       include: { movements: true },
     });
 
     return {
       success: true,
       message: 'Caja abierta',
-      data: { ...register, totals: computeTotals(register) },
+      data: { ...full, totals: computeTotals(full) },
     };
+  }
+
+  // Registra como ingreso las ventas en efectivo del día que aún no están en
+  // ninguna caja (evita duplicar: solo las que no tienen movimiento asociado).
+  private async importPendingCashSales(
+    cashRegisterId: number,
+    localId: number,
+    userId: number,
+  ) {
+    // Ventana del día en zona Colombia (UTC-5), expresada en UTC.
+    const now = new Date();
+    const col = new Date(now.getTime() - 5 * 3600 * 1000);
+    const y = col.getUTCFullYear();
+    const m = col.getUTCMonth();
+    const d = col.getUTCDate();
+    const start = new Date(Date.UTC(y, m, d, 5, 0, 0));
+    const end = new Date(Date.UTC(y, m, d + 1, 5, 0, 0));
+
+    const sales = await this.prisma.sale.findMany({
+      where: {
+        localId,
+        paymentMethod: 'EFECTIVO',
+        saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
+        saleDate: { gte: start, lt: end },
+        cashMovements: { none: {} }, // aún no registrada en ninguna caja
+      },
+      select: { id: true, code: true, totalAmount: true },
+    });
+
+    for (const s of sales) {
+      await this.prisma.cashMovement.create({
+        data: {
+          cashRegisterId,
+          type: 'INGRESO',
+          amount: s.totalAmount,
+          concept: 'Venta en efectivo (del día)',
+          saleId: s.id,
+          userId,
+        },
+      });
+    }
+
+    return sales.length;
   }
 
   async addMovement(user: any, id: number, dto: CashMovementDto) {
