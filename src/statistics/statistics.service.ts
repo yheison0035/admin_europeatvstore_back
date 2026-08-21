@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { PlanLimitsService } from '@/common/plan-limits.service';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
@@ -59,7 +60,8 @@ export class StatisticsService {
   // ventas de hoy (cobradas) + conteos para el checklist de primeros pasos.
   async homeSummary(user: any) {
     const companyId = user.companyId;
-    const today = colombiaDay(new Date());
+    const now = new Date();
+    const today = colombiaDay(now);
     const [y, m, d] = today.split('-').map(Number);
     const start = dayStartUtc(y, m, d);
     const end = dayStartUtc(y, m, d + 1);
@@ -88,6 +90,172 @@ export class StatisticsService {
         this.prisma.sale.count({ where: { local: { companyId } } }),
       ]);
 
+    // Config de la empresa para adaptar los bloques por vertical.
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { type: true, responsableIVA: true },
+    });
+    const isServices = ['SERVICIOS', 'ODONTOLOGIA'].includes(
+      company?.type as any,
+    );
+    const notCanceled = {
+      notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any,
+    };
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+
+    // ---- Ventas de los últimos 7 días (serie para mini gráfica) ----
+    const weekStart = dayStartUtc(y, m, d - 6);
+    const weekRows = await this.prisma.sale.findMany({
+      where: {
+        local: { companyId },
+        ...localFilter,
+        paymentStatus: 'PAGADA' as any,
+        saleDate: { gte: weekStart, lt: end },
+      },
+      select: { saleDate: true, totalAmount: true },
+    });
+    const days: { date: string; total: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      days.push({ date: colombiaDay(dayStartUtc(y, m, d - i)), total: 0 });
+    }
+    const dayMap = new Map(days.map((x) => [x.date, x]));
+    for (const s of weekRows) {
+      const b = dayMap.get(colombiaDay(s.saleDate));
+      if (b) b.total += s.totalAmount || 0;
+    }
+
+    // ---- Mes en curso: ventas, IVA generado, gastos y utilidad ----
+    const monthStart = dayStartUtc(y, m, 1);
+    const monthSalesAgg = await this.prisma.sale.aggregate({
+      where: {
+        local: { companyId },
+        ...localFilter,
+        saleStatus: notCanceled,
+        saleDate: { gte: monthStart, lt: end },
+      },
+      _sum: { totalAmount: true, taxTotal: true },
+    });
+    const expMonthStart = new Date(Date.UTC(y, m - 1, 1));
+    const expMonthEnd = new Date(Date.UTC(y, m - 1, d + 1));
+    const monthExpAgg = await this.prisma.expense.aggregate({
+      where: {
+        local: { companyId },
+        ...localFilter,
+        status: 'ACTIVO' as any,
+        expenseDate: { gte: expMonthStart, lt: expMonthEnd },
+      },
+      _sum: { amount: true },
+    });
+    const monthSalesTotal = monthSalesAgg._sum.totalAmount || 0;
+    const monthExpensesTotal = monthExpAgg._sum.amount || 0;
+
+    // ---- Cartera vencida (fiados con vencimiento pasado y saldo pendiente) ----
+    const overdueSales = await this.prisma.sale.findMany({
+      where: {
+        local: { companyId },
+        ...localFilter,
+        paymentStatus: 'FIADO' as any,
+        dueDate: { lt: now },
+      },
+      select: { totalAmount: true, payments: { select: { amount: true } } },
+    });
+    let overdueTotal = 0;
+    let overdueCount = 0;
+    for (const s of overdueSales) {
+      const paid = s.payments.reduce((a, p) => a + Number(p.amount), 0);
+      const saldo = Number(s.totalAmount) - paid;
+      if (saldo > 0.01) {
+        overdueTotal += saldo;
+        overdueCount++;
+      }
+    }
+
+    // ---- Clientes por reactivar (sin volver hace >= 20 días) ----
+    const cutoff = new Date(now.getTime() - 20 * 86400000);
+    const grouped = await this.prisma.sale.groupBy({
+      by: ['customerId'],
+      where: {
+        local: { companyId },
+        ...localFilter,
+        customerId: { not: null },
+        saleStatus: notCanceled,
+      },
+      _max: { saleDate: true },
+    });
+    const cf = await this.prisma.customer.findMany({
+      where: { companyId, document: CONSUMIDOR_FINAL },
+      select: { id: true },
+    });
+    const cfIds = new Set(cf.map((c) => c.id));
+    const winbackCount = grouped.filter(
+      (g) =>
+        g.customerId != null &&
+        !cfIds.has(g.customerId) &&
+        g._max.saleDate &&
+        g._max.saleDate <= cutoff,
+    ).length;
+
+    // ---- Cumpleaños de la próxima semana (por mes/día, ignora el año) ----
+    const pairs: { mo: number; da: number }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dt = new Date(Date.UTC(y, m - 1, d + i));
+      pairs.push({ mo: dt.getUTCMonth() + 1, da: dt.getUTCDate() });
+    }
+    const bdayMonths = [...new Set(pairs.map((p) => p.mo))];
+    let birthdays: { id: number; name: string; date: string }[] = [];
+    try {
+      const rows = await this.prisma.$queryRaw<
+        Array<{ id: number; name: string; birthday: Date }>
+      >(
+        Prisma.sql`SELECT id, name, birthday FROM "Customer"
+          WHERE "companyId" = ${companyId} AND birthday IS NOT NULL
+          AND EXTRACT(MONTH FROM birthday) IN (${Prisma.join(bdayMonths)})`,
+      );
+      const pairSet = new Set(pairs.map((p) => `${p.mo}-${p.da}`));
+      birthdays = rows
+        .filter((r) => {
+          const bd = new Date(r.birthday);
+          return pairSet.has(`${bd.getUTCMonth() + 1}-${bd.getUTCDate()}`);
+        })
+        .slice(0, 6)
+        .map((r) => {
+          const bd = new Date(r.birthday);
+          return {
+            id: r.id,
+            name: r.name,
+            date: `${String(bd.getUTCDate()).padStart(2, '0')}/${String(
+              bd.getUTCMonth() + 1,
+            ).padStart(2, '0')}`,
+          };
+        });
+    } catch (_) {
+      birthdays = [];
+    }
+
+    // ---- Próximas citas (solo verticales de servicios/agenda) ----
+    let nextAppointments: any[] = [];
+    if (isServices) {
+      const todayDateOnly = new Date(Date.UTC(y, m - 1, d));
+      nextAppointments = await this.prisma.appointment.findMany({
+        where: {
+          companyId,
+          ...localFilter,
+          status: { in: ['PENDIENTE', 'CONFIRMADA'] as any },
+          date: { gte: todayDateOnly },
+        },
+        orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+        take: 5,
+        select: {
+          id: true,
+          date: true,
+          startTime: true,
+          service: { select: { name: true } },
+          barber: { select: { name: true } },
+          customer: { select: { name: true } },
+        },
+      });
+    }
+
     return {
       success: true,
       data: {
@@ -101,6 +269,19 @@ export class StatisticsService {
           services: servicesCount,
           sales: salesEver,
         },
+        weekSales: days,
+        month: {
+          sales: r2(monthSalesTotal),
+          expenses: r2(monthExpensesTotal),
+          profit: r2(monthSalesTotal - monthExpensesTotal),
+        },
+        iva: company?.responsableIVA
+          ? { generado: r2(Number(monthSalesAgg._sum.taxTotal || 0)) }
+          : null,
+        overdue: { total: r2(overdueTotal), count: overdueCount },
+        winbackCount,
+        birthdays,
+        nextAppointments,
       },
     };
   }
