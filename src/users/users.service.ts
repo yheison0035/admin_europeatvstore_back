@@ -248,6 +248,8 @@ export class UsersService {
             crmTheme: true,
             // Si exige "abrir el día" (caja) para poder vender.
             requireCashOpen: true,
+            // Régimen de IVA (para el encabezado de la factura impresa).
+            responsableIVA: true,
           },
         },
         local: true,
