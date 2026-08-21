@@ -289,7 +289,14 @@ export class CompaniesService {
 
   // Tema de diseño del panel/CRM (colores). Solo valores permitidos.
   async updateCrmTheme(user: any, theme: string) {
-    const allowed = ['orange', 'blue', 'emerald'];
+    const allowed = [
+      'orange',
+      'blue',
+      'emerald',
+      'rose',
+      'violet',
+      'cyan',
+    ];
     const value = allowed.includes(theme) ? theme : 'orange';
     const company = await this.prisma.company.update({
       where: { id: user.companyId },
