@@ -216,6 +216,10 @@ model Company {
   // Tema de diseño del panel/CRM elegido por el dueño (orange | blue | emerald).
   crmTheme String @default("orange")
 
+  // Si está activo, no se puede vender sin haber "abierto el día" (caja abierta
+  // de hoy en la sede). El dueño lo enciende/apaga en Configuración.
+  requireCashOpen Boolean @default(false)
+
   // Facturación / suscripción (control de la plataforma)
   plan       String?
   paidUntil  DateTime? // fecha hasta la que la empresa está al día; si vence, se auto-suspende

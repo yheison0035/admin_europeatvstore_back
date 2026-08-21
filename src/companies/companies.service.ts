@@ -32,6 +32,7 @@ export class CompaniesService {
         type: true,
         nit: true,
         crmTheme: true,
+        requireCashOpen: true,
         loyaltyEnabled: true,
         loyaltyTier1Visits: true,
         loyaltyTier1Percent: true,
@@ -170,6 +171,16 @@ export class CompaniesService {
         salesProcessed: sales.length,
       },
     };
+  }
+
+  // Política de caja: exigir "abrir el día" (caja) para poder vender.
+  async updateCashPolicy(user: any, requireCashOpen: boolean) {
+    const company = await this.prisma.company.update({
+      where: { id: user.companyId },
+      data: { requireCashOpen: !!requireCashOpen },
+      select: { requireCashOpen: true },
+    });
+    return { success: true, data: company };
   }
 
   // Tema de diseño del panel/CRM (colores). Solo valores permitidos.

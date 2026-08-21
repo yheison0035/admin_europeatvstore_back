@@ -52,6 +52,12 @@ export class CompanySettingsController {
   }
 
   @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('cash-policy')
+  updateCashPolicy(@Body('requireCashOpen') requireCashOpen: boolean, @Req() req) {
+    return this.service.updateCashPolicy(req.user, requireCashOpen);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch('profile')
   updateProfile(
     @Body()
