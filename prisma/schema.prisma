@@ -281,6 +281,7 @@ model Company {
   mesas          Mesa[]
   comandas       Comanda[]
   salePayments   SalePayment[]
+  inventory      Inventory[]     @relation("CompanyInventory")
   cashRegisters  CashRegister[]
   purchases      Purchase[]
   quotes         Quote[]
@@ -508,6 +509,10 @@ model Inventory {
   expiryDate DateTime?
   lot        String?
 
+  // Ancla de tenant: el producto pertenece a una empresa (no depende del local,
+  // que puede quedar en null si se borra la sede). Nullable por 3 filas antiguas
+  // huérfanas sin empresa resoluble; los productos nuevos siempre lo llevan.
+  companyId  Int?
   localId    Int?
   providerId Int?
   categoryId Int?
@@ -518,6 +523,7 @@ model Inventory {
 
   createdBy User?     @relation("InventoryCreatedBy", fields: [createdById], references: [id])
   updatedBy User?     @relation("InventoryUpdatedBy", fields: [updatedById], references: [id])
+  company   Company?  @relation("CompanyInventory", fields: [companyId], references: [id], onDelete: Cascade)
   local     Local?    @relation("LocalInventory", fields: [localId], references: [id], onDelete: SetNull)
   provider  Provider? @relation("ProviderProducts", fields: [providerId], references: [id], onDelete: SetNull)
   category  Category? @relation("CategoryProducts", fields: [categoryId], references: [id], onDelete: SetNull)
@@ -530,6 +536,13 @@ model Inventory {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([localId])
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([providerId])
+  @@index([status])
 }
 
 model InventoryVariant {
@@ -609,6 +622,10 @@ model Expense {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([localId])
+  @@index([expenseDate])
+  @@index([type])
 }
 
 //////////////////////////////////////////////////
@@ -714,6 +731,10 @@ model SaleItem {
   service Service?          @relation(fields: [serviceId], references: [id])
 
   createdAt DateTime @default(now())
+
+  @@index([saleId])
+  @@index([inventoryVariantId])
+  @@index([serviceId])
 }
 
 //////////////////////////////////////////////////

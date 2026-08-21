@@ -564,6 +564,9 @@ export class InventoryService {
           ...(dto.lot !== undefined && { lot: dto.lot || null }),
           slug,
 
+          // Ancla de tenant: el producto siempre pertenece a la empresa.
+          company: { connect: { id: user.companyId } },
+
           ...(dto.localId && {
             local: { connect: { id: dto.localId } },
           }),
