@@ -33,6 +33,15 @@ export class CompaniesService {
         nit: true,
         crmTheme: true,
         requireCashOpen: true,
+        responsableIVA: true,
+        preciosIncluyenIVA: true,
+        defaultTaxRate: true,
+        businessName: true,
+        dv: true,
+        personType: true,
+        taxRegime: true,
+        fiscalAddress: true,
+        fiscalCity: true,
         loyaltyEnabled: true,
         loyaltyTier1Visits: true,
         loyaltyTier1Percent: true,
@@ -171,6 +180,43 @@ export class CompaniesService {
         salesProcessed: sales.length,
       },
     };
+  }
+
+  // Configuración fiscal (IVA / datos para facturar).
+  async updateFiscal(user: any, dto: any) {
+    const data: any = {};
+    if (typeof dto.responsableIVA === 'boolean')
+      data.responsableIVA = dto.responsableIVA;
+    if (typeof dto.preciosIncluyenIVA === 'boolean')
+      data.preciosIncluyenIVA = dto.preciosIncluyenIVA;
+    if (dto.defaultTaxRate != null) {
+      const r = Math.min(100, Math.max(0, Number(dto.defaultTaxRate) || 0));
+      data.defaultTaxRate = r;
+    }
+    if (dto.businessName !== undefined) data.businessName = dto.businessName || null;
+    if (dto.dv !== undefined) data.dv = dto.dv || null;
+    if (dto.personType !== undefined) data.personType = dto.personType || null;
+    if (dto.taxRegime !== undefined) data.taxRegime = dto.taxRegime || null;
+    if (dto.fiscalAddress !== undefined)
+      data.fiscalAddress = dto.fiscalAddress || null;
+    if (dto.fiscalCity !== undefined) data.fiscalCity = dto.fiscalCity || null;
+
+    const company = await this.prisma.company.update({
+      where: { id: user.companyId },
+      data,
+      select: {
+        responsableIVA: true,
+        preciosIncluyenIVA: true,
+        defaultTaxRate: true,
+        businessName: true,
+        dv: true,
+        personType: true,
+        taxRegime: true,
+        fiscalAddress: true,
+        fiscalCity: true,
+      },
+    });
+    return { success: true, data: company };
   }
 
   // Política de caja: exigir "abrir el día" (caja) para poder vender.

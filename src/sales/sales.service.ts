@@ -43,6 +43,30 @@ export class SalesService {
     }
   }
 
+  // Descompone un total de línea en base gravable + IVA.
+  //  - includeIva=true  : el precio YA incluye IVA → se le extrae.
+  //  - includeIva=false : el IVA se suma sobre el precio.
+  private taxParts(gross: number, ratePct: number, includeIva: boolean) {
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const rate = ratePct > 0 ? ratePct : 0;
+    if (rate === 0) return { base: r2(gross), tax: 0 };
+    if (includeIva) {
+      const base = r2(gross / (1 + rate / 100));
+      return { base, tax: r2(gross - base) };
+    }
+    return { base: r2(gross), tax: r2((gross * rate) / 100) };
+  }
+
+  // Tasa de IVA que aplica a un ítem según la config fiscal de la empresa.
+  private itemTaxRate(
+    productRate: any,
+    fiscal: { responsableIVA: boolean; defaultTaxRate: any },
+  ): number {
+    if (!fiscal?.responsableIVA) return 0;
+    const pr = Number(productRate) || 0;
+    return pr > 0 ? pr : Number(fiscal.defaultTaxRate) || 0;
+  }
+
   private calculateSubtotal(price: number, quantity: number, discount = 0) {
     if (discount < 0) {
       throw new BadRequestException('El descuento no puede ser negativo');
@@ -683,17 +707,23 @@ export class SalesService {
       throw new ForbiddenException('Usuario no pertenece a tu empresa');
     }
 
+    // Configuración fiscal de la empresa (IVA).
+    const fiscal = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        responsableIVA: true,
+        preciosIncluyenIVA: true,
+        defaultTaxRate: true,
+      },
+    });
+    const includeIva = fiscal?.preciosIncluyenIVA ?? true;
+
     return this.prisma.$transaction(async (tx) => {
       let total = 0;
+      let saleSubtotal = 0;
+      let saleTax = 0;
 
-      const itemsData: {
-        inventoryVariantId: number | null;
-        serviceId: number | null;
-        quantity: number;
-        price: number;
-        discount: number;
-        subtotal: number;
-      }[] = [];
+      const itemsData: any[] = [];
 
       for (const item of dto.items) {
         this.validateItem(item);
@@ -727,6 +757,12 @@ export class SalesService {
             discount,
           );
 
+          const rate = this.itemTaxRate(
+            variant.inventory.taxRate,
+            fiscal as any,
+          );
+          const { base, tax } = this.taxParts(subtotal, rate, includeIva);
+
           await this.stockService.decrement(variant.id, item.quantity, tx);
 
           itemsData.push({
@@ -736,9 +772,13 @@ export class SalesService {
             price,
             discount,
             subtotal,
+            taxRate: rate,
+            taxAmount: tax,
           });
 
-          total += subtotal;
+          total += includeIva ? subtotal : subtotal + tax;
+          saleSubtotal += base;
+          saleTax += tax;
         }
 
         // =========================
@@ -778,6 +818,9 @@ export class SalesService {
             discount,
           );
 
+          const rate = this.itemTaxRate(service.taxRate, fiscal as any);
+          const { base, tax } = this.taxParts(subtotal, rate, includeIva);
+
           itemsData.push({
             inventoryVariantId: null,
             serviceId: service.id,
@@ -785,9 +828,13 @@ export class SalesService {
             price,
             discount,
             subtotal,
+            taxRate: rate,
+            taxAmount: tax,
           });
 
-          total += subtotal;
+          total += includeIva ? subtotal : subtotal + tax;
+          saleSubtotal += base;
+          saleTax += tax;
         }
       }
 
@@ -795,10 +842,13 @@ export class SalesService {
       // si no se envía ninguna).
       const saleDate = dto.saleDate ? new Date(dto.saleDate) : new Date();
 
+      const r2 = (n: number) => Math.round(n * 100) / 100;
       const sale = await tx.sale.create({
         data: {
           code: `SALE-${Date.now()}`,
           totalAmount: total,
+          subtotal: r2(saleSubtotal),
+          taxTotal: r2(saleTax),
           paymentMethod: dto.paymentMethod,
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',
@@ -893,6 +943,16 @@ export class SalesService {
     // El fiado/crédito requiere plan Impulso o superior.
     await this.assertFiadoAllowed(dto, user);
 
+    const fiscal = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        responsableIVA: true,
+        preciosIncluyenIVA: true,
+        defaultTaxRate: true,
+      },
+    });
+    const includeIva = fiscal?.preciosIncluyenIVA ?? true;
+
     return this.prisma.$transaction(async (tx) => {
       const sale = await tx.sale.findUnique({
         where: { id },
@@ -982,15 +1042,10 @@ export class SalesService {
       });
 
       let total = 0;
+      let saleSubtotal = 0;
+      let saleTax = 0;
 
-      const itemsData: {
-        inventoryVariantId: number | null;
-        serviceId: number | null;
-        quantity: number;
-        price: number;
-        discount: number;
-        subtotal: number;
-      }[] = [];
+      const itemsData: any[] = [];
 
       // ====================================
       // NUEVOS ITEMS
@@ -1037,6 +1092,9 @@ export class SalesService {
             discount,
           );
 
+          const rate = this.itemTaxRate(service.taxRate, fiscal as any);
+          const { base, tax } = this.taxParts(subtotal, rate, includeIva);
+
           itemsData.push({
             inventoryVariantId: null,
             serviceId: service.id,
@@ -1044,9 +1102,13 @@ export class SalesService {
             price,
             discount,
             subtotal,
+            taxRate: rate,
+            taxAmount: tax,
           });
 
-          total += subtotal;
+          total += includeIva ? subtotal : subtotal + tax;
+          saleSubtotal += base;
+          saleTax += tax;
         }
 
         // ============================
@@ -1086,6 +1148,12 @@ export class SalesService {
             discount,
           );
 
+          const rate = this.itemTaxRate(
+            variant.inventory.taxRate,
+            fiscal as any,
+          );
+          const { base, tax } = this.taxParts(subtotal, rate, includeIva);
+
           await this.stockService.decrement(variant.id, item.quantity, tx);
 
           itemsData.push({
@@ -1095,9 +1163,13 @@ export class SalesService {
             price,
             discount,
             subtotal,
+            taxRate: rate,
+            taxAmount: tax,
           });
 
-          total += subtotal;
+          total += includeIva ? subtotal : subtotal + tax;
+          saleSubtotal += base;
+          saleTax += tax;
         }
 
         // ============================
@@ -1114,6 +1186,7 @@ export class SalesService {
       // ACTUALIZAR VENTA
       // ====================================
 
+      const r2 = (n: number) => Math.round(n * 100) / 100;
       const updatedSale = await tx.sale.update({
         where: { id },
 
@@ -1121,6 +1194,8 @@ export class SalesService {
           ...baseUpdate,
 
           totalAmount: total,
+          subtotal: r2(saleSubtotal),
+          taxTotal: r2(saleTax),
 
           items: {
             create: itemsData,
@@ -1234,6 +1309,8 @@ export class SalesService {
                 nit: true,
                 phone: true,
                 email: true,
+                businessName: true,
+                responsableIVA: true,
               },
             },
           },
@@ -1256,11 +1333,15 @@ export class SalesService {
         price: item.price,
         discount: item.discount,
         subtotal: item.subtotal,
+        taxRate: Number(item.taxRate) || 0,
+        taxAmount: Number(item.taxAmount) || 0,
       };
     });
 
     const subtotal = items.reduce((a, i) => a + i.price * i.quantity, 0);
     const discount = items.reduce((a, i) => a + (i.discount || 0), 0);
+    const taxTotal = Number(sale.taxTotal) || 0;
+    const taxable = sale.subtotal != null ? Number(sale.subtotal) : null;
 
     return {
       valid: true,
@@ -1271,6 +1352,10 @@ export class SalesService {
       notes: sale.notes || null,
       subtotal,
       discount,
+      // Desglose fiscal: base gravable + IVA (0 si la empresa no cobra IVA).
+      taxable,
+      taxTotal,
+      responsableIVA: !!sale.local?.company?.responsableIVA,
       totalAmount: sale.totalAmount,
       customer: {
         name: sale.customer?.name || 'CONSUMIDOR FINAL',
@@ -1285,6 +1370,7 @@ export class SalesService {
       },
       company: {
         name: sale.local?.company?.name || null,
+        businessName: sale.local?.company?.businessName || null,
         logo: sale.local?.company?.logo || null,
         nit: sale.local?.company?.nit || null,
         phone: sale.local?.company?.phone || null,

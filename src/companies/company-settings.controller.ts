@@ -58,6 +58,12 @@ export class CompanySettingsController {
   }
 
   @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('fiscal')
+  updateFiscal(@Body() dto: any, @Req() req) {
+    return this.service.updateFiscal(req.user, dto);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch('profile')
   updateProfile(
     @Body()
