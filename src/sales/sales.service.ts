@@ -853,6 +853,7 @@ export class SalesService {
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',
           saleDate: saleDate,
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           notes: dto.notes,
           customerId: dto.customerId,
           localId: dto.localId,

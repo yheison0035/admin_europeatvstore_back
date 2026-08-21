@@ -54,6 +54,11 @@ export class CreateSaleDto {
   @IsDateString()
   saleDate?: string;
 
+  // Vencimiento de la venta a crédito (fiado).
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
   @IsOptional()
   @IsString()
   notes?: string;
