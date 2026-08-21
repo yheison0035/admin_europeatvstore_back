@@ -180,6 +180,12 @@ enum WebsiteBannerType {
   POPUP
 }
 
+// Tipo de factura (normal vs electrónica DIAN).
+enum InvoiceType {
+  NORMAL
+  ELECTRONICA
+}
+
 //////////////////////////////////////////////////
 // MODELOS
 //////////////////////////////////////////////////
@@ -219,6 +225,18 @@ model Company {
   // Si está activo, no se puede vender sin haber "abierto el día" (caja abierta
   // de hoy en la sede). El dueño lo enciende/apaga en Configuración.
   requireCashOpen Boolean @default(false)
+
+  // Configuración fiscal (facturación con impuestos / electrónica DIAN).
+  responsableIVA     Boolean  @default(false)
+  preciosIncluyenIVA Boolean  @default(false)
+  defaultTaxRate     Decimal  @default(0) @db.Decimal(5, 2)
+  businessName       String?
+  dv                 String?
+  personType         String?
+  taxRegime          String?
+  ciiu               String?
+  fiscalAddress      String?
+  fiscalCity         String?
 
   // Facturación / suscripción (control de la plataforma)
   plan       String?
@@ -468,6 +486,7 @@ model Inventory {
   purchasePrice      Float
   oldPrice           Float?
   salePrice          Float
+  taxRate            Decimal @default(0) @db.Decimal(5, 2)
   status             Status  @default(ACTIVO)
   barcode            String? @unique
   publishInEcommerce Boolean @default(false)
@@ -592,6 +611,9 @@ model Sale {
   id            Int           @id @default(autoincrement())
   code          String        @unique
   totalAmount   Float
+  subtotal      Decimal?      @db.Decimal(14, 2)
+  taxTotal      Decimal       @default(0) @db.Decimal(14, 2)
+  invoiceType   InvoiceType   @default(NORMAL)
   paymentMethod PaymentMethod
   saleStatus    SaleStatus    @default(NUEVA)
   paymentStatus PaymentStatus @default(PENDIENTE)
@@ -641,10 +663,12 @@ model Sale {
 
 model SaleItem {
   id       Int   @id @default(autoincrement())
-  quantity Float // admite decimales para venta por peso (kg)
-  price    Float
-  subtotal Float
-  discount Float @default(0)
+  quantity  Float // admite decimales para venta por peso (kg)
+  price     Float
+  subtotal  Float
+  discount  Float   @default(0)
+  taxRate   Decimal @default(0) @db.Decimal(5, 2)
+  taxAmount Decimal @default(0) @db.Decimal(14, 2)
 
   saleId             Int
   inventoryVariantId Int?
@@ -719,6 +743,7 @@ model Service {
   name        String
   description String?
   duration    Int
+  taxRate     Decimal @default(0) @db.Decimal(5, 2)
   status      Status  @default(ACTIVO)
 
   companyId Int
