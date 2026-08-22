@@ -4,9 +4,10 @@ import { SalesController } from './sales.controller';
 import { PrismaService } from '@/prisma.service';
 import { InventoryModule } from '@/inventory/inventory.module';
 import { PlanLimitsModule } from '@/common/plan-limits.module';
+import { RecipesModule } from '@/recipes/recipes.module';
 
 @Module({
-  imports: [InventoryModule, PlanLimitsModule],
+  imports: [InventoryModule, PlanLimitsModule, RecipesModule],
   controllers: [SalesController],
   providers: [SalesService, PrismaService],
   exports: [SalesService],

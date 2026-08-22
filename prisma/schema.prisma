@@ -541,6 +541,7 @@ model Inventory {
   images         InventoryImage[]
   features       InventoryFeature[]
   specifications InventorySpecification[]
+  recipeItems    RecipeItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1009,13 +1010,34 @@ model Supply {
   companyId  Int
   company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  movements SupplyMovement[]
+  movements   SupplyMovement[]
+  recipeItems RecipeItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([companyId])
   @@index([localId])
+}
+
+// Receta: qué insumos (y cuánto) consume UNA unidad de un plato del menú.
+// Al vender el plato se descuentan estos insumos. Solo la usa comida.
+model RecipeItem {
+  id          Int   @id @default(autoincrement())
+  inventoryId Int // el plato
+  supplyId    Int // el insumo
+  quantity    Float @default(0) // cuánto insumo consume 1 unidad del plato
+  companyId   Int
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  supply    Supply    @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([inventoryId, supplyId])
+  @@index([inventoryId])
+  @@index([supplyId])
+  @@index([companyId])
 }
 
 model SupplyMovement {

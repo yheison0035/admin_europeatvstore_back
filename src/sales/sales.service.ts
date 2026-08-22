@@ -24,6 +24,7 @@ import {
 import { applyLocalFilter } from '@/common/local-filter.util';
 import { AuditService } from '@/audit/audit.service';
 import { applyLoyaltyVisit } from '@/common/loyalty.util';
+import { RecipesService } from '@/recipes/recipes.service';
 
 @Injectable()
 export class SalesService {
@@ -32,6 +33,7 @@ export class SalesService {
     private stockService: StockService,
     private audit: AuditService,
     private planLimits: PlanLimitsService,
+    private recipes: RecipesService,
   ) {}
 
   // Fiado / crédito solo desde el plan Impulso. Se valida al crear/editar venta.
@@ -724,6 +726,8 @@ export class SalesService {
       let saleTax = 0;
 
       const itemsData: any[] = [];
+      // Platos vendidos → para descontar sus insumos por receta (comida).
+      const recipeConsumption: { inventoryId: number; quantity: number }[] = [];
 
       for (const item of dto.items) {
         this.validateItem(item);
@@ -768,6 +772,12 @@ export class SalesService {
           if (variant.inventory.trackStock !== false) {
             await this.stockService.decrement(variant.id, item.quantity, tx);
           }
+
+          // Registrar para el descuento de insumos por receta (si tiene).
+          recipeConsumption.push({
+            inventoryId: variant.inventory.id,
+            quantity: item.quantity,
+          });
 
           itemsData.push({
             inventoryVariantId: variant.id,
@@ -932,6 +942,15 @@ export class SalesService {
           });
         }
       }
+
+      // Comida: descuenta los insumos de la receta de cada plato vendido
+      // (no hace nada si el producto no tiene receta → no afecta otras verticales).
+      await this.recipes.consume(
+        tx,
+        user.companyId,
+        recipeConsumption,
+        dto.userId ?? user.id,
+      );
 
       await this.audit.log({
         entity: 'sale',

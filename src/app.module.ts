@@ -25,6 +25,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { MesasModule } from './mesas/mesas.module';
 import { ComandasModule } from './comandas/comandas.module';
 import { SuppliesModule } from './supplies/supplies.module';
+import { RecipesModule } from './recipes/recipes.module';
 import { CashModule } from './cash/cash.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { QuotesModule } from './quotes/quotes.module';
@@ -62,6 +63,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     MesasModule,
     ComandasModule,
     SuppliesModule,
+    RecipesModule,
     CashModule,
     PurchasesModule,
     QuotesModule,
