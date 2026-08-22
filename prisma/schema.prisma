@@ -286,6 +286,7 @@ model Company {
   purchases      Purchase[]
   quotes         Quote[]
   returns        Return[]
+  supplies       Supply[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -402,6 +403,7 @@ model Provider {
   inventories Inventory[] @relation("ProviderProducts")
   expenses    Expense[]   @relation("ProviderExpenses")
   purchases   Purchase[]
+  supplies    Supply[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -440,6 +442,7 @@ model Local {
   purchases       Purchase[]
   quotes          Quote[]
   returns         Return[]
+  supplies        Supply[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -982,6 +985,52 @@ model ComandaItem {
   createdAt DateTime @default(now())
 
   @@index([comandaId])
+}
+
+//////////////////////////////////////////////////
+// INSUMOS (materia prima para elaborar comida)
+// Es control aparte del "Menú" (Inventory): lo que se usa para cocinar
+// (harina, carne, aceite...), no lo que se vende directamente.
+//////////////////////////////////////////////////
+
+model Supply {
+  id       Int     @id @default(autoincrement())
+  name     String
+  unit     String  @default("UNIDAD") // UNIDAD | KG | GRAMO | LITRO | ML
+  stock    Float   @default(0)
+  minStock Float? // alerta de bajo (opcional)
+  cost     Float   @default(0) // costo por unidad (opcional)
+  status   Status  @default(ACTIVO)
+
+  providerId Int?
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  localId    Int
+  local      Local     @relation(fields: [localId], references: [id], onDelete: Cascade)
+  companyId  Int
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  movements SupplyMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([localId])
+}
+
+model SupplyMovement {
+  id        Int     @id @default(autoincrement())
+  supplyId  Int
+  supply    Supply  @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  type      String // ENTRADA | SALIDA | AJUSTE
+  quantity  Float
+  reason    String?
+  userId    Int?
+  companyId Int
+
+  createdAt DateTime @default(now())
+
+  @@index([supplyId])
 }
 
 //////////////////////////////////////////////////
