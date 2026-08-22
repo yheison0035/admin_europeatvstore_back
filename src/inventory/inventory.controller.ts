@@ -139,6 +139,8 @@ export class InventoryController {
     'ASESOR',
     'BODEGUERO',
     'VENTAS',
+    'MESERO',
+    'CAJA',
   )
   @Get('search/:term')
   search(@Param('term') term: string, @Req() req) {
