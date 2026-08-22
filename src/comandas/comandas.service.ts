@@ -6,12 +6,37 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma.service';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
+import { SalesService } from '@/sales/sales.service';
 
 const KITCHEN_STATUSES = ['PENDIENTE', 'PREPARANDO', 'LISTO'];
 
+// Estados válidos de una comanda y a qué se puede pasar desde cada uno.
+// COBRADA no se pone con setStatus: se alcanza únicamente al cobrar.
+const ALL_STATUSES = [
+  'PENDIENTE',
+  'PREPARANDO',
+  'LISTO',
+  'ENTREGADO',
+  'COBRADA',
+  'CANCELADA',
+];
+const TRANSITIONS: Record<string, string[]> = {
+  PENDIENTE: ['PREPARANDO', 'LISTO', 'ENTREGADO', 'CANCELADA'],
+  PREPARANDO: ['LISTO', 'ENTREGADO', 'CANCELADA'],
+  LISTO: ['ENTREGADO', 'CANCELADA'],
+  ENTREGADO: ['CANCELADA'],
+  COBRADA: [],
+  CANCELADA: [],
+};
+// La cocina solo mueve estados de cocina.
+const COCINERO_ALLOWED = ['PREPARANDO', 'LISTO'];
+
 @Injectable()
 export class ComandasService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private salesService: SalesService,
+  ) {}
 
   // Resuelve nombre y precio de un ítem (producto o servicio) de la empresa.
   private async resolveItem(it: any, localId: number, companyId: number) {
@@ -170,10 +195,31 @@ export class ComandasService {
   }
 
   async setStatus(id: number, status: string, user: any) {
+    if (!ALL_STATUSES.includes(status)) {
+      throw new BadRequestException('Estado no válido');
+    }
+    // COBRADA se alcanza solo al cobrar (no por cambio de estado manual).
+    if (status === 'COBRADA') {
+      throw new BadRequestException('Para cobrar usa la opción de cobro');
+    }
+    // La cocina únicamente marca "Preparando" / "Listo".
+    if (user.role === 'COCINERO' && !COCINERO_ALLOWED.includes(status)) {
+      throw new ForbiddenException('La cocina solo marca Preparando o Listo');
+    }
+
     const comanda = await this.prisma.comanda.findFirst({
       where: { id, companyId: user.companyId },
     });
     if (!comanda) throw new NotFoundException('Comanda no encontrada');
+
+    // Validar que la transición desde el estado actual esté permitida
+    // (una comanda cobrada o cancelada ya no se mueve).
+    const allowed = TRANSITIONS[comanda.status] ?? [];
+    if (comanda.status !== status && !allowed.includes(status)) {
+      throw new BadRequestException(
+        `No se puede pasar de ${comanda.status} a ${status}`,
+      );
+    }
 
     const updated = await this.prisma.comanda.update({
       where: { id },
@@ -199,7 +245,7 @@ export class ComandasService {
     return { success: true, data: updated };
   }
 
-  // Cobrar: genera la venta a partir de la comanda y libera la mesa.
+  // Cobrar una sola comanda (pedido).
   async charge(id: number, dto: any, user: any) {
     const comanda = await this.prisma.comanda.findFirst({
       where: { id, companyId: user.companyId },
@@ -209,60 +255,109 @@ export class ComandasService {
     if (comanda.status === 'COBRADA') {
       throw new BadRequestException('La comanda ya fue cobrada');
     }
+    return this.chargeComandas([comanda], dto, user);
+  }
 
-    let customerId = dto.customerId ? Number(dto.customerId) : null;
-    if (!customerId) {
-      const cf = await this.prisma.customer.findFirst({
-        where: { companyId: user.companyId, document: '222222222222' },
-        select: { id: true },
-      });
-      customerId = cf?.id ?? null;
-    }
+  // Cobrar TODA la mesa: junta todas sus comandas abiertas en una sola venta.
+  // Es lo que ve caja cuando el cliente se acerca con su mesa.
+  async chargeMesa(mesaId: number, dto: any, user: any) {
+    const mesa = await this.prisma.mesa.findFirst({
+      where: { id: mesaId, companyId: user.companyId },
+    });
+    if (!mesa) throw new NotFoundException('Mesa no encontrada');
 
-    const sale = await this.prisma.sale.create({
-      data: {
-        code: `SALE-${Date.now()}`,
-        totalAmount: comanda.total,
-        paymentMethod: dto.paymentMethod || 'EFECTIVO',
-        paymentStatus: 'PAGADA',
-        saleStatus: 'NUEVA',
-        saleDate: new Date(),
-        customerId,
-        localId: comanda.localId,
-        userId: comanda.userId ?? user.id,
-        items: {
-          create: comanda.items.map((it) => ({
-            inventoryVariantId: it.inventoryVariantId,
-            serviceId: it.serviceId,
-            quantity: it.quantity,
-            price: it.price,
-            subtotal: it.subtotal,
-            discount: 0,
-          })),
-        },
+    const comandas = await this.prisma.comanda.findFirst({
+      where: {
+        mesaId,
+        companyId: user.companyId,
+        status: { notIn: ['COBRADA', 'CANCELADA'] },
       },
     });
+    if (!comandas) {
+      throw new BadRequestException('La mesa no tiene pedidos por cobrar');
+    }
 
-    await this.prisma.comanda.update({
-      where: { id },
+    const open = await this.prisma.comanda.findMany({
+      where: {
+        mesaId,
+        companyId: user.companyId,
+        status: { notIn: ['COBRADA', 'CANCELADA'] },
+      },
+      include: { items: true },
+    });
+    return this.chargeComandas(open, dto, user);
+  }
+
+  // Núcleo del cobro: arma una venta REAL a partir de las comandas (con la
+  // misma lógica que una venta normal: transacción, descuento de stock
+  // respetando trackStock, IVA, movimiento de caja y auditoría), marca las
+  // comandas como COBRADA y libera la mesa si ya no le quedan pedidos abiertos.
+  private async chargeComandas(comandas: any[], dto: any, user: any) {
+    if (!comandas.length) {
+      throw new BadRequestException('No hay pedidos por cobrar');
+    }
+
+    const localId = comandas[0].localId;
+
+    // Ítems para la venta (un ítem por línea de comanda; el precio/impuesto lo
+    // resuelve la venta con el catálogo y la config fiscal de la empresa).
+    const items = comandas
+      .flatMap((c) => c.items)
+      .map((it) =>
+        it.serviceId
+          ? { serviceId: it.serviceId, quantity: it.quantity, discount: 0 }
+          : {
+              inventoryVariantId: it.inventoryVariantId,
+              quantity: it.quantity,
+              discount: 0,
+            },
+      )
+      .filter((it) => it.inventoryVariantId || it.serviceId);
+
+    if (!items.length) {
+      throw new BadRequestException('Los pedidos no tienen ítems para cobrar');
+    }
+
+    const saleRes = await this.salesService.create(
+      {
+        localId,
+        paymentMethod: dto.paymentMethod || 'EFECTIVO',
+        customerId: dto.customerId ? Number(dto.customerId) : undefined,
+        userId: user.id,
+        items,
+      } as any,
+      user,
+    );
+    const sale = saleRes.data;
+
+    const ids = comandas.map((c) => c.id);
+    await this.prisma.comanda.updateMany({
+      where: { id: { in: ids } },
       data: { status: 'COBRADA', saleId: sale.id },
     });
 
-    if (comanda.mesaId) {
+    // Liberar las mesas involucradas si ya no tienen comandas abiertas.
+    const mesaIds = [
+      ...new Set(comandas.map((c) => c.mesaId).filter(Boolean)),
+    ] as number[];
+    for (const mesaId of mesaIds) {
       const others = await this.prisma.comanda.count({
         where: {
-          mesaId: comanda.mesaId,
+          mesaId,
           status: { notIn: ['COBRADA', 'CANCELADA'] },
         },
       });
       if (others === 0) {
         await this.prisma.mesa.update({
-          where: { id: comanda.mesaId },
+          where: { id: mesaId },
           data: { status: 'LIBRE' },
         });
       }
     }
 
-    return { success: true, data: { saleId: sale.id } };
+    return {
+      success: true,
+      data: { saleId: sale.id, total: sale.totalAmount },
+    };
   }
 }

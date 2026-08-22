@@ -61,4 +61,15 @@ export class ComandasController {
   charge(@Param('id', ParseIntPipe) id: number, @Body() dto: any, @Req() req) {
     return this.service.charge(id, dto, req.user);
   }
+
+  // Cobrar toda la mesa (todas sus comandas abiertas en una sola venta).
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'ASESOR', 'CAJA')
+  @Post('mesa/:mesaId/charge')
+  chargeMesa(
+    @Param('mesaId', ParseIntPipe) mesaId: number,
+    @Body() dto: any,
+    @Req() req,
+  ) {
+    return this.service.chargeMesa(mesaId, dto, req.user);
+  }
 }
