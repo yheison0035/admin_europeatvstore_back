@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   ParseIntPipe,
@@ -70,8 +71,9 @@ export class CashController {
     return this.cashService.reopen(req.user, id);
   }
 
-  // Corregir la base inicial de una caja abierta: solo dueño/administrador.
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  // Corregir la base inicial de una caja abierta: cualquier rol de caja (quien
+  // la abrió pudo poner mal la base u olvidarla).
+  @Roles(...CASH_ROLES)
   @Patch(':id/opening')
   updateOpening(
     @Param('id', ParseIntPipe) id: number,
@@ -79,6 +81,13 @@ export class CashController {
     @Req() req,
   ) {
     return this.cashService.updateOpening(req.user, id, dto.openingAmount);
+  }
+
+  // Eliminar/reiniciar una caja: solo dueño/administrador.
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.cashService.remove(req.user, id);
   }
 
   @Roles(...CASH_ROLES)

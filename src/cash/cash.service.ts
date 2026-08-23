@@ -328,6 +328,19 @@ export class CashService {
     };
   }
 
+  // Elimina/reinicia una caja (dueño/admin). Borra la caja y sus movimientos
+  // (cascada). Las VENTAS quedan intactas: al abrir una nueva caja se vuelven a
+  // importar las ventas en efectivo del día, así el arqueo queda igual. Sirve
+  // para "reiniciar" una caja abierta por error o mal configurada.
+  async remove(user: any, id: number) {
+    const register = await this.prisma.cashRegister.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+    if (!register) throw new NotFoundException('Caja no encontrada');
+    await this.prisma.cashRegister.delete({ where: { id } });
+    return { success: true, message: 'Caja eliminada' };
+  }
+
   async findAll(user: any, query: any) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
