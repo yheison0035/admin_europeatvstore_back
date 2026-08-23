@@ -396,10 +396,15 @@ export class CustomersService {
     const limit = Number(query.limit) || 20;
     const skip = (page - 1) * limit;
 
+    // completed=true → "clientes antiguos" (ya graduados, fidelización off);
+    // por defecto → los que están ACTIVOS acumulando (aún no completan el rango).
+    const completed = query.completed === 'true' || query.completed === true;
     const where: any = {
       companyId: user.companyId,
       status: { not: Status.ELIMINADO },
-      loyaltyStamps: { gt: 0 },
+      ...(completed
+        ? { loyaltyCompleted: true }
+        : { loyaltyCompleted: false, loyaltyStamps: { gt: 0 } }),
     };
 
     if (query.search) {
@@ -427,6 +432,7 @@ export class CustomersService {
           document: true,
           loyaltyStamps: true,
           loyaltyLastVisit: true,
+          loyaltyCompleted: true,
         },
       }),
       this.prisma.customer.count({ where }),

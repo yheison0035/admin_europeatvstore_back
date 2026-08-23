@@ -39,18 +39,46 @@ export function loyaltyStatus(cfg: LoyaltyConfig, customer: any, now: Date) {
   const lastVisit = customer?.loyaltyLastVisit
     ? new Date(customer.loyaltyLastVisit)
     : null;
+  const daysSince = lastVisit ? daysBetween(now, lastVisit) : null;
+  const tier1 = {
+    visits: cfg.loyaltyTier1Visits,
+    percent: cfg.loyaltyTier1Percent,
+  };
+  const tier2 = {
+    visits: cfg.loyaltyTier2Visits,
+    percent: cfg.loyaltyTier2Percent,
+  };
+
+  // Cliente graduado: ya completó el rango; la fidelización está desactivada
+  // (es cliente antiguo y paga normal). Sin descuento y sin próximas visitas.
+  if (customer?.loyaltyCompleted) {
+    return {
+      enabled: true,
+      completed: true,
+      currentCount: customer?.loyaltyStamps || 0,
+      nextVisit: null,
+      nextDiscount: 0,
+      tier1,
+      tier2,
+      maxDays: cfg.loyaltyMaxDays,
+      lastVisit,
+      daysSinceLastVisit: daysSince,
+      expired: false,
+    };
+  }
+
   const active = streakActive(cfg, lastVisit, now);
   const currentCount = active ? customer?.loyaltyStamps || 0 : 0;
   const nextVisit = currentCount + 1;
   const nextDiscount = discountForVisit(cfg, nextVisit);
-  const daysSince = lastVisit ? daysBetween(now, lastVisit) : null;
   return {
     enabled: true,
+    completed: false,
     currentCount,
     nextVisit,
     nextDiscount,
-    tier1: { visits: cfg.loyaltyTier1Visits, percent: cfg.loyaltyTier1Percent },
-    tier2: { visits: cfg.loyaltyTier2Visits, percent: cfg.loyaltyTier2Percent },
+    tier1,
+    tier2,
     maxDays: cfg.loyaltyMaxDays,
     lastVisit,
     daysSinceLastVisit: daysSince,
@@ -64,24 +92,38 @@ export function loyaltyStatus(cfg: LoyaltyConfig, customer: any, now: Date) {
 export function replayCustomerStamps(
   cfg: LoyaltyConfig,
   salesAsc: { saleDate: Date | string }[],
-): { stamps: number; last: Date | null } {
+): { stamps: number; last: Date | null; completed: boolean } {
   let stamps = 0;
   let last: Date | null = null;
+  let completed = false;
   for (const s of salesAsc) {
     const when = new Date(s.saleDate);
-    const { newCount } = applyLoyaltyVisit(
+    if (completed) {
+      // Ya graduado: la fidelización quedó off, no acumula más.
+      last = when;
+      continue;
+    }
+    const r = applyLoyaltyVisit(
       cfg,
-      { loyaltyStamps: stamps, loyaltyLastVisit: last },
+      { loyaltyStamps: stamps, loyaltyLastVisit: last, loyaltyCompleted: false },
       when,
     );
-    stamps = newCount;
+    stamps = r.newCount;
     last = when;
+    if (r.completed) completed = true;
   }
-  return { stamps, last };
+  return { stamps, last, completed };
 }
 
-// Aplica una visita al facturar: nuevo contador + descuento obtenido.
+// Aplica una visita al facturar: contador, descuento obtenido y si con esta
+// visita el cliente COMPLETA el rango (llega al tope) → se gradúa y ya no
+// vuelve a acumular (la fidelización es solo para los primeros cortes).
 export function applyLoyaltyVisit(cfg: LoyaltyConfig, customer: any, now: Date) {
+  // Cliente ya graduado: no acumula ni recibe descuento.
+  if (customer?.loyaltyCompleted) {
+    const c = customer?.loyaltyStamps || 0;
+    return { visit: c, discount: 0, newCount: c, completed: true };
+  }
   const lastVisit = customer?.loyaltyLastVisit
     ? new Date(customer.loyaltyLastVisit)
     : null;
@@ -89,6 +131,7 @@ export function applyLoyaltyVisit(cfg: LoyaltyConfig, customer: any, now: Date) 
   const base = active ? customer?.loyaltyStamps || 0 : 0;
   const visit = base + 1;
   const discount = discountForVisit(cfg, visit);
-  const newCount = visit >= cfg.loyaltyTier2Visits ? 0 : visit;
-  return { visit, discount, newCount };
+  // Ya NO se reinicia el ciclo: al llegar al tope (tier2) queda completado.
+  const completed = visit >= cfg.loyaltyTier2Visits;
+  return { visit, discount, newCount: visit, completed };
 }

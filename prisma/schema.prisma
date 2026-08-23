@@ -363,6 +363,10 @@ model Customer {
   loyaltyStamps    Int       @default(0)
   loyaltyRewards   Int       @default(0)
   loyaltyLastVisit DateTime? // última visita que sumó a la fidelización
+  // Cliente "graduado": ya completó el rango de fidelización (llegó al tope).
+  // La fidelización queda desactivada para él de forma permanente (ya es
+  // cliente antiguo y paga normal); se lista aparte para futuras ofertas.
+  loyaltyCompleted Boolean   @default(false)
 
   // Última vez que se le escribió para reactivarlo (campaña de win-back).
   lastWinbackAt DateTime?

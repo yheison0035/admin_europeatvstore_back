@@ -199,17 +199,34 @@ export class CompaniesService {
       orderBy: [{ customerId: 'asc' }, { saleDate: 'asc' }],
     });
 
-    // Reproduce el historial por cliente.
-    const state = new Map<number, { stamps: number; last: Date | null }>();
+    // Reproduce el historial por cliente. Al llegar al tope, el cliente queda
+    // "graduado" (completed) y ya no acumula (fidelización solo para los
+    // primeros cortes).
+    const state = new Map<
+      number,
+      { stamps: number; last: Date | null; completed: boolean }
+    >();
     for (const s of sales) {
       const cid = s.customerId as number;
-      const cur = state.get(cid) || { stamps: 0, last: null };
-      const { newCount } = applyLoyaltyVisit(
+      const cur = state.get(cid) || { stamps: 0, last: null, completed: false };
+      if (cur.completed) {
+        state.set(cid, { ...cur, last: new Date(s.saleDate) });
+        continue;
+      }
+      const r = applyLoyaltyVisit(
         company as any,
-        { loyaltyStamps: cur.stamps, loyaltyLastVisit: cur.last },
+        {
+          loyaltyStamps: cur.stamps,
+          loyaltyLastVisit: cur.last,
+          loyaltyCompleted: false,
+        },
         new Date(s.saleDate),
       );
-      state.set(cid, { stamps: newCount, last: new Date(s.saleDate) });
+      state.set(cid, {
+        stamps: r.newCount,
+        last: new Date(s.saleDate),
+        completed: r.completed,
+      });
     }
 
     // Reinicia a cero los clientes de la empresa que no tuvieron ventas (para
@@ -219,7 +236,11 @@ export class CompaniesService {
       ops.push(
         this.prisma.customer.update({
           where: { id: cid },
-          data: { loyaltyStamps: st.stamps, loyaltyLastVisit: st.last },
+          data: {
+            loyaltyStamps: st.stamps,
+            loyaltyLastVisit: st.last,
+            loyaltyCompleted: st.completed,
+          },
         }),
       );
     }

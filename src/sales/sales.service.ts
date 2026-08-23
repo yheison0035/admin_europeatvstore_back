@@ -77,10 +77,17 @@ export class SalesService {
       orderBy: { saleDate: 'asc' },
     });
 
-    const { stamps, last } = replayCustomerStamps(company as any, sales);
+    const { stamps, last, completed } = replayCustomerStamps(
+      company as any,
+      sales,
+    );
     await db.customer.update({
       where: { id: customerId },
-      data: { loyaltyStamps: stamps, loyaltyLastVisit: last },
+      data: {
+        loyaltyStamps: stamps,
+        loyaltyLastVisit: last,
+        loyaltyCompleted: completed,
+      },
     });
   }
 
@@ -106,7 +113,12 @@ export class SalesService {
     if (!company?.loyaltyEnabled) return 0;
     const customer = await this.prisma.customer.findFirst({
       where: { id: Number(dto.customerId), companyId },
-      select: { document: true, loyaltyStamps: true, loyaltyLastVisit: true },
+      select: {
+        document: true,
+        loyaltyStamps: true,
+        loyaltyLastVisit: true,
+        loyaltyCompleted: true,
+      },
     });
     if (!customer || customer.document === '222222222222') return 0;
     const when = dto.saleDate ? new Date(dto.saleDate) : new Date();
