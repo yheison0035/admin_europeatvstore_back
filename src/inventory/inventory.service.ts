@@ -125,6 +125,7 @@ export class InventoryService {
             isActive: true,
           },
         },
+        images: { orderBy: { position: 'asc' }, take: 1 },
       },
 
       take: 20,
@@ -171,6 +172,7 @@ export class InventoryService {
           price: product.salePrice,
           unit: product.unit,
           trackStock: product.trackStock,
+          image: product.images?.[0]?.url ?? null,
           localId: product.localId,
           score,
         };
