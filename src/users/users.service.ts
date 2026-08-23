@@ -497,7 +497,17 @@ export class UsersService {
 }
 
 export function sanitizeUser(user: any) {
-  const { password, ...rest } = user;
+  // Se quitan la contraseña y los campos internos del OTP de recuperación: no
+  // deben salir al front (seguridad) y además romperían el editar de usuario,
+  // porque el form los reenviaría y el validador (forbidNonWhitelisted) los
+  // rechaza al no estar en el DTO.
+  const {
+    password,
+    resetOtpHash,
+    resetOtpExpires,
+    resetOtpAttempts,
+    ...rest
+  } = user;
 
   return {
     ...rest,
