@@ -63,6 +63,11 @@ export class CreateSaleDto {
   @IsString()
   notes?: string;
 
+  // Efectivo con el que pagó el cliente (para el cambio/vuelto en la factura).
+  @IsOptional()
+  @IsNumber()
+  cashReceived?: number;
+
   @IsArray()
   @IsNotEmpty({ each: true })
   items: CreateSaleItemDto[];

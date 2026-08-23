@@ -652,6 +652,7 @@ model Sale {
   saleDate      DateTime      @default(now())
   dueDate       DateTime? // vencimiento de la venta a crédito (fiado)
   notes         String?
+  cashReceived  Float? // efectivo con el que pagó el cliente (para calcular el cambio en la factura)
 
   source              OrderSource @default(CRM)
   ecommerceCustomerId Int?

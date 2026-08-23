@@ -869,6 +869,10 @@ export class SalesService {
           saleDate: saleDate,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           notes: dto.notes,
+          cashReceived:
+            dto.paymentMethod === 'EFECTIVO' && dto.cashReceived
+              ? Number(dto.cashReceived)
+              : null,
           customerId: dto.customerId,
           localId: dto.localId,
           userId: dto.userId,
