@@ -304,6 +304,30 @@ export class CashService {
     };
   }
 
+  // Corrige la base inicial de una caja ABIERTA (por si se abrió con un monto
+  // equivocado o se olvidó). El "esperado" se recalcula solo al leer.
+  async updateOpening(user: any, id: number, openingAmount: number) {
+    const register = await this.prisma.cashRegister.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+    if (!register) throw new NotFoundException('Caja no encontrada');
+    if (register.status !== 'ABIERTA') {
+      throw new BadRequestException(
+        'Solo se puede editar la base de una caja abierta.',
+      );
+    }
+    const updated = await this.prisma.cashRegister.update({
+      where: { id },
+      data: { openingAmount: Number(openingAmount) || 0 },
+      include: { movements: true },
+    });
+    return {
+      success: true,
+      message: 'Base inicial actualizada',
+      data: { ...updated, totals: computeTotals(updated) },
+    };
+  }
+
   async findAll(user: any, query: any) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;

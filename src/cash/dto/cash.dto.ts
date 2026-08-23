@@ -43,3 +43,10 @@ export class CloseCashDto {
   @IsString()
   notes?: string;
 }
+
+// Corregir la base inicial de una caja YA abierta (olvido/confusión al abrir).
+export class UpdateOpeningDto {
+  @IsNumber()
+  @Min(0)
+  openingAmount: number;
+}

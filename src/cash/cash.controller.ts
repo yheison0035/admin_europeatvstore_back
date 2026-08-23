@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   ParseIntPipe,
@@ -10,7 +11,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CashService } from './cash.service';
-import { OpenCashDto, CashMovementDto, CloseCashDto } from './dto/cash.dto';
+import {
+  OpenCashDto,
+  CashMovementDto,
+  CloseCashDto,
+  UpdateOpeningDto,
+} from './dto/cash.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/auth/guards/roles.guard';
 import { Roles } from '@/auth/roles.decorator';
@@ -62,6 +68,17 @@ export class CashController {
   @Post(':id/reopen')
   reopen(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.cashService.reopen(req.user, id);
+  }
+
+  // Corregir la base inicial de una caja abierta: solo dueño/administrador.
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch(':id/opening')
+  updateOpening(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateOpeningDto,
+    @Req() req,
+  ) {
+    return this.cashService.updateOpening(req.user, id, dto.openingAmount);
   }
 
   @Roles(...CASH_ROLES)
