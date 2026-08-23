@@ -24,7 +24,11 @@ import {
 } from '@/common/date-range.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
 import { AuditService } from '@/audit/audit.service';
-import { replayCustomerStamps, applyLoyaltyVisit } from '@/common/loyalty.util';
+import {
+  replayCustomerStamps,
+  applyLoyaltyVisit,
+  loyaltyStatus,
+} from '@/common/loyalty.util';
 import { RecipesService } from '@/recipes/recipes.service';
 
 @Injectable()
@@ -321,9 +325,30 @@ export class SalesService {
       user.companyId,
     );
 
+    // Estado de fidelización del cliente de cada venta (para el WhatsApp
+    // adaptado en Ventas realizadas).
+    const loyaltyCfg = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        loyaltyEnabled: true,
+        loyaltyTier1Visits: true,
+        loyaltyTier1Percent: true,
+        loyaltyTier2Visits: true,
+        loyaltyTier2Percent: true,
+        loyaltyMaxDays: true,
+      },
+    });
+    const nowL = new Date();
+
     return {
       success: true,
-      data: items.map((s) => ({ ...s, lastAudit: auditMap[s.id] || null })),
+      data: items.map((s) => ({
+        ...s,
+        lastAudit: auditMap[s.id] || null,
+        customer: s.customer
+          ? { ...s.customer, loyalty: loyaltyStatus(loyaltyCfg as any, s.customer, nowL) }
+          : s.customer,
+      })),
       meta: {
         page,
         limit,

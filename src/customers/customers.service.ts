@@ -189,9 +189,28 @@ export class CustomersService {
       user.companyId,
     );
 
+    // Config de fidelización (para adjuntar el estado a cada cliente y que el
+    // WhatsApp del listado use el mensaje adecuado).
+    const loyaltyCfg = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        loyaltyEnabled: true,
+        loyaltyTier1Visits: true,
+        loyaltyTier1Percent: true,
+        loyaltyTier2Visits: true,
+        loyaltyTier2Percent: true,
+        loyaltyMaxDays: true,
+      },
+    });
+    const nowL = new Date();
+
     return {
       success: true,
-      data: data.map((c) => ({ ...c, lastAudit: auditMap[c.id] || null })),
+      data: data.map((c) => ({
+        ...c,
+        lastAudit: auditMap[c.id] || null,
+        loyalty: loyaltyStatus(loyaltyCfg as any, c, nowL),
+      })),
       meta: {
         page,
         limit,
