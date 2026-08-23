@@ -13,6 +13,7 @@ import {
   PaymentStatus,
   Status,
   ShippingStatus,
+  Prisma,
 } from '@prisma/client';
 import { StockService } from '@/inventory/stock.service';
 import { PlanLimitsService } from '@/common/plan-limits.service';
@@ -23,7 +24,7 @@ import {
 } from '@/common/date-range.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
 import { AuditService } from '@/audit/audit.service';
-import { applyLoyaltyVisit } from '@/common/loyalty.util';
+import { replayCustomerStamps } from '@/common/loyalty.util';
 import { RecipesService } from '@/recipes/recipes.service';
 
 @Injectable()
@@ -35,6 +36,53 @@ export class SalesService {
     private planLimits: PlanLimitsService,
     private recipes: RecipesService,
   ) {}
+
+  // Recalcula los sellos de fidelización de UN cliente desde todas sus ventas
+  // válidas (única fuente de verdad). Se llama al crear/anular/editar una venta,
+  // así el sello queda idéntico al que da "Sincronizar", anular reversa la
+  // visita, y todos los módulos ven lo mismo. El Consumidor Final no acumula.
+  private async recomputeLoyaltyForCustomer(
+    db: Prisma.TransactionClient | PrismaService,
+    companyId: number,
+    customerId: number | null | undefined,
+  ) {
+    if (!customerId) return;
+
+    const company = await db.company.findUnique({
+      where: { id: companyId },
+      select: {
+        loyaltyEnabled: true,
+        loyaltyTier1Visits: true,
+        loyaltyTier1Percent: true,
+        loyaltyTier2Visits: true,
+        loyaltyTier2Percent: true,
+        loyaltyMaxDays: true,
+      },
+    });
+    if (!company?.loyaltyEnabled) return;
+
+    const customer = await db.customer.findFirst({
+      where: { id: customerId, companyId },
+      select: { id: true, document: true },
+    });
+    if (!customer || customer.document === '222222222222') return;
+
+    const sales = await db.sale.findMany({
+      where: {
+        customerId,
+        saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
+        local: { is: { companyId } },
+      },
+      select: { saleDate: true },
+      orderBy: { saleDate: 'asc' },
+    });
+
+    const { stamps, last } = replayCustomerStamps(company as any, sales);
+    await db.customer.update({
+      where: { id: customerId },
+      data: { loyaltyStamps: stamps, loyaltyLastVisit: last },
+    });
+  }
 
   // Fiado / crédito solo desde el plan Impulso. Se valida al crear/editar venta.
   private async assertFiadoAllowed(dto: any, user: any) {
@@ -891,36 +939,11 @@ export class SalesService {
         },
       });
 
-      // Fidelización por visitas: cada venta a un cliente identificado (no
-      // Consumidor Final) cuenta como una visita, siempre que no hayan pasado
-      // más de loyaltyMaxDays desde la anterior (si se pasa, la racha reinicia).
-      // Al llegar al escalón 2 (ej. visita 8) el ciclo se reinicia.
-      const company = await tx.company.findUnique({
-        where: { id: user.companyId },
-        select: {
-          loyaltyEnabled: true,
-          loyaltyTier1Visits: true,
-          loyaltyTier1Percent: true,
-          loyaltyTier2Visits: true,
-          loyaltyTier2Percent: true,
-          loyaltyMaxDays: true,
-        },
-      });
-      if (
-        company?.loyaltyEnabled &&
-        dto.customerId &&
-        sale.customer?.document !== '222222222222'
-      ) {
-        const { newCount } = applyLoyaltyVisit(
-          company as any,
-          sale.customer,
-          new Date(),
-        );
-        await tx.customer.update({
-          where: { id: dto.customerId },
-          data: { loyaltyStamps: newCount, loyaltyLastVisit: new Date() },
-        });
-      }
+      // Fidelización: en vez de sumar +1 aquí (que se descuadraba con el
+      // "Sincronizar" y no se reversaba al anular), se RECALCULA el sello del
+      // cliente desde TODAS sus ventas válidas (única fuente de verdad). Incluye
+      // la venta recién creada (visible dentro de la transacción).
+      await this.recomputeLoyaltyForCustomer(tx, user.companyId, dto.customerId);
 
       // Caja: si la venta es en efectivo y hay una caja abierta en el local, se
       // registra el ingreso automáticamente para que el arqueo cuadre.
@@ -1283,6 +1306,15 @@ export class SalesService {
         }
       }
 
+      // Recalcular fidelización de los clientes afectados (p.ej. si se anuló la
+      // venta o se cambió el cliente): el sello se ajusta solo.
+      const affected = new Set<number>();
+      if (sale.customerId) affected.add(sale.customerId);
+      if (updatedSale.customerId) affected.add(updatedSale.customerId);
+      for (const cid of affected) {
+        await this.recomputeLoyaltyForCustomer(tx, user.companyId, cid);
+      }
+
       const changes = this.audit.diff(sale, dto, [
         'paymentMethod',
         'paymentStatus',
@@ -1340,6 +1372,10 @@ export class SalesService {
       await tx.cashMovement.deleteMany({ where: { saleId: id } });
 
       await tx.sale.delete({ where: { id } });
+
+      // Reversa la visita de fidelización: se recalcula el sello del cliente
+      // desde sus ventas restantes (la venta anulada ya no cuenta).
+      await this.recomputeLoyaltyForCustomer(tx, user.companyId, sale.customerId);
 
       await this.audit.log({
         entity: 'sale',

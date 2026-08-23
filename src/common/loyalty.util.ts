@@ -34,6 +34,8 @@ export function streakActive(
 // Estado para MOSTRAR (antes de facturar): próxima visita y su descuento.
 export function loyaltyStatus(cfg: LoyaltyConfig, customer: any, now: Date) {
   if (!cfg?.loyaltyEnabled) return null;
+  // El Consumidor Final no acumula fidelización: no debe mostrar preview.
+  if (customer?.document === '222222222222') return null;
   const lastVisit = customer?.loyaltyLastVisit
     ? new Date(customer.loyaltyLastVisit)
     : null;
@@ -54,6 +56,28 @@ export function loyaltyStatus(cfg: LoyaltyConfig, customer: any, now: Date) {
     daysSinceLastVisit: daysSince,
     expired: !!lastVisit && !active,
   };
+}
+
+// Reproduce el historial de UN cliente desde sus ventas (ordenadas por fecha)
+// y devuelve el estado final de sellos. Es la ÚNICA fuente de verdad: se usa al
+// facturar, al anular y al sincronizar, para que todos den el mismo resultado.
+export function replayCustomerStamps(
+  cfg: LoyaltyConfig,
+  salesAsc: { saleDate: Date | string }[],
+): { stamps: number; last: Date | null } {
+  let stamps = 0;
+  let last: Date | null = null;
+  for (const s of salesAsc) {
+    const when = new Date(s.saleDate);
+    const { newCount } = applyLoyaltyVisit(
+      cfg,
+      { loyaltyStamps: stamps, loyaltyLastVisit: last },
+      when,
+    );
+    stamps = newCount;
+    last = when;
+  }
+  return { stamps, last };
 }
 
 // Aplica una visita al facturar: nuevo contador + descuento obtenido.
