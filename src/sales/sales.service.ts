@@ -24,7 +24,7 @@ import {
 } from '@/common/date-range.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
 import { AuditService } from '@/audit/audit.service';
-import { replayCustomerStamps } from '@/common/loyalty.util';
+import { replayCustomerStamps, applyLoyaltyVisit } from '@/common/loyalty.util';
 import { RecipesService } from '@/recipes/recipes.service';
 
 @Injectable()
@@ -82,6 +82,36 @@ export class SalesService {
       where: { id: customerId },
       data: { loyaltyStamps: stamps, loyaltyLastVisit: last },
     });
+  }
+
+  // % de descuento de fidelización que le toca a ESTA venta según los sellos
+  // actuales del cliente (0 si no aplica). Se usa para garantizar el descuento
+  // en los servicios aunque el POS no lo mande.
+  private async loyaltyDiscountForSale(
+    companyId: number,
+    dto: any,
+  ): Promise<number> {
+    if (!dto.customerId) return 0;
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        loyaltyEnabled: true,
+        loyaltyTier1Visits: true,
+        loyaltyTier1Percent: true,
+        loyaltyTier2Visits: true,
+        loyaltyTier2Percent: true,
+        loyaltyMaxDays: true,
+      },
+    });
+    if (!company?.loyaltyEnabled) return 0;
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: Number(dto.customerId), companyId },
+      select: { document: true, loyaltyStamps: true, loyaltyLastVisit: true },
+    });
+    if (!customer || customer.document === '222222222222') return 0;
+    const when = dto.saleDate ? new Date(dto.saleDate) : new Date();
+    const { discount } = applyLoyaltyVisit(company as any, customer, when);
+    return discount || 0;
   }
 
   // Fiado / crédito solo desde el plan Impulso. Se valida al crear/editar venta.
@@ -768,6 +798,12 @@ export class SalesService {
     });
     const includeIva = fiscal?.preciosIncluyenIVA ?? true;
 
+    // Fidelización: % de descuento que le toca a ESTA visita (según los sellos
+    // actuales del cliente). El backend lo GARANTIZA como mínimo en los
+    // servicios, aunque el POS no lo haya mandado, para que la recompensa nunca
+    // se pierda. El Consumidor Final no acumula.
+    const loyaltyPct = await this.loyaltyDiscountForSale(user.companyId, dto);
+
     return this.prisma.$transaction(async (tx) => {
       let total = 0;
       let saleSubtotal = 0;
@@ -872,7 +908,14 @@ export class SalesService {
           }
 
           const price = serviceLocal.price;
-          const discount = item.discount ?? 0;
+          // Descuento de fidelización GARANTIZADO: al menos el % que le toca a
+          // la visita (aunque el POS no lo haya aplicado); nunca por debajo de
+          // un descuento manual mayor.
+          const loyaltyDisc =
+            loyaltyPct > 0
+              ? Math.round((price * item.quantity * loyaltyPct) / 100)
+              : 0;
+          const discount = Math.max(item.discount ?? 0, loyaltyDisc);
 
           const subtotal = this.calculateSubtotal(
             price,
