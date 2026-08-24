@@ -17,16 +17,31 @@ export interface ParsedDeposit {
 function parseAmount(text: string): number {
   const m = text.match(/\$\s*([\d][\d.,]*)/);
   if (!m) return 0;
-  let s = m[1];
+  const s = m[1];
   const hasDot = s.includes('.');
   const hasComma = s.includes(',');
+
   let intPart = s;
   if (hasDot && hasComma) {
-    // El último separador es el decimal → nos quedamos con la parte entera.
+    // Ambos separadores: el último es el decimal (ej. $32,500.00 o $5.000,00).
+    // Nos quedamos con la parte entera antes de él.
     const lastSep = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
     intPart = s.slice(0, lastSep);
+  } else if (hasDot || hasComma) {
+    // Un solo tipo de separador. Es AMBIGUO en COP:
+    //   "$50.000" → punto de MILES (50000)   |   "$200.00" → punto de CENTAVOS (200)
+    // Regla: si aparece UNA sola vez y le siguen EXACTAMENTE 2 dígitos, es
+    // decimal (centavos) y lo descartamos; en cualquier otro caso (3 dígitos,
+    // o aparece varias veces) son separadores de miles.
+    const sep = hasDot ? '.' : ',';
+    const parts = s.split(sep);
+    const last = parts[parts.length - 1];
+    if (parts.length === 2 && last.length === 2) {
+      intPart = parts[0]; // centavos → parte entera
+    }
+    // si no, se dejan como miles y se limpian abajo
   }
-  // Quita todos los separadores de miles.
+
   const digits = intPart.replace(/[.,]/g, '');
   const n = Number(digits);
   return Number.isFinite(n) ? n : 0;
