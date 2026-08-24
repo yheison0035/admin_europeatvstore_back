@@ -81,6 +81,22 @@ export class BankService {
     };
   }
 
+  // Crea una consignación de PRUEBA (para comprobar la voz y la notificación
+  // sin depender del celular). Va por el canal autenticado, sin problemas de
+  // CORS del navegador.
+  async sendTest(user: any) {
+    const deposit = await this.prisma.bankDeposit.create({
+      data: {
+        companyId: user.companyId,
+        amount: 50000,
+        senderName: 'JUAN DE PRUEBA',
+        reference: '*1234',
+        raw: 'Consignación de prueba (Pegazo).',
+      },
+    });
+    return { success: true, data: { id: deposit.id } };
+  }
+
   async list(user: any, query: any) {
     const limit = Math.min(Number(query.limit) || 50, 200);
     const deposits = await this.prisma.bankDeposit.findMany({

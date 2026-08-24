@@ -71,6 +71,13 @@ export class BankController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OWNER_ROLES)
+  @Post('test')
+  sendTest(@Req() req) {
+    return this.service.sendTest(req.user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...VIEW_ROLES)
   @Get('deposits')
   list(@Req() req, @Query() query: any) {
