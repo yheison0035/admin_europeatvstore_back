@@ -250,6 +250,8 @@ export class UsersService {
             terminology: true,
             // Si exige "abrir el día" (caja) para poder vender.
             requireCashOpen: true,
+            // Aviso de consignaciones al banco (voz + notificación).
+            bankNotifyEnabled: true,
             // Régimen de IVA (para el encabezado de la factura impresa).
             responsableIVA: true,
           },

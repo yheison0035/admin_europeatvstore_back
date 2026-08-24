@@ -287,9 +287,33 @@ model Company {
   quotes         Quote[]
   returns        Return[]
   supplies       Supply[]
+  bankDeposits   BankDeposit[]
+
+  // Notificaciones de consignaciones a la cuenta del banco (SMS reenviado).
+  bankNotifyEnabled Boolean @default(false)
+  bankNotifyToken   String? @unique // secreto para el webhook del reenviador de SMS
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Consignación/transferencia recibida en la cuenta del banco de la empresa,
+// detectada al parsear el SMS de Bancolombia reenviado por el celular.
+model BankDeposit {
+  id         Int      @id @default(autoincrement())
+  amount     Float    @default(0)
+  senderName String? // nombre de quien consignó (si el SMS lo trae)
+  reference  String? // referencia/últimos dígitos si vienen en el SMS
+  raw        String? // texto original del SMS (respaldo)
+  seen       Boolean  @default(false)
+
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([seen])
 }
 
 model User {
