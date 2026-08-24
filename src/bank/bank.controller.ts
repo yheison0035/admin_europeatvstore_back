@@ -53,8 +53,8 @@ export class BankController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...OWNER_ROLES)
   @Patch('config')
-  setIdentifier(@Req() req, @Body('identifier') identifier: string) {
-    return this.service.setIdentifier(req.user, identifier);
+  setConfig(@Req() req, @Body() body: any) {
+    return this.service.setConfig(req.user, body || {});
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

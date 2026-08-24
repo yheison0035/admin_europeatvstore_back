@@ -82,17 +82,28 @@ export class BankService {
         ...(dto?.identifier !== undefined && {
           bankIdentifier: String(dto.identifier || '').trim() || null,
         }),
+        ...(dto?.email !== undefined && {
+          bankEmail: String(dto.email || '').trim() || null,
+        }),
       },
     });
     return { success: true, data: { enabled: true, token } };
   }
 
-  // Guarda cómo se identifica la empresa en el banco (nombre/llave).
-  async setIdentifier(user: any, identifier: string) {
-    await this.prisma.company.update({
-      where: { id: user.companyId },
-      data: { bankIdentifier: String(identifier || '').trim() || null },
-    });
+  // Guarda la configuración del banco: identificador (nombre/llave con que el
+  // banco identifica a la empresa) y/o el correo donde llegan las confirmaciones.
+  async setConfig(user: any, dto: any = {}) {
+    const data: any = {};
+    if (dto?.identifier !== undefined)
+      data.bankIdentifier = String(dto.identifier || '').trim() || null;
+    if (dto?.email !== undefined)
+      data.bankEmail = String(dto.email || '').trim() || null;
+    if (Object.keys(data).length) {
+      await this.prisma.company.update({
+        where: { id: user.companyId },
+        data,
+      });
+    }
     return { success: true };
   }
 
@@ -121,6 +132,7 @@ export class BankService {
         bankNotifyEnabled: true,
         bankNotifyToken: true,
         bankIdentifier: true,
+        bankEmail: true,
         name: true,
       },
     });
@@ -130,6 +142,7 @@ export class BankService {
         enabled: !!c?.bankNotifyEnabled,
         token: c?.bankNotifyToken || null,
         identifier: c?.bankIdentifier || '',
+        email: c?.bankEmail || '',
         companyName: c?.name || '',
       },
     };

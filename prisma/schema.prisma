@@ -297,6 +297,9 @@ model Company {
   // Cómo se identifica esta empresa en la notificación del banco (nombre y/o
   // llave del QR, separados por coma). Ej: "RAGNOR BARBER, @ragnorbarber".
   bankIdentifier    String?
+  // Correo donde el negocio recibe las confirmaciones del banco (informativo /
+  // para las instrucciones del reenviador). Ej: "ragnor.pagos@gmail.com".
+  bankEmail         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
