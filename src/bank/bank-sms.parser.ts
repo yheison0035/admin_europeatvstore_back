@@ -1,40 +1,67 @@
-// Extrae valor, nombre y referencia de un SMS de Bancolombia (u otro banco).
-// Es "mejor esfuerzo": si algo no viene en el texto, queda null y se conserva
-// el SMS completo. Acepta también campos ya estructurados si el reenviador los
-// manda (amount/name/reference).
+// Extrae los datos de una notificación de Bancolombia (SMS o correo). Detecta
+// si es un PAGO RECIBIDO (consignación) o una salida (transferencia enviada),
+// y saca valor, nombre del pagador, empresa (destinatario) y llave del QR.
 
 export interface ParsedDeposit {
+  direction: 'in' | 'out' | 'unknown';
   amount: number;
-  senderName: string | null;
+  senderName: string | null; // quien pagó
+  business: string | null; // nombre de la empresa que recibió (según el banco)
+  llave: string | null; // llave del QR / referencia
   reference: string | null;
   raw: string | null;
 }
 
+// Convierte "$32,500.00" / "$60,000.00" / "$136,500" / "$50.000" a entero de
+// pesos, manejando bien miles y centavos.
 function parseAmount(text: string): number {
-  // Busca el primer monto tipo $50.000 / $ 1,250,000 / $80000.
   const m = text.match(/\$\s*([\d][\d.,]*)/);
   if (!m) return 0;
-  // Formato colombiano: el separador de miles suele ser "." o ",". Se quitan
-  // todos los separadores y se toma como entero (los SMS no traen centavos).
-  const digits = m[1].replace(/[.,]/g, '');
+  let s = m[1];
+  const hasDot = s.includes('.');
+  const hasComma = s.includes(',');
+  let intPart = s;
+  if (hasDot && hasComma) {
+    // El último separador es el decimal → nos quedamos con la parte entera.
+    const lastSep = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
+    intPart = s.slice(0, lastSep);
+  }
+  // Quita todos los separadores de miles.
+  const digits = intPart.replace(/[.,]/g, '');
   const n = Number(digits);
   return Number.isFinite(n) ? n : 0;
 }
 
-function parseSender(text: string): string | null {
-  // Nombre después de "de " en mayúsculas, hasta una palabra clave o el final.
+function parseBusiness(text: string): string | null {
+  // "Bancolombia: RAGNOR BARBER, recibiste un pago de ..."
+  const m = text.match(/Bancolombia:\s*([^,\n]+?),\s*recibiste/i);
+  return m ? m[1].trim() : null;
+}
+
+function parsePayer(text: string): string | null {
+  // "recibiste un pago de ANDRES DUQUE CARDONA por $..."
   const m = text.match(
-    /\bde\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ.\s]{2,40}?)(?=\s+(?:por|el|en|con|cta|cuenta|ref|hora|a\s+las|\d)|[.,;\n]|$)/,
+    /recibiste\s+un\s+pago\s+de\s+(.+?)\s+por\s+\$/i,
   );
   if (m) return m[1].replace(/\s+/g, ' ').trim();
-  return null;
+  // Fallback genérico: "de NOMBRE" en mayúsculas.
+  const g = text.match(
+    /\bde\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ.\s]{2,40}?)(?=\s+(?:por|el|en|con|@|\d)|[.,]|$)/,
+  );
+  return g ? g[1].replace(/\s+/g, ' ').trim() : null;
+}
+
+function parseLlave(text: string): string | null {
+  // "conectado a la llave @ragnorbarber el ..." / "a la llave 0089288789 el"
+  const m = text.match(/llave\s+(\S+?)\s+el\b/i);
+  if (m) return m[1].trim();
+  const m2 = text.match(/llave\s+(\S+)/i);
+  return m2 ? m2[1].trim().replace(/[.,;]$/, '') : null;
 }
 
 function parseReference(text: string): string | null {
-  const star = text.match(/\*\s*(\d{3,6})/); // últimos dígitos de cuenta
+  const star = text.match(/\*\s*(\d{3,20})/);
   if (star) return `*${star[1]}`;
-  const ref = text.match(/\bref(?:erencia)?[:\s#]*([\w-]{3,30})/i);
-  if (ref) return ref[1];
   return null;
 }
 
@@ -42,8 +69,15 @@ export function parseBankSms(body: any): ParsedDeposit {
   const raw =
     body?.text ?? body?.message ?? body?.sms ?? body?.raw ?? body?.body ?? '';
   const text = String(raw || '');
+  const lower = text.toLowerCase();
 
-  // Si el reenviador ya mandó campos estructurados, se respetan.
+  // Dirección: recibido (consignación) vs enviado (no interesa).
+  let direction: 'in' | 'out' | 'unknown' = 'unknown';
+  if (/recibiste\s+un\s+pago|recibiste\s+una\s+transferencia|recibiste\s+\$/i.test(text))
+    direction = 'in';
+  else if (/transferiste|enviaste|pagaste|retiro|compra\s+por/i.test(lower))
+    direction = 'out';
+
   const amount =
     body?.amount != null && !isNaN(Number(body.amount))
       ? Number(body.amount)
@@ -51,8 +85,11 @@ export function parseBankSms(body: any): ParsedDeposit {
   const structuredName = String(body?.name || body?.sender || '').trim();
 
   return {
+    direction,
     amount,
-    senderName: structuredName || parseSender(text),
+    senderName: structuredName || parsePayer(text),
+    business: parseBusiness(text),
+    llave: parseLlave(text),
     reference: body?.reference || parseReference(text),
     raw: text || null,
   };

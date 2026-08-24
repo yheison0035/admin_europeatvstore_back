@@ -289,9 +289,14 @@ model Company {
   supplies       Supply[]
   bankDeposits   BankDeposit[]
 
-  // Notificaciones de consignaciones a la cuenta del banco (SMS reenviado).
+  // Notificaciones de consignaciones a la cuenta del banco (SMS/correo reenviado).
   bankNotifyEnabled Boolean @default(false)
-  bankNotifyToken   String? @unique // secreto para el webhook del reenviador de SMS
+  // Secreto del webhook. NO es único: varias empresas que comparten el mismo
+  // buzón/cuenta usan el mismo token y se distinguen por bankIdentifier.
+  bankNotifyToken   String?
+  // Cómo se identifica esta empresa en la notificación del banco (nombre y/o
+  // llave del QR, separados por coma). Ej: "RAGNOR BARBER, @ragnorbarber".
+  bankIdentifier    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

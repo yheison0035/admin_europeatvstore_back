@@ -11,42 +11,89 @@ import { parseBankSms } from './bank-sms.parser';
 export class BankService {
   constructor(private prisma: PrismaService) {}
 
-  // Webhook PÚBLICO: el reenviador de SMS del celular manda aquí cada SMS del
-  // banco. Se identifica la empresa por el token secreto de la URL.
+  // Webhook PÚBLICO: el reenviador (SMS/correo) manda aquí cada notificación
+  // del banco. Un mismo buzón puede tener VARIAS empresas (mismo token): se
+  // enruta a la empresa correcta según su identificador (nombre/llave). Las
+  // salidas (transferencias enviadas) se ignoran.
   async receiveSms(token: string, body: any) {
     if (!token) throw new NotFoundException();
-    const company = await this.prisma.company.findFirst({
-      where: { bankNotifyToken: token, bankNotifyEnabled: true },
-      select: { id: true },
-    });
-    if (!company) throw new NotFoundException('Token no válido');
 
     const p = parseBankSms(body);
+
+    // No es un pago recibido → no es una consignación, se ignora.
+    if (p.direction === 'out') {
+      return { success: true, data: { ignored: 'no es un pago recibido' } };
+    }
+
+    const companies = await this.prisma.company.findMany({
+      where: { bankNotifyToken: token, bankNotifyEnabled: true },
+      select: { id: true, name: true, bankIdentifier: true },
+    });
+    if (companies.length === 0) throw new NotFoundException('Token no válido');
+
+    let target = companies[0];
+    if (companies.length > 1) {
+      // Buzón compartido: elegir la empresa cuyo identificador aparezca en la
+      // notificación (por nombre o por llave).
+      const haystack = `${p.raw || ''} ${p.business || ''} ${p.llave || ''}`.toLowerCase();
+      const match = companies.find((c) => {
+        const ids = (c.bankIdentifier || '')
+          .split(',')
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean);
+        return ids.some((id) => haystack.includes(id));
+      });
+      if (!match) {
+        return {
+          success: true,
+          data: { ignored: 'ninguna empresa coincide con la notificación' },
+        };
+      }
+      target = match;
+    }
+
     const deposit = await this.prisma.bankDeposit.create({
       data: {
-        companyId: company.id,
+        companyId: target.id,
         amount: p.amount,
         senderName: p.senderName,
-        reference: p.reference,
+        reference: p.llave || p.reference,
         raw: p.raw,
       },
     });
     return { success: true, data: { id: deposit.id, amount: deposit.amount } };
   }
 
-  // Activa las notificaciones y genera (o reutiliza) el token del webhook.
-  async enable(user: any) {
+  // Activa las notificaciones. Si se pasa un token (compartir buzón con otra
+  // empresa), se usa ese; si no, se reutiliza el existente o se genera uno.
+  async enable(user: any, dto: any = {}) {
     const company = await this.prisma.company.findUnique({
       where: { id: user.companyId },
       select: { bankNotifyToken: true },
     });
+    const shared = String(dto?.token || '').trim();
     const token =
-      company?.bankNotifyToken || randomBytes(24).toString('hex');
+      shared || company?.bankNotifyToken || randomBytes(24).toString('hex');
     await this.prisma.company.update({
       where: { id: user.companyId },
-      data: { bankNotifyEnabled: true, bankNotifyToken: token },
+      data: {
+        bankNotifyEnabled: true,
+        bankNotifyToken: token,
+        ...(dto?.identifier !== undefined && {
+          bankIdentifier: String(dto.identifier || '').trim() || null,
+        }),
+      },
     });
     return { success: true, data: { enabled: true, token } };
+  }
+
+  // Guarda cómo se identifica la empresa en el banco (nombre/llave).
+  async setIdentifier(user: any, identifier: string) {
+    await this.prisma.company.update({
+      where: { id: user.companyId },
+      data: { bankIdentifier: String(identifier || '').trim() || null },
+    });
+    return { success: true };
   }
 
   async disable(user: any) {
@@ -70,13 +117,20 @@ export class BankService {
   async status(user: any) {
     const c = await this.prisma.company.findUnique({
       where: { id: user.companyId },
-      select: { bankNotifyEnabled: true, bankNotifyToken: true },
+      select: {
+        bankNotifyEnabled: true,
+        bankNotifyToken: true,
+        bankIdentifier: true,
+        name: true,
+      },
     });
     return {
       success: true,
       data: {
         enabled: !!c?.bankNotifyEnabled,
         token: c?.bankNotifyToken || null,
+        identifier: c?.bankIdentifier || '',
+        companyName: c?.name || '',
       },
     };
   }
