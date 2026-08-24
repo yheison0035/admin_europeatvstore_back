@@ -130,6 +130,23 @@ export class BankService {
     return { success: true };
   }
 
+  async remove(user: any, id: number) {
+    const dep = await this.prisma.bankDeposit.findFirst({
+      where: { id, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!dep) throw new NotFoundException('No encontrada');
+    await this.prisma.bankDeposit.delete({ where: { id } });
+    return { success: true };
+  }
+
+  async clearAll(user: any) {
+    const res = await this.prisma.bankDeposit.deleteMany({
+      where: { companyId: user.companyId },
+    });
+    return { success: true, data: { deleted: res.count } };
+  }
+
   async markAllSeen(user: any) {
     await this.prisma.bankDeposit.updateMany({
       where: { companyId: user.companyId, seen: false },

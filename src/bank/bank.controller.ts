@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -103,5 +104,20 @@ export class BankController {
   @Patch('deposits/seen-all')
   markAllSeen(@Req() req) {
     return this.service.markAllSeen(req.user);
+  }
+
+  // Borrar registros: solo dueño/administrador.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OWNER_ROLES)
+  @Delete('deposits/all')
+  clearAll(@Req() req) {
+    return this.service.clearAll(req.user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OWNER_ROLES)
+  @Delete('deposits/:id')
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.service.remove(req.user, id);
   }
 }
