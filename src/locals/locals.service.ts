@@ -259,18 +259,23 @@ export class LocalsService {
     };
 
     if (dto.managerId !== undefined) {
-      const manager = await this.prisma.user.findFirst({
-        where: {
-          id: dto.managerId,
-          companyId: found.companyId,
-        },
-      });
+      if (dto.managerId === null) {
+        // Reenviar el local sin encargado no debe romper: se desvincula.
+        data.manager = { disconnect: true };
+      } else {
+        const manager = await this.prisma.user.findFirst({
+          where: {
+            id: dto.managerId,
+            companyId: found.companyId,
+          },
+        });
 
-      if (!manager) {
-        throw new NotFoundException('El manager no pertenece a la empresa');
+        if (!manager) {
+          throw new NotFoundException('El manager no pertenece a la empresa');
+        }
+
+        data.manager = { connect: { id: dto.managerId } };
       }
-
-      data.manager = { connect: { id: dto.managerId } };
     }
 
     const updated = await this.prisma.local.update({

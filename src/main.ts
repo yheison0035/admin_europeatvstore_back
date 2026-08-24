@@ -20,8 +20,12 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // elimina campos que no estén en el DTO
-      forbidNonWhitelisted: true, // lanza error si envías campos extra
+      whitelist: true, // elimina campos que no estén en el DTO (protege la BD)
+      // No reventamos si llegan campos extra: los editores del panel reenvían la
+      // entidad completa (id, companyId, fechas, relaciones…) y whitelist ya los
+      // descarta antes de tocar la BD. Así no hay errores "property X should not
+      // exist" en ningún módulo. Los tipos/formatos sí se siguen validando.
+      forbidNonWhitelisted: false,
       transform: true, // transforma los tipos (ej: "123" → number si espera number)
     }),
   );
