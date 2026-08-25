@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -44,5 +45,27 @@ export class StatisticsController {
   @Get('home')
   home(@Req() req) {
     return this.statisticsService.homeSummary(req.user);
+  }
+
+  // Serie de ventas para la gráfica del Home: semana (7 días), mes (30 días) o
+  // año (12 meses). Para cualquier usuario del dashboard.
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN',
+    'COORDINADOR',
+    'RECEPCIONISTA',
+    'ASESOR',
+    'AUXILIAR',
+    'BODEGUERO',
+    'VENTAS',
+    'BARBERO',
+    'CAJA',
+    'MESERO',
+    'COCINERO',
+    'PROFESIONAL',
+  )
+  @Get('sales-trend')
+  salesTrend(@Req() req, @Query('period') period?: string) {
+    return this.statisticsService.salesTrend(req.user, period);
   }
 }

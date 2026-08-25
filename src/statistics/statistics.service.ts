@@ -296,6 +296,80 @@ export class StatisticsService {
     };
   }
 
+  // Serie de ventas PAGADAS para la gráfica del Home. period:
+  //   'week'  → últimos 7 días (diario)
+  //   'month' → últimos 30 días (diario)
+  //   'year'  → últimos 12 meses (mensual)
+  async salesTrend(user: any, period?: string) {
+    const companyId = user.companyId;
+    const today = colombiaDay(new Date());
+    const [y, m, d] = today.split('-').map(Number);
+    const accessible = await getAccessibleLocalIds(this.prisma, user);
+    const localFilter: any = accessible ? { localId: { in: accessible } } : {};
+    const baseWhere: any = {
+      local: { companyId },
+      ...localFilter,
+      paymentStatus: 'PAGADA' as any,
+    };
+
+    const p = period === 'month' || period === 'year' ? period : 'week';
+
+    if (p === 'year') {
+      const start = dayStartUtc(y, m - 11, 1);
+      const end = dayStartUtc(y, m + 1, 1);
+      const rows = await this.prisma.sale.findMany({
+        where: { ...baseWhere, saleDate: { gte: start, lt: end } },
+        select: { saleDate: true, totalAmount: true },
+      });
+      const MES = [
+        'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+        'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
+      ];
+      const buckets: { key: string; label: string; total: number }[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const dt = new Date(Date.UTC(y, m - 1 - i, 1));
+        const mo = dt.getUTCMonth();
+        const yr = dt.getUTCFullYear();
+        buckets.push({
+          key: `${yr}-${String(mo + 1).padStart(2, '0')}`,
+          label: `${MES[mo]} ${String(yr).slice(2)}`,
+          total: 0,
+        });
+      }
+      const map = new Map(buckets.map((b) => [b.key, b]));
+      for (const s of rows) {
+        const key = colombiaDay(s.saleDate).slice(0, 7);
+        const b = map.get(key);
+        if (b) b.total += s.totalAmount || 0;
+      }
+      return { success: true, data: buckets, period: p };
+    }
+
+    // week / month (diario)
+    const nDays = p === 'month' ? 30 : 7;
+    const start = dayStartUtc(y, m, d - (nDays - 1));
+    const end = dayStartUtc(y, m, d + 1);
+    const rows = await this.prisma.sale.findMany({
+      where: { ...baseWhere, saleDate: { gte: start, lt: end } },
+      select: { saleDate: true, totalAmount: true },
+    });
+    const buckets: { key: string; label: string; total: number }[] = [];
+    for (let i = nDays - 1; i >= 0; i--) {
+      const cd = colombiaDay(dayStartUtc(y, m, d - i)); // YYYY-MM-DD
+      buckets.push({
+        key: cd,
+        label: `${cd.slice(8)}/${cd.slice(5, 7)}`,
+        total: 0,
+      });
+    }
+    const map = new Map(buckets.map((b) => [b.key, b]));
+    for (const s of rows) {
+      const b = map.get(colombiaDay(s.saleDate));
+      if (b) b.total += s.totalAmount || 0;
+    }
+    return { success: true, data: buckets, period: p };
+  }
+
   private async dashboardInternal(user: any, dto: any) {
     const companyId = user.companyId;
     const localId = dto.localId ? Number(dto.localId) : null;
