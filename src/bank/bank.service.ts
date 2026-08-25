@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '@/prisma.service';
 import { parseBankSms } from './bank-sms.parser';
 
@@ -52,21 +52,25 @@ export class BankService {
       target = match;
     }
 
-    // Anti-duplicados: si el mismo reenviador manda el mismo correo dos veces
-    // (reintentos, solapamiento del cron), no creamos una consignación repetida.
-    const dupSince = new Date(Date.now() - 15 * 60 * 1000);
-    const dup = await this.prisma.bankDeposit.findFirst({
-      where: {
-        companyId: target.id,
-        amount: p.amount,
-        senderName: p.senderName,
-        reference: p.llave || p.reference,
-        createdAt: { gte: dupSince },
-      },
-      select: { id: true },
-    });
-    if (dup) {
-      return { success: true, data: { id: dup.id, amount: p.amount, duplicate: true } };
+    // Anti-duplicados PERSISTENTE: cada correo se procesa UNA sola vez por
+    // empresa, para siempre. La clave es el id del correo (si el reenviador lo
+    // manda) o el hash del texto. Aunque el usuario borre la consignación y el
+    // reenviador mande el mismo correo otra vez, NO se vuelve a crear.
+    const rawText = p.raw || '';
+    const sourceKey =
+      String(body?.sourceId || body?.id || '').trim() ||
+      (rawText
+        ? createHash('sha256').update(rawText).digest('hex')
+        : '');
+    if (sourceKey) {
+      try {
+        await this.prisma.bankProcessedEmail.create({
+          data: { companyId: target.id, sourceKey },
+        });
+      } catch {
+        // Violación de índice único → este correo ya se procesó antes.
+        return { success: true, data: { duplicate: true } };
+      }
     }
 
     const deposit = await this.prisma.bankDeposit.create({

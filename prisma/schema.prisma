@@ -288,6 +288,7 @@ model Company {
   returns        Return[]
   supplies       Supply[]
   bankDeposits   BankDeposit[]
+  bankProcessedEmails BankProcessedEmail[]
 
   // Notificaciones de consignaciones a la cuenta del banco (SMS/correo reenviado).
   bankNotifyEnabled Boolean @default(false)
@@ -322,6 +323,20 @@ model BankDeposit {
 
   @@index([companyId])
   @@index([seen])
+}
+
+// Registro PERSISTENTE de correos del banco ya procesados por empresa. Sirve
+// para NO volver a crear una consignación aunque el reenviador mande el mismo
+// correo otra vez, incluso si el usuario ya borró esa consignación del historial.
+model BankProcessedEmail {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceKey String // id del correo (Gmail) o hash del texto
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, sourceKey])
+  @@index([companyId])
 }
 
 model User {
