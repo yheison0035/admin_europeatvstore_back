@@ -16,14 +16,24 @@ import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/auth/guards/roles.guard';
 import { Roles } from '@/auth/roles.decorator';
 
+// Ver/oír consignaciones: CUALQUIER rol del negocio (todos deben poder
+// enterarse de que entró una transferencia).
 const VIEW_ROLES = [
   'SUPER_ADMIN',
+  'COORDINADOR',
   'ADMIN',
-  'RECEPCIONISTA',
-  'CAJA',
   'ASESOR',
+  'AUXILIAR',
+  'BODEGUERO',
   'VENTAS',
+  'BARBERO',
+  'CAJA',
+  'RECEPCIONISTA',
+  'MESERO',
+  'COCINERO',
+  'PROFESIONAL',
 ];
+// Configurar/eliminar: solo dueño/administrador.
 const OWNER_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 
 @Controller('bank')

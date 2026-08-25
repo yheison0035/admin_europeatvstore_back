@@ -52,6 +52,23 @@ export class BankService {
       target = match;
     }
 
+    // Anti-duplicados: si el mismo reenviador manda el mismo correo dos veces
+    // (reintentos, solapamiento del cron), no creamos una consignación repetida.
+    const dupSince = new Date(Date.now() - 15 * 60 * 1000);
+    const dup = await this.prisma.bankDeposit.findFirst({
+      where: {
+        companyId: target.id,
+        amount: p.amount,
+        senderName: p.senderName,
+        reference: p.llave || p.reference,
+        createdAt: { gte: dupSince },
+      },
+      select: { id: true },
+    });
+    if (dup) {
+      return { success: true, data: { id: dup.id, amount: p.amount, duplicate: true } };
+    }
+
     const deposit = await this.prisma.bankDeposit.create({
       data: {
         companyId: target.id,
