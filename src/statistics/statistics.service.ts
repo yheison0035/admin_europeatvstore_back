@@ -312,6 +312,22 @@ export class StatisticsService {
       paymentStatus: 'PAGADA' as any,
     };
 
+    // Solo dueño/administrador ven las cifras en pesos. Para los demás roles se
+    // devuelve la tendencia RELATIVA (0–100) sin exponer los montos reales, así
+    // ven la forma de la gráfica pero no la plata (ni siquiera en la respuesta).
+    const canSeeMoney = ['SUPER_ADMIN', 'ADMIN'].includes(user.role);
+    const shape = (
+      buckets: { key: string; label: string; total: number }[],
+    ) => {
+      if (canSeeMoney) return buckets;
+      const max = buckets.reduce((mx, b) => Math.max(mx, b.total), 0);
+      return buckets.map((b) => ({
+        key: b.key,
+        label: b.label,
+        total: max > 0 ? Math.round((b.total / max) * 100) : 0,
+      }));
+    };
+
     const p = period === 'month' || period === 'year' ? period : 'week';
 
     if (p === 'year') {
@@ -342,7 +358,7 @@ export class StatisticsService {
         const b = map.get(key);
         if (b) b.total += s.totalAmount || 0;
       }
-      return { success: true, data: buckets, period: p };
+      return { success: true, data: shape(buckets), period: p, values: canSeeMoney };
     }
 
     // week / month (diario)
@@ -367,7 +383,7 @@ export class StatisticsService {
       const b = map.get(colombiaDay(s.saleDate));
       if (b) b.total += s.totalAmount || 0;
     }
-    return { success: true, data: buckets, period: p };
+    return { success: true, data: shape(buckets), period: p, values: canSeeMoney };
   }
 
   private async dashboardInternal(user: any, dto: any) {
