@@ -187,13 +187,23 @@ export class StatisticsService {
       select: { id: true },
     });
     const cfIds = new Set(cf.map((c) => c.id));
-    const winbackCount = grouped.filter(
-      (g) =>
-        g.customerId != null &&
-        !cfIds.has(g.customerId) &&
-        g._max.saleDate &&
-        g._max.saleDate <= cutoff,
-    ).length;
+    const winbackIds = grouped
+      .filter(
+        (g) =>
+          g.customerId != null &&
+          !cfIds.has(g.customerId) &&
+          g._max.saleDate &&
+          g._max.saleDate <= cutoff,
+      )
+      .map((g) => g.customerId as number);
+    // Solo contamos los que tienen teléfono, porque la reactivación es por
+    // WhatsApp y el modal "Por reactivar" únicamente lista esos (así el número
+    // del inicio coincide con lo que se ve al abrirlo).
+    const winbackCount = winbackIds.length
+      ? await this.prisma.customer.count({
+          where: { id: { in: winbackIds }, companyId, phone: { not: null } },
+        })
+      : 0;
 
     // ---- Cumpleaños de la próxima semana (por mes/día, ignora el año) ----
     const pairs: { mo: number; da: number }[] = [];
