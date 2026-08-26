@@ -482,6 +482,7 @@ export class StatisticsService {
           items: {
             select: {
               subtotal: true,
+              quantity: true,
               serviceId: true,
               inventoryVariantId: true,
             },
@@ -490,20 +491,29 @@ export class StatisticsService {
       });
       let services = 0;
       let products = 0;
+      let cuts = 0; // nº de cortes/servicios realizados
       for (const s of sales) {
         for (const it of s.items) {
           const v = it.subtotal || 0;
-          if (it.serviceId) services += v;
-          else if (it.inventoryVariantId) products += v;
+          if (it.serviceId) {
+            services += v;
+            cuts += it.quantity || 0;
+          } else if (it.inventoryVariantId) {
+            products += v;
+          }
         }
       }
-      return {
-        services,
-        products,
-        total: services + products,
-        count: sales.length,
-      };
+      return { services, products, cuts, count: sales.length };
     };
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    // Ganancia (comisión) del barbero a partir de lo vendido a su nombre.
+    const earn = (services: number, products: number) => {
+      const s = svcRate != null ? r2((services * svcRate) / 100) : null;
+      const p = prodRate != null ? r2((products * prodRate) / 100) : null;
+      return { service: s, product: p, total: r2((s || 0) + (p || 0)) };
+    };
+    const ratesConfigured = svcRate != null && prodRate != null;
 
     const [tDay, wWeek, mMonth] = await Promise.all([
       sumRange(tStart, tEnd),
@@ -511,12 +521,12 @@ export class StatisticsService {
       sumRange(moStart, moEnd),
     ]);
 
-    const r2 = (n: number) => Math.round(n * 100) / 100;
-    const serviceEarn = svcRate != null ? r2((mMonth.services * svcRate) / 100) : null;
-    const productEarn = prodRate != null ? r2((mMonth.products * prodRate) / 100) : null;
-    const earnTotal = (serviceEarn || 0) + (productEarn || 0);
     const productShare =
-      mMonth.total > 0 ? Math.round((mMonth.products / mMonth.total) * 100) : 0;
+      mMonth.services + mMonth.products > 0
+        ? Math.round(
+            (mMonth.products / (mMonth.services + mMonth.products)) * 100,
+          )
+        : 0;
 
     const label = (dt: Date) =>
       `${String(dt.getUTCDate()).padStart(2, '0')}/${String(
@@ -524,34 +534,32 @@ export class StatisticsService {
       ).padStart(2, '0')}`;
     const weekRange = `${label(wStart)} – ${label(new Date(wEnd.getTime() - 86400000))}`;
 
-    // Cumpleaños del equipo (del local del barbero, o de la empresa si no tiene).
     const teamBirthdays = await this.teamBirthdays(user, y, m, d);
 
     return {
       success: true,
       data: {
         teamBirthdays,
-        today: { total: r2(tDay.total), count: tDay.count },
-        week: { total: r2(wWeek.total), count: wWeek.count, range: weekRange },
+        ratesConfigured,
+        rates: { service: svcRate, product: prodRate },
+        today: { earnings: earn(tDay.services, tDay.products), cuts: tDay.cuts },
+        week: {
+          earnings: earn(wWeek.services, wWeek.products),
+          cuts: wWeek.cuts,
+          range: weekRange,
+        },
         month: {
-          services: r2(mMonth.services),
-          products: r2(mMonth.products),
-          total: r2(mMonth.total),
-          count: mMonth.count,
+          earnings: earn(mMonth.services, mMonth.products),
+          cuts: mMonth.cuts,
           productShare,
-          rates: { service: svcRate, product: prodRate },
-          earnings: {
-            service: serviceEarn,
-            product: productEarn,
-            total: r2(earnTotal),
-          },
-          ratesConfigured: svcRate != null && prodRate != null,
         },
       },
     };
   }
 
-  // Historial de las últimas 8 semanas (domingo→sábado) del propio usuario.
+  // Historial de las últimas 8 semanas (domingo→sábado) del propio usuario, con
+  // su GANANCIA (comisión), cuántos cortes y CUÁLES servicios hizo. Solo se
+  // muestran montos de lo que él gana, no el bruto del negocio.
   async myWeeklyHistory(user: any) {
     const uid = user.id;
     const companyId = user.companyId;
@@ -561,12 +569,23 @@ export class StatisticsService {
       notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any,
     };
     const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+    const r2 = (n: number) => Math.round(n * 100) / 100;
     const label = (dt: Date) =>
       `${String(dt.getUTCDate()).padStart(2, '0')}/${String(
         dt.getUTCMonth() + 1,
       ).padStart(2, '0')}`;
 
-    const weeks: { label: string; total: number; count: number }[] = [];
+    const me = await this.prisma.user.findUnique({
+      where: { id: uid },
+      select: { commissionServiceRate: true, commissionProductRate: true },
+    });
+    const svcRate =
+      me?.commissionServiceRate != null ? Number(me.commissionServiceRate) : null;
+    const prodRate =
+      me?.commissionProductRate != null ? Number(me.commissionProductRate) : null;
+    const ratesConfigured = svcRate != null && prodRate != null;
+
+    const weeks: any[] = [];
     for (let i = 7; i >= 0; i--) {
       const wStart = dayStartUtc(y, m, d - dow - i * 7);
       const wEnd = dayStartUtc(y, m, d - dow - i * 7 + 7);
@@ -578,16 +597,50 @@ export class StatisticsService {
           saleStatus: notCanceled,
           saleDate: { gte: wStart, lt: wEnd },
         },
-        select: { totalAmount: true },
+        select: {
+          items: {
+            select: {
+              subtotal: true,
+              quantity: true,
+              serviceId: true,
+              inventoryVariantId: true,
+              service: { select: { name: true } },
+            },
+          },
+        },
       });
-      const total = sales.reduce((a, s) => a + (s.totalAmount || 0), 0);
+
+      // Agrupa por servicio: cuántos y cuánto GANA en cada uno.
+      const svc = new Map<string, { name: string; qty: number; earn: number }>();
+      let cuts = 0;
+      for (const s of sales) {
+        for (const it of s.items) {
+          if (it.serviceId) {
+            const name = it.service?.name || 'Servicio';
+            const earn = svcRate != null ? (it.subtotal || 0) * (svcRate / 100) : 0;
+            const cur = svc.get(name) || { name, qty: 0, earn: 0 };
+            cur.qty += it.quantity || 0;
+            cur.earn += earn;
+            svc.set(name, cur);
+            cuts += it.quantity || 0;
+          }
+        }
+      }
+      const services = [...svc.values()]
+        .map((x) => ({ name: x.name, qty: x.qty, earn: r2(x.earn) }))
+        .sort((a, b) => b.earn - a.earn);
+      // El historial semanal muestra la comisión de CORTES (los productos se
+      // pagan aparte, mensual el día 3).
+      const serviceEarn = services.reduce((a, x) => a + x.earn, 0);
+
       weeks.push({
         label: `${label(wStart)} – ${label(new Date(wEnd.getTime() - 86400000))}`,
-        total: Math.round(total * 100) / 100,
-        count: sales.length,
+        cuts,
+        services,
+        earnings: r2(serviceEarn),
       });
     }
-    return { success: true, data: weeks };
+    return { success: true, data: weeks, ratesConfigured };
   }
 
   // Cumpleaños del EQUIPO (usuarios del local del que consulta; si no tiene
