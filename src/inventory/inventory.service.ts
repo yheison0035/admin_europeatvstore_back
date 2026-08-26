@@ -405,6 +405,9 @@ export class InventoryService {
   // Productos con alerta de stock bajo: minStock > 0 y stock total <= minStock.
   // Ordenados por los más críticos primero (mayor faltante).
   async getLowStock(user: any) {
+    // Umbral por defecto de "por agotarse" cuando el producto no tiene alerta
+    // de stock configurada (le quedan 1, 2 o 3).
+    const LOW_STOCK_DEFAULT = 3;
     const localIds = await getAccessibleLocalIds(this.prisma, user);
 
     const where: any = {
@@ -440,13 +443,20 @@ export class InventoryService {
           variantsCount: p.variants.length,
         };
       })
-      // Sale si está por debajo de su alerta, o si está AGOTADO (aunque no tenga
-      // alerta configurada: un producto en 0 siempre conviene mostrarlo).
-      .filter((p) => (p.minStock > 0 && p.stock <= p.minStock) || p.stock <= 0)
-      // Los agotados primero; luego por mayor faltante frente al mínimo.
+      // Sale si:
+      //  - está AGOTADO (stock <= 0), o
+      //  - tiene alerta configurada y está por debajo (stock <= minStock), o
+      //  - NO tiene alerta pero le quedan pocos (<= 3): "por agotarse".
+      .filter(
+        (p) =>
+          p.stock <= 0 ||
+          (p.minStock > 0 && p.stock <= p.minStock) ||
+          (p.minStock <= 0 && p.stock > 0 && p.stock <= LOW_STOCK_DEFAULT),
+      )
+      // Los agotados primero; luego los de menor stock.
       .sort((a, b) => {
-        const sa = a.stock <= 0 ? -1e9 : a.stock - a.minStock;
-        const sb = b.stock <= 0 ? -1e9 : b.stock - b.minStock;
+        const sa = a.stock <= 0 ? -1e9 : a.stock;
+        const sb = b.stock <= 0 ? -1e9 : b.stock;
         return sa - sb;
       });
 
