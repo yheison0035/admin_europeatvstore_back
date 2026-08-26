@@ -432,6 +432,7 @@ export class InventoryService {
           name: p.name,
           stock,
           minStock: p.minStock,
+          unit: p.unit || 'UNIDAD',
           local: p.local?.name || null,
         };
       })
