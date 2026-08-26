@@ -47,8 +47,29 @@ export class StatisticsController {
     return this.statisticsService.homeSummary(req.user);
   }
 
-  // Serie de ventas para la gráfica del Home: semana (7 días), mes (30 días) o
-  // año (12 meses). Para cualquier usuario del dashboard.
+  // Serie de ventas para la gráfica del Home (ventas del NEGOCIO): NO para el
+  // barbero (él solo ve lo suyo en "Mi rendimiento").
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN',
+    'COORDINADOR',
+    'RECEPCIONISTA',
+    'ASESOR',
+    'AUXILIAR',
+    'BODEGUERO',
+    'VENTAS',
+    'CAJA',
+  )
+  @Get('sales-trend')
+  salesTrend(
+    @Req() req,
+    @Query('period') period?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.statisticsService.salesTrend(req.user, period, offset);
+  }
+
+  // "Mi rendimiento": SOLO lo del usuario que consulta. Cualquier empleado.
   @Roles(
     'SUPER_ADMIN',
     'ADMIN',
@@ -64,12 +85,28 @@ export class StatisticsController {
     'COCINERO',
     'PROFESIONAL',
   )
-  @Get('sales-trend')
-  salesTrend(
-    @Req() req,
-    @Query('period') period?: string,
-    @Query('offset') offset?: string,
-  ) {
-    return this.statisticsService.salesTrend(req.user, period, offset);
+  @Get('my-performance')
+  myPerformance(@Req() req) {
+    return this.statisticsService.myPerformance(req.user);
+  }
+
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN',
+    'COORDINADOR',
+    'RECEPCIONISTA',
+    'ASESOR',
+    'AUXILIAR',
+    'BODEGUERO',
+    'VENTAS',
+    'BARBERO',
+    'CAJA',
+    'MESERO',
+    'COCINERO',
+    'PROFESIONAL',
+  )
+  @Get('my-weekly-history')
+  myWeeklyHistory(@Req() req) {
+    return this.statisticsService.myWeeklyHistory(req.user);
   }
 }

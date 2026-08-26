@@ -81,6 +81,12 @@ export class AppointmentsService {
       else where.barber = byRelationName(v);
     }
 
+    // BLINDAJE: el barbero/profesional SOLO puede ver SUS citas, pase lo que
+    // pase por el filtro. Esto sobreescribe cualquier query.barberId.
+    if (['BARBERO', 'PROFESIONAL'].includes(user.role)) {
+      where.barberId = user.id;
+    }
+
     if (query.serviceId) {
       const v = String(query.serviceId).trim();
       if (/^\d+$/.test(v)) where.serviceId = Number(v);
@@ -520,6 +526,11 @@ export class AppointmentsService {
     };
 
     applyLocalFilter(where, user, localIds);
+
+    // El barbero/profesional solo ve SU agenda.
+    if (['BARBERO', 'PROFESIONAL'].includes(user.role)) {
+      where.barberId = user.id;
+    }
 
     const items = await this.prisma.appointment.findMany({
       where,

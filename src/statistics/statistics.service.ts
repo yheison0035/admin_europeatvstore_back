@@ -261,46 +261,8 @@ export class StatisticsService {
       birthdays = [];
     }
 
-    // ---- Cumpleaños del EQUIPO (usuarios del local al que pertenece quien
-    // consulta; si no tiene local, todo el equipo de la empresa). Se listan
-    // todos con su fecha, ordenados por el próximo en cumplir. ----
-    let teamBirthdays: { id: number; name: string; date: string }[] = [];
-    try {
-      const teamRows = await this.prisma.user.findMany({
-        where: {
-          companyId,
-          status: 'ACTIVO' as any,
-          birthdate: { not: null },
-          ...(user.localId ? { localId: user.localId } : {}),
-        },
-        select: { id: true, name: true, birthdate: true },
-      });
-      const MESES = [
-        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-      ];
-      teamBirthdays = teamRows
-        .map((u) => {
-          const bd = new Date(u.birthdate as Date);
-          const mo = bd.getUTCMonth() + 1;
-          const da = bd.getUTCDate();
-          // días aproximados hasta el próximo cumpleaños (para ordenar)
-          const nextIn = ((mo - m) * 31 + (da - d) + 372) % 372;
-          // año del PRÓXIMO cumpleaños (este año si aún no pasa, si no el siguiente)
-          const yr = mo > m || (mo === m && da >= d) ? y : y + 1;
-          return {
-            id: u.id,
-            name: u.name,
-            date: `${da} de ${MESES[mo - 1]} de ${yr}`,
-            nextIn,
-          };
-        })
-        .sort((a, b) => a.nextIn - b.nextIn)
-        .slice(0, 15)
-        .map(({ nextIn, ...rest }) => rest);
-    } catch (_) {
-      teamBirthdays = [];
-    }
+    // ---- Cumpleaños del EQUIPO (fuente única) ----
+    const teamBirthdays = await this.teamBirthdays(user, y, m, d);
 
     // ---- Próximas citas (solo verticales de servicios/agenda) ----
     let nextAppointments: any[] = [];
@@ -472,6 +434,200 @@ export class StatisticsService {
       canForward: offset > 0,
       rangeLabel: rangeLabel(buckets),
     };
+  }
+
+  // "Mi rendimiento": SOLO las ventas atribuidas al usuario que consulta
+  // (Sale.userId = req.user.id). Hoy / esta semana (domingo→sábado) / este mes,
+  // con ganancia según SUS comisiones (servicios y productos). Aislado: no
+  // expone nada de la empresa ni de otros empleados.
+  async myPerformance(user: any) {
+    const uid = user.id;
+    const companyId = user.companyId;
+    const today = colombiaDay(new Date());
+    const [y, m, d] = today.split('-').map(Number);
+    const notCanceled = {
+      notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any,
+    };
+
+    // Semana domingo→sábado: día de la semana de hoy (0=domingo).
+    const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+    const tStart = dayStartUtc(y, m, d);
+    const tEnd = dayStartUtc(y, m, d + 1);
+    const wStart = dayStartUtc(y, m, d - dow);
+    const wEnd = dayStartUtc(y, m, d - dow + 7);
+    const moStart = dayStartUtc(y, m, 1);
+    const moEnd = dayStartUtc(y, m + 1, 1);
+
+    // Comisiones del propio usuario.
+    const me = await this.prisma.user.findUnique({
+      where: { id: uid },
+      select: { commissionServiceRate: true, commissionProductRate: true },
+    });
+    const svcRate =
+      me?.commissionServiceRate != null ? Number(me.commissionServiceRate) : null;
+    const prodRate =
+      me?.commissionProductRate != null ? Number(me.commissionProductRate) : null;
+
+    const sumRange = async (gte: Date, lt: Date) => {
+      const sales = await this.prisma.sale.findMany({
+        where: {
+          userId: uid,
+          local: { companyId },
+          paymentStatus: 'PAGADA' as any,
+          saleStatus: notCanceled,
+          saleDate: { gte, lt },
+        },
+        select: {
+          id: true,
+          items: {
+            select: {
+              subtotal: true,
+              serviceId: true,
+              inventoryVariantId: true,
+            },
+          },
+        },
+      });
+      let services = 0;
+      let products = 0;
+      for (const s of sales) {
+        for (const it of s.items) {
+          const v = it.subtotal || 0;
+          if (it.serviceId) services += v;
+          else if (it.inventoryVariantId) products += v;
+        }
+      }
+      return {
+        services,
+        products,
+        total: services + products,
+        count: sales.length,
+      };
+    };
+
+    const [tDay, wWeek, mMonth] = await Promise.all([
+      sumRange(tStart, tEnd),
+      sumRange(wStart, wEnd),
+      sumRange(moStart, moEnd),
+    ]);
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const serviceEarn = svcRate != null ? r2((mMonth.services * svcRate) / 100) : null;
+    const productEarn = prodRate != null ? r2((mMonth.products * prodRate) / 100) : null;
+    const earnTotal = (serviceEarn || 0) + (productEarn || 0);
+    const productShare =
+      mMonth.total > 0 ? Math.round((mMonth.products / mMonth.total) * 100) : 0;
+
+    const label = (dt: Date) =>
+      `${String(dt.getUTCDate()).padStart(2, '0')}/${String(
+        dt.getUTCMonth() + 1,
+      ).padStart(2, '0')}`;
+    const weekRange = `${label(wStart)} – ${label(new Date(wEnd.getTime() - 86400000))}`;
+
+    // Cumpleaños del equipo (del local del barbero, o de la empresa si no tiene).
+    const teamBirthdays = await this.teamBirthdays(user, y, m, d);
+
+    return {
+      success: true,
+      data: {
+        teamBirthdays,
+        today: { total: r2(tDay.total), count: tDay.count },
+        week: { total: r2(wWeek.total), count: wWeek.count, range: weekRange },
+        month: {
+          services: r2(mMonth.services),
+          products: r2(mMonth.products),
+          total: r2(mMonth.total),
+          count: mMonth.count,
+          productShare,
+          rates: { service: svcRate, product: prodRate },
+          earnings: {
+            service: serviceEarn,
+            product: productEarn,
+            total: r2(earnTotal),
+          },
+          ratesConfigured: svcRate != null && prodRate != null,
+        },
+      },
+    };
+  }
+
+  // Historial de las últimas 8 semanas (domingo→sábado) del propio usuario.
+  async myWeeklyHistory(user: any) {
+    const uid = user.id;
+    const companyId = user.companyId;
+    const today = colombiaDay(new Date());
+    const [y, m, d] = today.split('-').map(Number);
+    const notCanceled = {
+      notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any,
+    };
+    const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+    const label = (dt: Date) =>
+      `${String(dt.getUTCDate()).padStart(2, '0')}/${String(
+        dt.getUTCMonth() + 1,
+      ).padStart(2, '0')}`;
+
+    const weeks: { label: string; total: number; count: number }[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const wStart = dayStartUtc(y, m, d - dow - i * 7);
+      const wEnd = dayStartUtc(y, m, d - dow - i * 7 + 7);
+      const sales = await this.prisma.sale.findMany({
+        where: {
+          userId: uid,
+          local: { companyId },
+          paymentStatus: 'PAGADA' as any,
+          saleStatus: notCanceled,
+          saleDate: { gte: wStart, lt: wEnd },
+        },
+        select: { totalAmount: true },
+      });
+      const total = sales.reduce((a, s) => a + (s.totalAmount || 0), 0);
+      weeks.push({
+        label: `${label(wStart)} – ${label(new Date(wEnd.getTime() - 86400000))}`,
+        total: Math.round(total * 100) / 100,
+        count: sales.length,
+      });
+    }
+    return { success: true, data: weeks };
+  }
+
+  // Cumpleaños del EQUIPO (usuarios del local del que consulta; si no tiene
+  // local, toda la empresa). Formato "8 de agosto de 2026", ordenados por el
+  // próximo en cumplir. Fuente única usada por el Home y por Mi rendimiento.
+  private async teamBirthdays(user: any, y: number, m: number, d: number) {
+    const MESES = [
+      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+    ];
+    try {
+      const teamRows = await this.prisma.user.findMany({
+        where: {
+          companyId: user.companyId,
+          status: 'ACTIVO' as any,
+          birthdate: { not: null },
+          ...(user.localId ? { localId: user.localId } : {}),
+        },
+        select: { id: true, name: true, birthdate: true },
+      });
+      return teamRows
+        .map((u) => {
+          const bd = new Date(u.birthdate as Date);
+          const mo = bd.getUTCMonth() + 1;
+          const da = bd.getUTCDate();
+          const nextIn = ((mo - m) * 31 + (da - d) + 372) % 372;
+          const yr = mo > m || (mo === m && da >= d) ? y : y + 1;
+          return {
+            id: u.id,
+            name: u.name,
+            date: `${da} de ${MESES[mo - 1]} de ${yr}`,
+            nextIn,
+          };
+        })
+        .sort((a, b) => a.nextIn - b.nextIn)
+        .slice(0, 15)
+        .map(({ nextIn, ...rest }) => rest);
+    } catch (_) {
+      return [];
+    }
   }
 
   private async dashboardInternal(user: any, dto: any) {
