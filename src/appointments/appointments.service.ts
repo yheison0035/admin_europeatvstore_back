@@ -577,6 +577,86 @@ export class AppointmentsService {
     };
   }
 
+  // Mis citas por rango: HOY / MAÑANA / SEMANA (dom→sáb) / MES (mes actual).
+  // Para el barbero/profesional va forzada a SUS citas; para el resto respeta
+  // el filtro de local. Excluye canceladas.
+  async myAppointments(user: any, rangeRaw?: string) {
+    await this.planLimits.assertModule(user.companyId, 'appointments');
+    await this.runAutoTransitions(user.companyId).catch(() => null);
+
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+    const today = this.colombiaTodayMidnightUtc();
+    const DAY = 24 * 3600 * 1000;
+    const range = ['today', 'tomorrow', 'week', 'month'].includes(rangeRaw || '')
+      ? (rangeRaw as string)
+      : 'today';
+
+    let gte: Date;
+    let lt: Date;
+    if (range === 'tomorrow') {
+      gte = new Date(today.getTime() + DAY);
+      lt = new Date(today.getTime() + 2 * DAY);
+    } else if (range === 'week') {
+      const dow = today.getUTCDay(); // 0=domingo
+      gte = new Date(today.getTime() - dow * DAY);
+      lt = new Date(gte.getTime() + 7 * DAY);
+    } else if (range === 'month') {
+      gte = new Date(
+        Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1),
+      );
+      lt = new Date(
+        Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1),
+      );
+    } else {
+      gte = today;
+      lt = new Date(today.getTime() + DAY);
+    }
+
+    const where: any = {
+      companyId: user.companyId,
+      date: { gte, lt },
+      status: { not: AppointmentStatus.CANCELADA },
+    };
+    applyLocalFilter(where, user, localIds);
+    if (['BARBERO', 'PROFESIONAL'].includes(user.role)) {
+      where.barberId = user.id;
+    }
+
+    const items = await this.prisma.appointment.findMany({
+      where,
+      include: {
+        service: { select: { id: true, name: true, duration: true } },
+        barber: { select: { id: true, name: true } },
+        customer: { select: { id: true, name: true, phone: true } },
+        local: { select: { id: true, name: true } },
+      },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+    });
+
+    const data = items.map((a) => {
+      const start = this.startInstant(a.date, a.startTime);
+      const end = new Date(
+        start.getTime() + (a.service?.duration || 0) * 60000,
+      );
+      return {
+        id: a.id,
+        status: a.status,
+        startTime: a.startTime,
+        notes: a.notes,
+        clientConfirmed: a.clientConfirmed,
+        date: a.date.toISOString().slice(0, 10),
+        startAt: start.toISOString(),
+        endAt: end.toISOString(),
+        service: a.service,
+        barber: a.barber,
+        customer: a.customer,
+        local: a.local,
+      };
+    });
+
+    return { success: true, data, range };
+  }
+
   // Devuelve los horarios disponibles para un barbero, fecha y servicio dado
   async getAvailability(query: any) {
     const {

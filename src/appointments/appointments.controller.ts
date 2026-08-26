@@ -42,6 +42,12 @@ export class AppointmentsController {
     return this.service.getAgenda(req.user);
   }
 
+  // Mis citas por rango: hoy | mañana | semana | mes. Antes de :id.
+  @Get('mine')
+  mine(@Req() req, @Query('range') range?: string) {
+    return this.service.myAppointments(req.user, range);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.findOne(id, req.user);

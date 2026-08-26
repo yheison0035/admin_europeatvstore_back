@@ -706,8 +706,9 @@ export class StatisticsService {
     };
   }
 
-  // Historial del barbero agrupado por SEMANA (8 últimas, dom→sáb) o por MES
-  // (6 últimos), con su ganancia y el desglose de cortes y productos.
+  // Historial del barbero agrupado por DÍA (14 últimos), SEMANA (8 últimas,
+  // dom→sáb) o MES (6 últimos), con su ganancia y el desglose de cortes y
+  // productos.
   async myHistory(user: any, groupRaw?: string) {
     const uid = user.id;
     const companyId = user.companyId;
@@ -721,31 +722,59 @@ export class StatisticsService {
     const MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
     const rates = await this.barberRates(uid);
-    const group = groupRaw === 'month' ? 'month' : 'week';
-    const periods: any[] = [];
+    const group =
+      groupRaw === 'month' ? 'month' : groupRaw === 'day' ? 'day' : 'week';
+    const DIA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
-    if (group === 'month') {
+    // Definir primero las ventanas (label + rango) y resolver los desgloses en
+    // paralelo (evita esperas secuenciales: 14 días pasan de ~5s a <1s).
+    const windows: { label: string; gte: Date; lt: Date }[] = [];
+    if (group === 'day') {
+      for (let i = 13; i >= 0; i--) {
+        const gte = dayStartUtc(y, m, d - i);
+        const lt = dayStartUtc(y, m, d - i + 1);
+        const wd = new Date(Date.UTC(y, m - 1, d - i, 12)).getUTCDay();
+        const label =
+          i === 0 ? `Hoy · ${lb(gte)}` : i === 1 ? `Ayer · ${lb(gte)}` : `${DIA[wd]} ${lb(gte)}`;
+        windows.push({ label, gte, lt });
+      }
+    } else if (group === 'month') {
       for (let i = 5; i >= 0; i--) {
         const gte = dayStartUtc(y, m - i, 1);
         const lt = dayStartUtc(y, m - i + 1, 1);
         const dt = new Date(Date.UTC(y, m - 1 - i, 1));
-        const bd = await this.barberBreakdown(uid, companyId, gte, lt, rates.service, rates.product);
-        periods.push({
+        windows.push({
           label: `${MES[dt.getUTCMonth()]} ${dt.getUTCFullYear()}`,
-          ...bd,
+          gte,
+          lt,
         });
       }
     } else {
       for (let i = 7; i >= 0; i--) {
         const gte = dayStartUtc(y, m, d - dow - i * 7);
         const lt = dayStartUtc(y, m, d - dow - i * 7 + 7);
-        const bd = await this.barberBreakdown(uid, companyId, gte, lt, rates.service, rates.product);
-        periods.push({
+        windows.push({
           label: `${lb(gte)} – ${lb(new Date(lt.getTime() - 86400000))}`,
-          ...bd,
+          gte,
+          lt,
         });
       }
     }
+
+    const periods = await Promise.all(
+      windows.map(async (w) => ({
+        label: w.label,
+        ...(await this.barberBreakdown(
+          uid,
+          companyId,
+          w.gte,
+          w.lt,
+          rates.service,
+          rates.product,
+        )),
+      })),
+    );
+
     return {
       success: true,
       data: periods,
