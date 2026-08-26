@@ -80,6 +80,25 @@ export class StatisticsService {
       _count: { _all: true },
     });
 
+    // Desglose de las ventas de HOY por medio de pago (efectivo, Bancolombia…).
+    const todayByMethodRows = await this.prisma.sale.groupBy({
+      by: ['paymentMethod'],
+      where: {
+        local: { companyId },
+        ...localFilter,
+        saleDate: { gte: start, lt: end },
+        paymentStatus: 'PAGADA' as any,
+      },
+      _sum: { totalAmount: true },
+    });
+    const todayByMethod = todayByMethodRows
+      .map((r) => ({
+        method: r.paymentMethod,
+        total: r._sum.totalAmount || 0,
+      }))
+      .filter((r) => r.total > 0)
+      .sort((a, b) => b.total - a.total);
+
     const [localsCount, productsCount, servicesCount, salesEver] =
       await Promise.all([
         this.prisma.local.count({ where: { companyId } }),
@@ -272,6 +291,7 @@ export class StatisticsService {
         today: {
           total: todayAgg._sum.totalAmount || 0,
           count: todayAgg._count._all,
+          byMethod: todayByMethod,
         },
         setup: {
           locals: localsCount,
