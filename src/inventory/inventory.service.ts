@@ -409,7 +409,8 @@ export class InventoryService {
 
     const where: any = {
       status: 'ACTIVO',
-      minStock: { gt: 0 },
+      // Excluye elaborados sin control de stock (platos): trackStock false.
+      NOT: { trackStock: false },
       local: { companyId: user.companyId },
     };
     if (localIds !== null) {
@@ -434,12 +435,51 @@ export class InventoryService {
           minStock: p.minStock,
           unit: p.unit || 'UNIDAD',
           local: p.local?.name || null,
+          // nº de presentaciones activas: 1 = se puede reponer rápido; >1 (con
+          // colores/tallas) hay que editarlo para saber a cuál sumar.
+          variantsCount: p.variants.length,
         };
       })
-      .filter((p) => p.stock <= p.minStock)
-      .sort((a, b) => a.stock - a.minStock - (b.stock - b.minStock));
+      // Sale si está por debajo de su alerta, o si está AGOTADO (aunque no tenga
+      // alerta configurada: un producto en 0 siempre conviene mostrarlo).
+      .filter((p) => (p.minStock > 0 && p.stock <= p.minStock) || p.stock <= 0)
+      // Los agotados primero; luego por mayor faltante frente al mínimo.
+      .sort((a, b) => {
+        const sa = a.stock <= 0 ? -1e9 : a.stock - a.minStock;
+        const sb = b.stock <= 0 ? -1e9 : b.stock - b.minStock;
+        return sa - sb;
+      });
 
     return { success: true, data: low };
+  }
+
+  // Reponer rápido: suma `amount` al stock de un producto de UNA sola
+  // presentación (sin color/talla). Para productos con varias variantes hay que
+  // usar la edición completa.
+  async restock(id: number, amount: any, user: any) {
+    const qty = Number(amount);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new BadRequestException('La cantidad a reponer debe ser mayor a 0.');
+    }
+    const product = await this.prisma.inventory.findFirst({
+      where: { id, local: { companyId: user.companyId } },
+      include: { variants: { where: { isActive: true } } },
+    });
+    if (!product) throw new NotFoundException('Producto no encontrado');
+    if (product.variants.length !== 1) {
+      throw new BadRequestException(
+        'Este producto tiene varias presentaciones; edítalo para reponer.',
+      );
+    }
+    const variant = product.variants[0];
+    const updated = await this.prisma.inventoryVariant.update({
+      where: { id: variant.id },
+      data: { stock: { increment: qty } },
+    });
+    return {
+      success: true,
+      data: { id, stock: updated.stock, minStock: product.minStock },
+    };
   }
 
   // Productos por vencer: con fecha de vencimiento dentro de los próximos

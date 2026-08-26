@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   UseGuards,
   Put,
+  Patch,
   Req,
   UseInterceptors,
   UploadedFiles,
@@ -94,6 +95,17 @@ export class InventoryController {
     @Req() req,
   ) {
     return this.inventoryService.update(id, dto, req.user);
+  }
+
+  // Reponer rápido stock (solo productos de una sola presentación).
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'BODEGUERO')
+  @Patch(':id/restock')
+  restock(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('amount') amount: number,
+    @Req() req,
+  ) {
+    return this.inventoryService.restock(id, amount, req.user);
   }
 
   @Roles('SUPER_ADMIN')
