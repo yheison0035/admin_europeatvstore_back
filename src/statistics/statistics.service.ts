@@ -455,8 +455,11 @@ export class StatisticsService {
     const tEnd = dayStartUtc(y, m, d + 1);
     const wStart = dayStartUtc(y, m, d - dow);
     const wEnd = dayStartUtc(y, m, d - dow + 7);
-    const moStart = dayStartUtc(y, m, 1);
-    const moEnd = dayStartUtc(y, m + 1, 1);
+    // Cierre de mes del barbero: del 3 de un mes al 2 del siguiente (los
+    // productos se pagan el 3), NO el mes calendario.
+    const cycle = this.commissionMonth(y, m, d);
+    const moStart = cycle.gte;
+    const moEnd = cycle.lt;
 
     // Comisiones del propio usuario.
     const me = await this.prisma.user.findUnique({
@@ -552,9 +555,32 @@ export class StatisticsService {
           earnings: earn(mMonth.services, mMonth.products),
           cuts: mMonth.cuts,
           productShare,
+          range: cycle.range,
+          payDay: cycle.payDay,
         },
       },
     };
+  }
+
+  // Ciclo de cierre de mes del barbero: del 3 de un mes al 2 del siguiente
+  // (los productos se pagan el 3), NO el mes calendario. Devuelve la ventana
+  // [gte, lt) que contiene el día (y,m,d), su etiqueta con fechas y el día de
+  // pago. `back` desplaza a ciclos anteriores (0 = actual, 1 = anterior, …).
+  private commissionMonth(y: number, m: number, d: number, back = 0) {
+    const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    // Mes ancla: si aún no llega el 3, seguimos en el ciclo del mes anterior.
+    const anchor = d >= 3 ? m : m - 1;
+    const gte = dayStartUtc(y, anchor - back, 3);
+    const lt = dayStartUtc(y, anchor - back + 1, 3);
+    const end = new Date(lt.getTime() - 86400000); // el 2 del mes siguiente
+    const gy = gte.getUTCFullYear();
+    const ey = end.getUTCFullYear();
+    const range =
+      gy === ey
+        ? `3 ${MES[gte.getUTCMonth()]} – 2 ${MES[end.getUTCMonth()]} ${ey}`
+        : `3 ${MES[gte.getUTCMonth()]} ${gy} – 2 ${MES[end.getUTCMonth()]} ${ey}`;
+    const payDay = `3 ${MES[lt.getUTCMonth()]}`; // se paga el 3 del mes de cierre
+    return { gte, lt, range, payDay };
   }
 
   // Historial de las últimas 8 semanas (domingo→sábado) del propio usuario, con
@@ -675,10 +701,11 @@ export class StatisticsService {
       lt = dayStartUtc(y, m, d - dow + 7);
       label = `${lb(gte)} – ${lb(new Date(lt.getTime() - 86400000))}`;
     } else if (period === 'month') {
-      gte = dayStartUtc(y, m, 1);
-      lt = dayStartUtc(y, m + 1, 1);
-      const MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-      label = `${MES[m - 1]} ${y}`;
+      // Cierre 3→2 (no mes calendario), con fechas.
+      const cycle = this.commissionMonth(y, m, d);
+      gte = cycle.gte;
+      lt = cycle.lt;
+      label = cycle.range;
     } else {
       gte = dayStartUtc(y, m, d);
       lt = dayStartUtc(y, m, d + 1);
@@ -719,7 +746,6 @@ export class StatisticsService {
       `${String(dt.getUTCDate()).padStart(2, '0')}/${String(
         dt.getUTCMonth() + 1,
       ).padStart(2, '0')}`;
-    const MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
     const rates = await this.barberRates(uid);
     const group =
@@ -739,15 +765,10 @@ export class StatisticsService {
         windows.push({ label, gte, lt });
       }
     } else if (group === 'month') {
+      // 6 cierres 3→2 (actual y anteriores), con sus fechas.
       for (let i = 5; i >= 0; i--) {
-        const gte = dayStartUtc(y, m - i, 1);
-        const lt = dayStartUtc(y, m - i + 1, 1);
-        const dt = new Date(Date.UTC(y, m - 1 - i, 1));
-        windows.push({
-          label: `${MES[dt.getUTCMonth()]} ${dt.getUTCFullYear()}`,
-          gte,
-          lt,
-        });
+        const c = this.commissionMonth(y, m, d, i);
+        windows.push({ label: c.range, gte: c.gte, lt: c.lt });
       }
     } else {
       for (let i = 7; i >= 0; i--) {
