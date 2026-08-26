@@ -560,87 +560,198 @@ export class StatisticsService {
   // Historial de las últimas 8 semanas (domingo→sábado) del propio usuario, con
   // su GANANCIA (comisión), cuántos cortes y CUÁLES servicios hizo. Solo se
   // muestran montos de lo que él gana, no el bruto del negocio.
-  async myWeeklyHistory(user: any) {
-    const uid = user.id;
-    const companyId = user.companyId;
-    const today = colombiaDay(new Date());
-    const [y, m, d] = today.split('-').map(Number);
-    const notCanceled = {
-      notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any,
-    };
-    const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
-    const r2 = (n: number) => Math.round(n * 100) / 100;
-    const label = (dt: Date) =>
-      `${String(dt.getUTCDate()).padStart(2, '0')}/${String(
-        dt.getUTCMonth() + 1,
-      ).padStart(2, '0')}`;
-
+  // Comisiones del propio usuario (o null si no están configuradas).
+  private async barberRates(uid: number) {
     const me = await this.prisma.user.findUnique({
       where: { id: uid },
       select: { commissionServiceRate: true, commissionProductRate: true },
     });
-    const svcRate =
+    const service =
       me?.commissionServiceRate != null ? Number(me.commissionServiceRate) : null;
-    const prodRate =
+    const product =
       me?.commissionProductRate != null ? Number(me.commissionProductRate) : null;
-    const ratesConfigured = svcRate != null && prodRate != null;
+    return { service, product, configured: service != null && product != null };
+  }
 
-    const weeks: any[] = [];
-    for (let i = 7; i >= 0; i--) {
-      const wStart = dayStartUtc(y, m, d - dow - i * 7);
-      const wEnd = dayStartUtc(y, m, d - dow - i * 7 + 7);
-      const sales = await this.prisma.sale.findMany({
-        where: {
-          userId: uid,
-          local: { companyId },
-          paymentStatus: 'PAGADA' as any,
-          saleStatus: notCanceled,
-          saleDate: { gte: wStart, lt: wEnd },
-        },
-        select: {
-          items: {
-            select: {
-              subtotal: true,
-              quantity: true,
-              serviceId: true,
-              inventoryVariantId: true,
-              service: { select: { name: true } },
-            },
+  // Trae las ventas del barbero en un rango y desglosa CORTES y PRODUCTOS con
+  // cuántos, cuáles y cuánto GANA él en cada uno.
+  private async barberBreakdown(
+    uid: number,
+    companyId: number,
+    gte: Date,
+    lt: Date,
+    svcRate: number | null,
+    prodRate: number | null,
+  ) {
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const sales = await this.prisma.sale.findMany({
+      where: {
+        userId: uid,
+        local: { companyId },
+        paymentStatus: 'PAGADA' as any,
+        saleStatus: { notIn: ['CANCELADA', 'RECHAZADA', 'DEVUELTA'] as any },
+        saleDate: { gte, lt },
+      },
+      select: {
+        items: {
+          select: {
+            subtotal: true,
+            quantity: true,
+            serviceId: true,
+            inventoryVariantId: true,
+            service: { select: { name: true } },
+            variant: { select: { inventory: { select: { name: true } } } },
           },
         },
-      });
+      },
+    });
 
-      // Agrupa por servicio: cuántos y cuánto GANA en cada uno.
-      const svc = new Map<string, { name: string; qty: number; earn: number }>();
-      let cuts = 0;
-      for (const s of sales) {
-        for (const it of s.items) {
-          if (it.serviceId) {
-            const name = it.service?.name || 'Servicio';
-            const earn = svcRate != null ? (it.subtotal || 0) * (svcRate / 100) : 0;
-            const cur = svc.get(name) || { name, qty: 0, earn: 0 };
-            cur.qty += it.quantity || 0;
-            cur.earn += earn;
-            svc.set(name, cur);
-            cuts += it.quantity || 0;
-          }
+    const svc = new Map<string, { name: string; qty: number; earn: number }>();
+    const prod = new Map<string, { name: string; qty: number; earn: number }>();
+    let cuts = 0;
+    let productUnits = 0;
+    for (const s of sales) {
+      for (const it of s.items) {
+        const gross = it.subtotal || 0;
+        const qty = it.quantity || 0;
+        if (it.serviceId) {
+          const name = it.service?.name || 'Servicio';
+          const earn = svcRate != null ? (gross * svcRate) / 100 : 0;
+          const c = svc.get(name) || { name, qty: 0, earn: 0 };
+          c.qty += qty;
+          c.earn += earn;
+          svc.set(name, c);
+          cuts += qty;
+        } else if (it.inventoryVariantId) {
+          const name = it.variant?.inventory?.name || 'Producto';
+          const earn = prodRate != null ? (gross * prodRate) / 100 : 0;
+          const c = prod.get(name) || { name, qty: 0, earn: 0 };
+          c.qty += qty;
+          c.earn += earn;
+          prod.set(name, c);
+          productUnits += qty;
         }
       }
-      const services = [...svc.values()]
-        .map((x) => ({ name: x.name, qty: x.qty, earn: r2(x.earn) }))
-        .sort((a, b) => b.earn - a.earn);
-      // El historial semanal muestra la comisión de CORTES (los productos se
-      // pagan aparte, mensual el día 3).
-      const serviceEarn = services.reduce((a, x) => a + x.earn, 0);
-
-      weeks.push({
-        label: `${label(wStart)} – ${label(new Date(wEnd.getTime() - 86400000))}`,
-        cuts,
-        services,
-        earnings: r2(serviceEarn),
-      });
     }
-    return { success: true, data: weeks, ratesConfigured };
+    const services = [...svc.values()]
+      .map((x) => ({ name: x.name, qty: x.qty, earn: r2(x.earn) }))
+      .sort((a, b) => b.earn - a.earn);
+    const products = [...prod.values()]
+      .map((x) => ({ name: x.name, qty: x.qty, earn: r2(x.earn) }))
+      .sort((a, b) => b.earn - a.earn);
+    const serviceEarn = r2(services.reduce((a, x) => a + x.earn, 0));
+    const productEarn = r2(products.reduce((a, x) => a + x.earn, 0));
+    return {
+      cuts,
+      productUnits,
+      services,
+      products,
+      serviceEarn,
+      productEarn,
+      earnings: r2(serviceEarn + productEarn),
+    };
+  }
+
+  // Detalle del propio barbero para HOY / SEMANA (dom→sáb) / MES: qué cortes y
+  // qué productos, con lo que gana en cada uno.
+  async myDetail(user: any, periodRaw?: string) {
+    const uid = user.id;
+    const companyId = user.companyId;
+    const today = colombiaDay(new Date());
+    const [y, m, d] = today.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+    const lb = (dt: Date) =>
+      `${String(dt.getUTCDate()).padStart(2, '0')}/${String(
+        dt.getUTCMonth() + 1,
+      ).padStart(2, '0')}`;
+
+    const period =
+      periodRaw === 'week' || periodRaw === 'month' ? periodRaw : 'today';
+    let gte: Date;
+    let lt: Date;
+    let label: string;
+    if (period === 'week') {
+      gte = dayStartUtc(y, m, d - dow);
+      lt = dayStartUtc(y, m, d - dow + 7);
+      label = `${lb(gte)} – ${lb(new Date(lt.getTime() - 86400000))}`;
+    } else if (period === 'month') {
+      gte = dayStartUtc(y, m, 1);
+      lt = dayStartUtc(y, m + 1, 1);
+      const MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+      label = `${MES[m - 1]} ${y}`;
+    } else {
+      gte = dayStartUtc(y, m, d);
+      lt = dayStartUtc(y, m, d + 1);
+      label = 'Hoy';
+    }
+
+    const rates = await this.barberRates(uid);
+    const bd = await this.barberBreakdown(
+      uid,
+      companyId,
+      gte,
+      lt,
+      rates.service,
+      rates.product,
+    );
+    return {
+      success: true,
+      data: {
+        period,
+        label,
+        ratesConfigured: rates.configured,
+        rates: { service: rates.service, product: rates.product },
+        ...bd,
+      },
+    };
+  }
+
+  // Historial del barbero agrupado por SEMANA (8 últimas, dom→sáb) o por MES
+  // (6 últimos), con su ganancia y el desglose de cortes y productos.
+  async myHistory(user: any, groupRaw?: string) {
+    const uid = user.id;
+    const companyId = user.companyId;
+    const today = colombiaDay(new Date());
+    const [y, m, d] = today.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+    const lb = (dt: Date) =>
+      `${String(dt.getUTCDate()).padStart(2, '0')}/${String(
+        dt.getUTCMonth() + 1,
+      ).padStart(2, '0')}`;
+    const MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+    const rates = await this.barberRates(uid);
+    const group = groupRaw === 'month' ? 'month' : 'week';
+    const periods: any[] = [];
+
+    if (group === 'month') {
+      for (let i = 5; i >= 0; i--) {
+        const gte = dayStartUtc(y, m - i, 1);
+        const lt = dayStartUtc(y, m - i + 1, 1);
+        const dt = new Date(Date.UTC(y, m - 1 - i, 1));
+        const bd = await this.barberBreakdown(uid, companyId, gte, lt, rates.service, rates.product);
+        periods.push({
+          label: `${MES[dt.getUTCMonth()]} ${dt.getUTCFullYear()}`,
+          ...bd,
+        });
+      }
+    } else {
+      for (let i = 7; i >= 0; i--) {
+        const gte = dayStartUtc(y, m, d - dow - i * 7);
+        const lt = dayStartUtc(y, m, d - dow - i * 7 + 7);
+        const bd = await this.barberBreakdown(uid, companyId, gte, lt, rates.service, rates.product);
+        periods.push({
+          label: `${lb(gte)} – ${lb(new Date(lt.getTime() - 86400000))}`,
+          ...bd,
+        });
+      }
+    }
+    return {
+      success: true,
+      data: periods,
+      group,
+      ratesConfigured: rates.configured,
+    };
   }
 
   // Cumpleaños del EQUIPO (usuarios del local del que consulta; si no tiene

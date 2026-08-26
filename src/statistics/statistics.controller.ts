@@ -105,8 +105,28 @@ export class StatisticsController {
     'COCINERO',
     'PROFESIONAL',
   )
-  @Get('my-weekly-history')
-  myWeeklyHistory(@Req() req) {
-    return this.statisticsService.myWeeklyHistory(req.user);
+  @Get('my-detail')
+  myDetail(@Req() req, @Query('period') period?: string) {
+    return this.statisticsService.myDetail(req.user, period);
+  }
+
+  @Roles(
+    'SUPER_ADMIN',
+    'ADMIN',
+    'COORDINADOR',
+    'RECEPCIONISTA',
+    'ASESOR',
+    'AUXILIAR',
+    'BODEGUERO',
+    'VENTAS',
+    'BARBERO',
+    'CAJA',
+    'MESERO',
+    'COCINERO',
+    'PROFESIONAL',
+  )
+  @Get('my-history')
+  myHistory(@Req() req, @Query('group') group?: string) {
+    return this.statisticsService.myHistory(req.user, group);
   }
 }
