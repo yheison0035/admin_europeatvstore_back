@@ -65,7 +65,11 @@ export class StatisticsController {
     'PROFESIONAL',
   )
   @Get('sales-trend')
-  salesTrend(@Req() req, @Query('period') period?: string) {
-    return this.statisticsService.salesTrend(req.user, period);
+  salesTrend(
+    @Req() req,
+    @Query('period') period?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.statisticsService.salesTrend(req.user, period, offset);
   }
 }

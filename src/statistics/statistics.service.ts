@@ -300,10 +300,18 @@ export class StatisticsService {
   //   'week'  → últimos 7 días (diario)
   //   'month' → últimos 30 días (diario)
   //   'year'  → últimos 12 meses (mensual)
-  async salesTrend(user: any, period?: string) {
+  async salesTrend(user: any, period?: string, offsetRaw?: any) {
     const companyId = user.companyId;
     const today = colombiaDay(new Date());
     const [y, m, d] = today.split('-').map(Number);
+    // offset: cuántos periodos hacia ATRÁS (0 = actual). No se permite futuro.
+    const offset = Math.max(0, Math.floor(Number(offsetRaw) || 0));
+    const rangeLabel = (
+      buckets: { label: string }[],
+    ): string =>
+      buckets.length
+        ? `${buckets[0].label} – ${buckets[buckets.length - 1].label}`
+        : '';
     const accessible = await getAccessibleLocalIds(this.prisma, user);
     const localFilter: any = accessible ? { localId: { in: accessible } } : {};
     const baseWhere: any = {
@@ -331,8 +339,9 @@ export class StatisticsService {
     const p = period === 'month' || period === 'year' ? period : 'week';
 
     if (p === 'year') {
-      const start = dayStartUtc(y, m - 11, 1);
-      const end = dayStartUtc(y, m + 1, 1);
+      const mShift = m - offset * 12; // desplaza 12 meses por cada offset
+      const start = dayStartUtc(y, mShift - 11, 1);
+      const end = dayStartUtc(y, mShift + 1, 1);
       const rows = await this.prisma.sale.findMany({
         where: { ...baseWhere, saleDate: { gte: start, lt: end } },
         select: { saleDate: true, totalAmount: true },
@@ -343,7 +352,7 @@ export class StatisticsService {
       ];
       const buckets: { key: string; label: string; total: number }[] = [];
       for (let i = 11; i >= 0; i--) {
-        const dt = new Date(Date.UTC(y, m - 1 - i, 1));
+        const dt = new Date(Date.UTC(y, mShift - 1 - i, 1));
         const mo = dt.getUTCMonth();
         const yr = dt.getUTCFullYear();
         buckets.push({
@@ -358,20 +367,29 @@ export class StatisticsService {
         const b = map.get(key);
         if (b) b.total += s.totalAmount || 0;
       }
-      return { success: true, data: shape(buckets), period: p, values: canSeeMoney };
+      return {
+        success: true,
+        data: shape(buckets),
+        period: p,
+        values: canSeeMoney,
+        offset,
+        canForward: offset > 0,
+        rangeLabel: rangeLabel(buckets),
+      };
     }
 
     // week / month (diario)
     const nDays = p === 'month' ? 30 : 7;
-    const start = dayStartUtc(y, m, d - (nDays - 1));
-    const end = dayStartUtc(y, m, d + 1);
+    const dShift = d - offset * nDays; // desplaza la ventana por cada offset
+    const start = dayStartUtc(y, m, dShift - (nDays - 1));
+    const end = dayStartUtc(y, m, dShift + 1);
     const rows = await this.prisma.sale.findMany({
       where: { ...baseWhere, saleDate: { gte: start, lt: end } },
       select: { saleDate: true, totalAmount: true },
     });
     const buckets: { key: string; label: string; total: number }[] = [];
     for (let i = nDays - 1; i >= 0; i--) {
-      const cd = colombiaDay(dayStartUtc(y, m, d - i)); // YYYY-MM-DD
+      const cd = colombiaDay(dayStartUtc(y, m, dShift - i)); // YYYY-MM-DD
       buckets.push({
         key: cd,
         label: `${cd.slice(8)}/${cd.slice(5, 7)}`,
@@ -383,7 +401,15 @@ export class StatisticsService {
       const b = map.get(colombiaDay(s.saleDate));
       if (b) b.total += s.totalAmount || 0;
     }
-    return { success: true, data: shape(buckets), period: p, values: canSeeMoney };
+    return {
+      success: true,
+      data: shape(buckets),
+      period: p,
+      values: canSeeMoney,
+      offset,
+      canForward: offset > 0,
+      rangeLabel: rangeLabel(buckets),
+    };
   }
 
   private async dashboardInternal(user: any, dto: any) {
