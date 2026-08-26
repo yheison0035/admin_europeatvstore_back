@@ -275,6 +275,10 @@ export class StatisticsService {
         },
         select: { id: true, name: true, birthdate: true },
       });
+      const MESES = [
+        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+      ];
       teamBirthdays = teamRows
         .map((u) => {
           const bd = new Date(u.birthdate as Date);
@@ -282,10 +286,12 @@ export class StatisticsService {
           const da = bd.getUTCDate();
           // días aproximados hasta el próximo cumpleaños (para ordenar)
           const nextIn = ((mo - m) * 31 + (da - d) + 372) % 372;
+          // año del PRÓXIMO cumpleaños (este año si aún no pasa, si no el siguiente)
+          const yr = mo > m || (mo === m && da >= d) ? y : y + 1;
           return {
             id: u.id,
             name: u.name,
-            date: `${String(da).padStart(2, '0')}/${String(mo).padStart(2, '0')}`,
+            date: `${da} de ${MESES[mo - 1]} de ${yr}`,
             nextIn,
           };
         })
