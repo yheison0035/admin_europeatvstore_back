@@ -6,6 +6,9 @@ import {
   IsEnum,
   IsDateString,
   IsInt,
+  IsNumber,
+  Min,
+  Max,
 } from 'class-validator';
 import { Role, Status } from '@prisma/client';
 
@@ -62,4 +65,17 @@ export class UpdateUserDto {
   @IsOptional()
   @IsInt()
   localId?: number;
+
+  // Comisiones (porcentaje 0–100). null = borrar/sin configurar.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  commissionServiceRate?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  commissionProductRate?: number | null;
 }

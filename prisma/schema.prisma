@@ -354,6 +354,12 @@ model User {
   password   String
   avatar     String?
 
+  // Comisiones del empleado (porcentaje 0–100). NULL = sin configurar: no se
+  // calcula ganancia y se avisa al administrador. Aplica a cualquier empleado
+  // que preste servicios o venda productos (dinámico, no solo barberos).
+  commissionServiceRate Decimal? @db.Decimal(5, 2) // % por servicios/cortes
+  commissionProductRate Decimal? @db.Decimal(5, 2) // % por productos
+
   // Código OTP para restablecer contraseña por celular (WhatsApp)
   resetOtpHash     String?
   resetOtpExpires  DateTime?
