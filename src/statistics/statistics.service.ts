@@ -261,6 +261,41 @@ export class StatisticsService {
       birthdays = [];
     }
 
+    // ---- Cumpleaños del EQUIPO (usuarios del local al que pertenece quien
+    // consulta; si no tiene local, todo el equipo de la empresa). Se listan
+    // todos con su fecha, ordenados por el próximo en cumplir. ----
+    let teamBirthdays: { id: number; name: string; date: string }[] = [];
+    try {
+      const teamRows = await this.prisma.user.findMany({
+        where: {
+          companyId,
+          status: 'ACTIVO' as any,
+          birthdate: { not: null },
+          ...(user.localId ? { localId: user.localId } : {}),
+        },
+        select: { id: true, name: true, birthdate: true },
+      });
+      teamBirthdays = teamRows
+        .map((u) => {
+          const bd = new Date(u.birthdate as Date);
+          const mo = bd.getUTCMonth() + 1;
+          const da = bd.getUTCDate();
+          // días aproximados hasta el próximo cumpleaños (para ordenar)
+          const nextIn = ((mo - m) * 31 + (da - d) + 372) % 372;
+          return {
+            id: u.id,
+            name: u.name,
+            date: `${String(da).padStart(2, '0')}/${String(mo).padStart(2, '0')}`,
+            nextIn,
+          };
+        })
+        .sort((a, b) => a.nextIn - b.nextIn)
+        .slice(0, 15)
+        .map(({ nextIn, ...rest }) => rest);
+    } catch (_) {
+      teamBirthdays = [];
+    }
+
     // ---- Próximas citas (solo verticales de servicios/agenda) ----
     let nextAppointments: any[] = [];
     if (isServices) {
@@ -311,6 +346,7 @@ export class StatisticsService {
         overdue: { total: r2(overdueTotal), count: overdueCount },
         winbackCount,
         birthdays,
+        teamBirthdays,
         nextAppointments,
       },
     };
