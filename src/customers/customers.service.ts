@@ -104,6 +104,20 @@ export class CustomersService {
       }
     }
 
+    // Origen del cliente. El filtro es un texto libre: se mapea a la enum por
+    // palabras amigables ("tienda", "online", "ecommerce" → ECOMMERCE; "crm",
+    // "manual", "negocio" → CRM).
+    if (query.source) {
+      const raw = String(query.source).toLowerCase();
+      if (/(tienda|online|ecom|web)/.test(raw)) {
+        where.source = 'ECOMMERCE';
+      } else if (/(crm|manual|negocio)/.test(raw)) {
+        where.source = 'CRM';
+      } else if (raw === 'ecommerce' || raw === 'crm') {
+        where.source = raw.toUpperCase();
+      }
+    }
+
     // Excluye SOLO al consumidor final. Se incluye document NULL, porque
     // `document <> '222...'` en SQL descarta los NULL sin querer.
     const customerWhere = {

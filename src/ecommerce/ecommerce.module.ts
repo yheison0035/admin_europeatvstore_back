@@ -1,12 +1,34 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EcommerceService } from './ecommerce.service';
 import { EcommerceController } from './ecommerce.controller';
+import { CustomerAuthService } from './customer-auth.service';
+import { CustomerJwtGuard } from '@/common/guards/customer-jwt.guard';
 import { PrismaService } from '@/prisma.service';
 import { WebsiteModule } from '@/modules/website/website.module';
 
 @Module({
-  imports: [WebsiteModule],
+  imports: [
+    WebsiteModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const secret = config.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error('JWT_SECRET no está definido');
+        }
+        return { secret };
+      },
+    }),
+  ],
   controllers: [EcommerceController],
-  providers: [EcommerceService, PrismaService],
+  providers: [
+    EcommerceService,
+    CustomerAuthService,
+    CustomerJwtGuard,
+    PrismaService,
+  ],
 })
 export class EcommerceModule {}

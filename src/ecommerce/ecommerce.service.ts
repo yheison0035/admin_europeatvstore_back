@@ -686,11 +686,15 @@ export class EcommerceService {
     return letters.slice(0, 3) || 'WEB';
   }
 
-  async createOrder(dto: CreateEcommerceOrderDto, website: WebsiteContext) {
+  async createOrder(
+    dto: CreateEcommerceOrderDto,
+    website: WebsiteContext,
+    loggedCustomerId: number | null = null,
+  ) {
     const { localId } = website;
 
     return this.prisma.$transaction(async (tx) => {
-      /**  CLIENTE ECOMMERCE */
+      /**  CLIENTE ECOMMERCE (perfil de envío/facturación) */
       let ecommerceCustomer = await tx.ecommerceCustomer.findUnique({
         where: { email: dto.customer.email },
       });
@@ -716,7 +720,14 @@ export class EcommerceService {
             billingAddress: dto.customer.billingAddress,
             isHardToAccess: dto.customer.isHardToAccess ?? false,
             localId: localId,
+            customerId: loggedCustomerId ?? undefined,
           },
+        });
+      } else if (loggedCustomerId && !ecommerceCustomer.customerId) {
+        // Enlaza el perfil de tienda al cliente del CRM cuando inicia sesión.
+        ecommerceCustomer = await tx.ecommerceCustomer.update({
+          where: { id: ecommerceCustomer.id },
+          data: { customerId: loggedCustomerId },
         });
       }
 
@@ -783,7 +794,9 @@ export class EcommerceService {
       total += shippingCost;
 
       /** ACTORES DEL CHECKOUT (se crean/resuelven si la empresa no los tenía) */
-      let crmCustomerId = website.customerId;
+      // Si el cliente inició sesión, el pedido queda a SU nombre; si no, cae en
+      // "Consumidor Final".
+      let crmCustomerId = loggedCustomerId || website.customerId;
       if (!crmCustomerId) {
         const cf = await tx.customer.upsert({
           where: {

@@ -406,6 +406,14 @@ model Customer {
   address       String?
   status        Status  @default(ACTIVO)
 
+  // Origen del cliente: creado en el CRM por el negocio, o registrado desde la
+  // tienda online (ecommerce). Sirve para saber de dónde viene cada cliente.
+  source CustomerSource @default(CRM)
+
+  // Contraseña (hash bcrypt) solo para clientes que inician sesión en la tienda
+  // online. Los clientes creados por el CRM la tienen en null.
+  password String?
+
   // Fecha de nacimiento (para campañas de cumpleaños) y notas del asesor
   // (preferencias, observaciones del cliente).
   birthday DateTime?
@@ -434,10 +442,19 @@ model Customer {
   appointments Appointment[]
   quotes       Quote[]
 
+  // Perfil(es) de la tienda online (datos de envío/facturación) enlazados a
+  // este cliente del CRM.
+  ecommerceProfiles EcommerceCustomer[] @relation("CustomerEcommerceProfiles")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([document, companyId])
+}
+
+enum CustomerSource {
+  CRM
+  ECOMMERCE
 }
 
 //////////////////////////////////////////////////
@@ -833,6 +850,11 @@ model EcommerceCustomer {
   isHardToAccess Boolean @default(false)
 
   localId Int @default(3)
+
+  // Cliente del CRM (identidad unificada) al que pertenece este perfil de
+  // tienda. Se enlaza cuando el cliente se registra/inicia sesión o al comprar.
+  customerId Int?
+  customer   Customer? @relation("CustomerEcommerceProfiles", fields: [customerId], references: [id], onDelete: SetNull)
 
   orders Sale[] @relation("EcommerceOrders")
 
