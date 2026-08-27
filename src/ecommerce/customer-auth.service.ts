@@ -237,7 +237,7 @@ export class CustomerAuthService {
     const normalized = this.normalizeEmail(email);
     const customer = await this.findByEmail(website.companyId, normalized);
 
-    if (customer) {
+    if (customer && customer.email) {
       const token = await this.jwt.signAsync(
         { sub: customer.id, companyId: website.companyId, kind: 'customer-reset' },
         { secret: this.resetSecret(customer.password), expiresIn: '30m' },
