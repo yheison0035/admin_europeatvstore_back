@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
 import { MailService } from '@/mail/mail.service';
+import { WebsiteService } from '@/modules/website/website.service';
 import { WebsiteContext } from '@/modules/website/interfaces/website-context.interface';
 import {
   LoginCustomerDto,
@@ -23,6 +24,7 @@ export class CustomerAuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly mail: MailService,
+    private readonly website: WebsiteService,
   ) {}
 
   private normalizeEmail(email: string) {
@@ -300,59 +302,124 @@ export class CustomerAuthService {
     };
   }
 
-  // ---- Inicio/registro con Google ----
+  // ---- Inicio/registro con Google (flujo por redirección, MULTI-TENANT) ----
+  //
+  // No usa el botón client-side (que exige registrar cada dominio en Google).
+  // Un solo callback central (el backend) sirve para CUALQUIER dominio: la
+  // tienda manda a /google/start?return=<su-origen>, el usuario entra en Google,
+  // Google vuelve al callback del backend, y el backend devuelve al cliente a su
+  // propio dominio ya con la sesión.
 
-  async googleAuth(credential: string, website: WebsiteContext) {
-    // Client ID público (mismo que usa la tienda). Sobreescribible por env
-    // GOOGLE_CLIENT_ID. Solo se usa para validar el `aud` del ID token.
-    const clientId =
+  private googleClientId() {
+    return (
       process.env.GOOGLE_CLIENT_ID ||
-      '763872388804-5p6fncsiplu0n7iirhbg1bdvjk0dcm38.apps.googleusercontent.com';
+      '763872388804-5p6fncsiplu0n7iirhbg1bdvjk0dcm38.apps.googleusercontent.com'
+    );
+  }
 
-    // Verificación del ID token contra Google (valida firma y expiración).
-    let payload: any;
-    try {
-      const res = await fetch(
-        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(
-          credential,
-        )}`,
-      );
-      payload = await res.json();
-    } catch {
-      throw new UnauthorizedException('No se pudo validar la cuenta de Google.');
-    }
+  private googleRedirectUri() {
+    return (
+      process.env.GOOGLE_REDIRECT_URI ||
+      'https://admineuropeatvstoreback-production.up.railway.app/ecommerce/auth/google/callback'
+    );
+  }
 
-    const audOk = payload?.aud === clientId;
-    const emailVerified =
-      payload?.email_verified === true || payload?.email_verified === 'true';
-    if (!payload?.email || !audOk || !emailVerified) {
-      throw new UnauthorizedException('Cuenta de Google inválida.');
-    }
-
-    const email = this.normalizeEmail(payload.email);
-    const name = payload.name || payload.given_name || email.split('@')[0];
-    const companyId = website.companyId;
-
+  private async findOrCreateEcommerceCustomer(
+    email: string,
+    name: string,
+    companyId: number,
+    localId: number,
+  ) {
     let customer = await this.findByEmail(companyId, email);
     if (!customer) {
       customer = await this.prisma.customer.create({
-        data: {
-          name,
-          email,
-          companyId,
-          localId: website.localId,
-          source: 'ECOMMERCE',
-        },
+        data: { name, email, companyId, localId, source: 'ECOMMERCE' },
       });
     }
+    return customer;
+  }
 
-    return {
-      success: true,
-      data: {
-        access_token: await this.signToken(customer),
-        customer: this.safe(customer),
-      },
-    };
+  // Construye la URL de Google a la que se envía al usuario. `returnOrigin` es
+  // el origen de la tienda (https://dominio) al que hay que devolverlo.
+  async buildGoogleAuthUrl(returnOrigin: string) {
+    if (!returnOrigin || !/^https?:\/\//.test(returnOrigin)) {
+      throw new UnauthorizedException('Origen de retorno inválido.');
+    }
+    const state = await this.jwt.signAsync(
+      { r: returnOrigin.replace(/\/+$/, ''), kind: 'goauth' },
+      { expiresIn: '10m' },
+    );
+    const params = new URLSearchParams({
+      client_id: this.googleClientId(),
+      redirect_uri: this.googleRedirectUri(),
+      response_type: 'code',
+      scope: 'openid email profile',
+      state,
+      prompt: 'select_account',
+      access_type: 'online',
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  // Procesa el retorno de Google. Devuelve la URL a la que redirigir el
+  // navegador (siempre el dominio de la tienda que inició el flujo).
+  async handleGoogleCallback(code: string, state: string): Promise<string> {
+    let returnOrigin: string;
+    try {
+      const decoded: any = await this.jwt.verifyAsync(state);
+      if (decoded?.kind !== 'goauth' || !decoded?.r) throw new Error();
+      returnOrigin = String(decoded.r).replace(/\/+$/, '');
+    } catch {
+      throw new UnauthorizedException('Sesión de Google expirada.');
+    }
+
+    const fail = `${returnOrigin}/mi-cuenta?gerror=1`;
+    if (!code) return fail;
+
+    try {
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: this.googleClientId(),
+          client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+          code,
+          grant_type: 'authorization_code',
+          redirect_uri: this.googleRedirectUri(),
+        }),
+      });
+      const tokenData: any = await tokenRes.json();
+      if (!tokenData?.id_token) return fail;
+
+      const payload: any = this.jwt.decode(tokenData.id_token);
+      const emailVerified =
+        payload?.email_verified === true ||
+        payload?.email_verified === 'true';
+      if (
+        !payload?.email ||
+        payload?.aud !== this.googleClientId() ||
+        !emailVerified
+      ) {
+        return fail;
+      }
+
+      const host = returnOrigin.replace(/^https?:\/\//, '');
+      const site = await this.website.resolveCompany(host);
+
+      const email = this.normalizeEmail(payload.email);
+      const name = payload.name || payload.given_name || email.split('@')[0];
+      const customer = await this.findOrCreateEcommerceCustomer(
+        email,
+        name,
+        site.companyId,
+        site.localId,
+      );
+
+      const token = await this.signToken(customer);
+      return `${returnOrigin}/mi-cuenta?gtoken=${encodeURIComponent(token)}`;
+    } catch {
+      return fail;
+    }
   }
 
   // Decodifica de forma OPCIONAL el token de cliente (para enlazar el pedido en

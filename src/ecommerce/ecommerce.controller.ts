@@ -7,15 +7,16 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { EcommerceService } from './ecommerce.service';
 import { CustomerAuthService } from './customer-auth.service';
 import { Public } from '@/auth/decorators/public.decorator';
 import { CreateEcommerceOrderDto } from './dto/create-ecommerce-order.dto';
 import {
   ForgotPasswordDto,
-  GoogleAuthDto,
   LoginCustomerDto,
   RegisterCustomerDto,
   ResetPasswordDto,
@@ -147,14 +148,29 @@ export class EcommerceController {
     return this.customerAuth.login(dto, website);
   }
 
+  // Google multi-tenant: la tienda abre esta URL con ?return=<su-origen>.
   @Public()
-  @UseGuards(WebsiteGuard)
-  @Post('auth/google')
-  googleAuth(
-    @Body() dto: GoogleAuthDto,
-    @Website() website: WebsiteContext,
+  @Get('auth/google/start')
+  async googleStart(@Query('return') ret: string, @Res() res: Response) {
+    try {
+      const url = await this.customerAuth.buildGoogleAuthUrl(ret);
+      return res.redirect(url);
+    } catch {
+      const back = ret && /^https?:\/\//.test(ret) ? ret : '';
+      return res.redirect(`${back}/mi-cuenta?gerror=1`);
+    }
+  }
+
+  // Callback ÚNICO al que vuelve Google para todos los dominios.
+  @Public()
+  @Get('auth/google/callback')
+  async googleCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res() res: Response,
   ) {
-    return this.customerAuth.googleAuth(dto.credential, website);
+    const url = await this.customerAuth.handleGoogleCallback(code, state);
+    return res.redirect(url);
   }
 
   @Public()
