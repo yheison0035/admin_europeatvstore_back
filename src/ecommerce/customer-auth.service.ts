@@ -244,8 +244,15 @@ export class CustomerAuthService {
       );
       const base = `https://${website.domain}`;
       const resetUrl = `${base}/restablecer?token=${token}`;
+      const c: any = website.company || {};
       await this.mail
-        .sendPasswordReset(customer.email, resetUrl, customer.name)
+        .sendCustomerPasswordReset(customer.email, resetUrl, {
+          companyName: c.websiteName || c.name || undefined,
+          logo: c.logo || null,
+          accentColor: c.ctaColor || c.primaryColor || c.accentColor || null,
+          customerName: customer.name,
+          supportEmail: c.email || null,
+        })
         .catch(() => null);
     }
 
