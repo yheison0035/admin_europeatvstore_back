@@ -6,6 +6,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
+import { MailService } from '@/mail/mail.service';
 import { WebsiteContext } from '@/modules/website/interfaces/website-context.interface';
 import {
   LoginCustomerDto,
@@ -21,6 +22,7 @@ export class CustomerAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly mail: MailService,
   ) {}
 
   private normalizeEmail(email: string) {
@@ -217,6 +219,141 @@ export class CustomerAuthService {
       data,
     });
     return { success: true, data: { customer: this.safe(updated) } };
+  }
+
+  // ---- Restablecer contraseña por correo ----
+
+  // Secreto por-cliente: incluye el hash actual de la contraseña, así el enlace
+  // deja de servir en cuanto la contraseña cambia (single-use).
+  private resetSecret(passwordHash: string | null) {
+    return (process.env.JWT_SECRET || '') + (passwordHash || 'sin-clave');
+  }
+
+  // Envía el enlace de restablecimiento. Responde igual exista o no el correo
+  // (no se revela si un correo está registrado).
+  async forgotPassword(email: string, website: WebsiteContext) {
+    const normalized = this.normalizeEmail(email);
+    const customer = await this.findByEmail(website.companyId, normalized);
+
+    if (customer) {
+      const token = await this.jwt.signAsync(
+        { sub: customer.id, companyId: website.companyId, kind: 'customer-reset' },
+        { secret: this.resetSecret(customer.password), expiresIn: '30m' },
+      );
+      const base = `https://${website.domain}`;
+      const resetUrl = `${base}/restablecer?token=${token}`;
+      await this.mail
+        .sendPasswordReset(customer.email, resetUrl, customer.name)
+        .catch(() => null);
+    }
+
+    return {
+      success: true,
+      message:
+        'Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña.',
+    };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    // Se decodifica sin verificar para saber a qué cliente pertenece y así
+    // reconstruir su secreto (que depende de su hash actual).
+    let decoded: any;
+    try {
+      decoded = this.jwt.decode(token);
+    } catch {
+      decoded = null;
+    }
+    if (!decoded?.sub || decoded?.kind !== 'customer-reset') {
+      throw new UnauthorizedException('Enlace inválido o expirado.');
+    }
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: Number(decoded.sub) },
+      omit: { password: false },
+    });
+    if (!customer) {
+      throw new UnauthorizedException('Enlace inválido o expirado.');
+    }
+
+    // Verifica firma + expiración con el secreto por-cliente.
+    try {
+      await this.jwt.verifyAsync(token, {
+        secret: this.resetSecret(customer.password),
+      });
+    } catch {
+      throw new UnauthorizedException('El enlace expiró o ya fue usado.');
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    const updated = await this.prisma.customer.update({
+      where: { id: customer.id },
+      data: { password: hash },
+    });
+
+    return {
+      success: true,
+      message: 'Tu contraseña fue actualizada. Ya puedes iniciar sesión.',
+      data: {
+        access_token: await this.signToken(updated),
+        customer: this.safe(updated),
+      },
+    };
+  }
+
+  // ---- Inicio/registro con Google ----
+
+  async googleAuth(credential: string, website: WebsiteContext) {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      throw new UnauthorizedException(
+        'El acceso con Google no está configurado.',
+      );
+    }
+
+    // Verificación del ID token contra Google (valida firma y expiración).
+    let payload: any;
+    try {
+      const res = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(
+          credential,
+        )}`,
+      );
+      payload = await res.json();
+    } catch {
+      throw new UnauthorizedException('No se pudo validar la cuenta de Google.');
+    }
+
+    const audOk = payload?.aud === clientId;
+    const emailVerified =
+      payload?.email_verified === true || payload?.email_verified === 'true';
+    if (!payload?.email || !audOk || !emailVerified) {
+      throw new UnauthorizedException('Cuenta de Google inválida.');
+    }
+
+    const email = this.normalizeEmail(payload.email);
+    const name = payload.name || payload.given_name || email.split('@')[0];
+    const companyId = website.companyId;
+
+    let customer = await this.findByEmail(companyId, email);
+    if (!customer) {
+      customer = await this.prisma.customer.create({
+        data: {
+          name,
+          email,
+          companyId,
+          localId: website.localId,
+          source: 'ECOMMERCE',
+        },
+      });
+    }
+
+    return {
+      success: true,
+      data: {
+        access_token: await this.signToken(customer),
+        customer: this.safe(customer),
+      },
+    };
   }
 
   // Decodifica de forma OPCIONAL el token de cliente (para enlazar el pedido en

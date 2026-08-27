@@ -41,6 +41,29 @@ export class LoginCustomerDto {
   password: string;
 }
 
+export class ForgotPasswordDto {
+  @IsEmail()
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+
+  @IsString()
+  @MinLength(6)
+  @MaxLength(72)
+  password: string;
+}
+
+export class GoogleAuthDto {
+  // ID token (credential) que devuelve Google Identity Services.
+  @IsString()
+  @IsNotEmpty()
+  credential: string;
+}
+
 export class UpdateCustomerProfileDto {
   @IsOptional()
   @IsString()

@@ -5,6 +5,7 @@ import { EcommerceService } from './ecommerce.service';
 import { EcommerceController } from './ecommerce.controller';
 import { CustomerAuthService } from './customer-auth.service';
 import { CustomerJwtGuard } from '@/common/guards/customer-jwt.guard';
+import { MailService } from '@/mail/mail.service';
 import { PrismaService } from '@/prisma.service';
 import { WebsiteModule } from '@/modules/website/website.module';
 
@@ -28,6 +29,7 @@ import { WebsiteModule } from '@/modules/website/website.module';
     EcommerceService,
     CustomerAuthService,
     CustomerJwtGuard,
+    MailService,
     PrismaService,
   ],
 })

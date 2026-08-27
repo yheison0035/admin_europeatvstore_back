@@ -14,8 +14,11 @@ import { CustomerAuthService } from './customer-auth.service';
 import { Public } from '@/auth/decorators/public.decorator';
 import { CreateEcommerceOrderDto } from './dto/create-ecommerce-order.dto';
 import {
+  ForgotPasswordDto,
+  GoogleAuthDto,
   LoginCustomerDto,
   RegisterCustomerDto,
+  ResetPasswordDto,
   UpdateCustomerProfileDto,
 } from './dto/customer-auth.dto';
 import { WebsiteGuard } from '@/common/guards/website.guard';
@@ -142,6 +145,33 @@ export class EcommerceController {
     @Website() website: WebsiteContext,
   ) {
     return this.customerAuth.login(dto, website);
+  }
+
+  @Public()
+  @UseGuards(WebsiteGuard)
+  @Post('auth/google')
+  googleAuth(
+    @Body() dto: GoogleAuthDto,
+    @Website() website: WebsiteContext,
+  ) {
+    return this.customerAuth.googleAuth(dto.credential, website);
+  }
+
+  @Public()
+  @UseGuards(WebsiteGuard)
+  @Post('auth/forgot-password')
+  forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+    @Website() website: WebsiteContext,
+  ) {
+    return this.customerAuth.forgotPassword(dto.email, website);
+  }
+
+  @Public()
+  @UseGuards(WebsiteGuard)
+  @Post('auth/reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.customerAuth.resetPassword(dto.token, dto.password);
   }
 
   @Public()
