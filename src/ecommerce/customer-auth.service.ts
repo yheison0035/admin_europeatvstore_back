@@ -303,12 +303,11 @@ export class CustomerAuthService {
   // ---- Inicio/registro con Google ----
 
   async googleAuth(credential: string, website: WebsiteContext) {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      throw new UnauthorizedException(
-        'El acceso con Google no está configurado.',
-      );
-    }
+    // Client ID público (mismo que usa la tienda). Sobreescribible por env
+    // GOOGLE_CLIENT_ID. Solo se usa para validar el `aud` del ID token.
+    const clientId =
+      process.env.GOOGLE_CLIENT_ID ||
+      '763872388804-5p6fncsiplu0n7iirhbg1bdvjk0dcm38.apps.googleusercontent.com';
 
     // Verificación del ID token contra Google (valida firma y expiración).
     let payload: any;
