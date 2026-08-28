@@ -1,10 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 
+export interface SmtpConfig {
+  host?: string | null;
+  port?: number | null;
+  user?: string | null;
+  pass?: string | null;
+  fromEmail?: string | null;
+  fromName?: string | null;
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
+  // Caché de transporters por empresa (clave host|port|user) para no recrearlos.
+  private cache = new Map<string, nodemailer.Transporter>();
 
   constructor() {
     const host = process.env.MAIL_HOST;
@@ -21,10 +32,52 @@ export class MailService {
       });
     } else {
       this.logger.warn(
-        'Correo NO configurado (faltan MAIL_HOST/MAIL_USER/MAIL_PASS). ' +
-          'Los enlaces de restablecimiento se registrarán en el log.',
+        'Correo global NO configurado (MAIL_HOST/MAIL_USER/MAIL_PASS). ' +
+          'Cada empresa debe configurar su propio correo, o los enlaces se registran en el log.',
       );
     }
+  }
+
+  // Devuelve el transporter de la EMPRESA (su propio SMTP) si está configurado;
+  // si no, cae al global (env). null si no hay ninguno.
+  private resolveTransporter(
+    smtp?: SmtpConfig,
+  ): { tx: nodemailer.Transporter; from: string } | null {
+    if (smtp?.host && smtp?.user && smtp?.pass) {
+      const port = Number(smtp.port) || 587;
+      const key = `${smtp.host}|${port}|${smtp.user}`;
+      let tx = this.cache.get(key);
+      if (!tx) {
+        tx = nodemailer.createTransport({
+          host: smtp.host,
+          port,
+          secure: port === 465,
+          auth: { user: smtp.user, pass: smtp.pass },
+        });
+        this.cache.set(key, tx);
+      }
+      const email = smtp.fromEmail || smtp.user;
+      const from = smtp.fromName ? `"${smtp.fromName}" <${email}>` : email;
+      return { tx, from };
+    }
+    if (this.transporter) {
+      const email =
+        process.env.MAIL_FROM || process.env.MAIL_USER || 'no-reply@localhost';
+      return { tx: this.transporter, from: email };
+    }
+    return null;
+  }
+
+  // Envía un correo de prueba con el SMTP de la empresa (para el botón "probar").
+  async sendTest(to: string, smtp: SmtpConfig, companyName = 'Tu tienda') {
+    const resolved = this.resolveTransporter(smtp);
+    if (!resolved) throw new Error('SMTP no configurado');
+    await resolved.tx.sendMail({
+      from: resolved.from,
+      to,
+      subject: `Correo de prueba · ${companyName}`,
+      html: `<p style="font-family:Arial,sans-serif">✅ ¡Tu correo quedó configurado correctamente! Este es un mensaje de prueba de <b>${companyName}</b>.</p>`,
+    });
   }
 
   async sendPasswordReset(to: string, resetUrl: string, name?: string) {
@@ -74,6 +127,7 @@ export class MailService {
       customerName?: string | null;
       supportEmail?: string | null;
     } = {},
+    smtp?: SmtpConfig,
   ) {
     const company = (brand.companyName || 'Tu tienda').trim();
     const accent = this.safeColor(brand.accentColor) || '#111827';
@@ -132,17 +186,18 @@ export class MailService {
   </table>
 </body></html>`;
 
-    if (!this.transporter) {
+    const resolved = this.resolveTransporter(smtp);
+    if (!resolved) {
       this.logger.warn(`[SIN CORREO] Enlace para ${to}: ${resetUrl}`);
       return;
     }
 
-    const fromEmail =
-      process.env.MAIL_FROM || process.env.MAIL_USER || 'no-reply@localhost';
-    // Nombre visible del remitente = la empresa.
-    const from = `"${company}" <${fromEmail}>`;
+    // Nombre visible del remitente = la empresa (si el SMTP no trae fromName).
+    const from = smtp?.host
+      ? resolved.from
+      : `"${company}" <${resolved.from}>`;
 
-    await this.transporter.sendMail({ from, to, subject, html });
+    await resolved.tx.sendMail({ from, to, subject, html });
   }
 
   // Solo permite colores hex (#rgb / #rrggbb) para no romper el HTML del correo.

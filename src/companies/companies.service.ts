@@ -10,6 +10,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { applyLoyaltyVisit } from '@/common/loyalty.util';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
+import { MailService } from '@/mail/mail.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { Role, Status, Prisma } from '@prisma/client';
@@ -18,7 +19,10 @@ import { Role, Status, Prisma } from '@prisma/client';
 export class CompaniesService {
   private readonly logger = new Logger(CompaniesService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private mail: MailService,
+  ) {}
 
   // Configuración self-service que ve/edita el dueño de la empresa.
   async getOwnSettings(user: any) {
@@ -51,9 +55,88 @@ export class CompaniesService {
         loyaltyMaxDays: true,
         openHour: true,
         closeHour: true,
+        // Correo propio del negocio (sin la contraseña).
+        mailHost: true,
+        mailPort: true,
+        mailUser: true,
+        mailFromName: true,
+        mailFromEmail: true,
       },
     });
-    return { success: true, data: company };
+    // ¿Tiene correo listo para enviar? (host + usuario + contraseña).
+    const withPass: any = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      omit: { mailPassword: false },
+    });
+    const mailConfigured = !!(
+      withPass?.mailHost &&
+      withPass?.mailUser &&
+      withPass?.mailPassword
+    );
+    return { success: true, data: { ...company, mailConfigured } };
+  }
+
+  // Correo propio del negocio (SMTP). La contraseña solo se actualiza si viene
+  // (para no borrarla al guardar el resto). Enviar '' explícito la limpia.
+  async updateMailConfig(
+    user: any,
+    dto: {
+      mailHost?: string | null;
+      mailPort?: number | null;
+      mailUser?: string | null;
+      mailPassword?: string;
+      mailFromName?: string | null;
+      mailFromEmail?: string | null;
+    },
+  ) {
+    const data: any = {
+      mailHost: dto.mailHost?.trim() || null,
+      mailPort: dto.mailPort ? Number(dto.mailPort) : null,
+      mailUser: dto.mailUser?.trim() || null,
+      mailFromName: dto.mailFromName?.trim() || null,
+      mailFromEmail: dto.mailFromEmail?.trim() || null,
+    };
+    // La contraseña solo se toca si el campo viene definido en el DTO.
+    if (dto.mailPassword !== undefined) {
+      data.mailPassword = dto.mailPassword ? dto.mailPassword : null;
+    }
+    await this.prisma.company.update({
+      where: { id: user.companyId },
+      data,
+    });
+    return this.getOwnSettings(user);
+  }
+
+  // Envía un correo de prueba con el SMTP guardado de la empresa al destinatario.
+  async sendMailTest(user: any, to: string) {
+    const c: any = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      omit: { mailPassword: false },
+    });
+    if (!c?.mailHost || !c?.mailUser || !c?.mailPassword) {
+      throw new BadRequestException(
+        'Primero configura y guarda tu correo (host, usuario y contraseña).',
+      );
+    }
+    try {
+      await this.mail.sendTest(
+        to,
+        {
+          host: c.mailHost,
+          port: c.mailPort,
+          user: c.mailUser,
+          pass: c.mailPassword,
+          fromEmail: c.mailFromEmail || c.mailUser,
+          fromName: c.mailFromName || c.websiteName || c.name,
+        },
+        c.websiteName || c.name || 'Tu tienda',
+      );
+    } catch (e: any) {
+      throw new BadRequestException(
+        `No se pudo enviar: ${e?.message || 'revisa los datos del correo'}`,
+      );
+    }
+    return { success: true, message: `Correo de prueba enviado a ${to}.` };
   }
 
   // Config fiscal mínima para el punto de venta (accesible a cualquier vendedor,

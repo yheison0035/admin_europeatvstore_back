@@ -245,14 +245,33 @@ export class CustomerAuthService {
       const base = `https://${website.domain}`;
       const resetUrl = `${base}/restablecer?token=${token}`;
       const c: any = website.company || {};
+      // SMTP propio de la empresa (con la contraseña, que está omitida por
+      // defecto): así el correo sale DESDE el correo del negocio.
+      const mail: any = await this.prisma.company.findUnique({
+        where: { id: website.companyId },
+        omit: { mailPassword: false },
+      });
       await this.mail
-        .sendCustomerPasswordReset(customer.email, resetUrl, {
-          companyName: c.websiteName || c.name || undefined,
-          logo: c.logo || null,
-          accentColor: c.ctaColor || c.primaryColor || c.accentColor || null,
-          customerName: customer.name,
-          supportEmail: c.email || null,
-        })
+        .sendCustomerPasswordReset(
+          customer.email,
+          resetUrl,
+          {
+            companyName: c.websiteName || c.name || undefined,
+            logo: c.logo || null,
+            accentColor: c.ctaColor || c.primaryColor || c.accentColor || null,
+            customerName: customer.name,
+            supportEmail: c.mailFromEmail || c.email || null,
+          },
+          {
+            host: mail?.mailHost,
+            port: mail?.mailPort,
+            user: mail?.mailUser,
+            pass: mail?.mailPassword,
+            fromEmail: mail?.mailFromEmail || mail?.mailUser,
+            fromName:
+              mail?.mailFromName || c.websiteName || c.name || undefined,
+          },
+        )
         .catch(() => null);
     }
 

@@ -58,6 +58,19 @@ export class CompanySettingsController {
     return this.service.updateCrmTheme(req.user, theme);
   }
 
+  // Correo propio del negocio (SMTP) para enviar sus correos.
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('mail')
+  updateMail(@Body() dto: any, @Req() req) {
+    return this.service.updateMailConfig(req.user, dto);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Post('mail/test')
+  testMail(@Body('to') to: string, @Req() req) {
+    return this.service.sendMailTest(req.user, to);
+  }
+
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch('cash-policy')
   updateCashPolicy(@Body('requireCashOpen') requireCashOpen: boolean, @Req() req) {

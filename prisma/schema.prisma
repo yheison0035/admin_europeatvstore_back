@@ -266,6 +266,16 @@ model Company {
   heroTitle      String?
   heroSubtitle   String?
 
+  // Correo propio del negocio (SMTP) para enviar sus correos (p. ej. el
+  // restablecimiento de contraseña de sus clientes) DESDE su propia cuenta.
+  // mailPassword se omite globalmente en las respuestas (igual que la del cliente).
+  mailHost      String?
+  mailPort      Int?
+  mailUser      String?
+  mailPassword  String?
+  mailFromName  String?
+  mailFromEmail String?
+
   //////////////////////////////////////////////////
 
   users          User[]

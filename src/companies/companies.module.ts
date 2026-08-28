@@ -4,6 +4,7 @@ import { CompaniesController } from './companies.controller';
 import { CompanyLogoController } from './company-logo.controller';
 import { CompanySettingsController } from './company-settings.controller';
 import { PrismaService } from '@/prisma.service';
+import { MailService } from '@/mail/mail.service';
 
 @Module({
   controllers: [
@@ -11,6 +12,6 @@ import { PrismaService } from '@/prisma.service';
     CompanyLogoController,
     CompanySettingsController,
   ],
-  providers: [CompaniesService, PrismaService],
+  providers: [CompaniesService, PrismaService, MailService],
 })
 export class CompaniesModule {}
