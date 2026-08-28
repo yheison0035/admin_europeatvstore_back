@@ -29,6 +29,10 @@ export class MailService {
         port,
         secure: port === 465, // SSL en 465; STARTTLS en 587
         auth: { user, pass },
+        // No colgar si el puerto SMTP está bloqueado/lento.
+        connectionTimeout: 12000,
+        greetingTimeout: 12000,
+        socketTimeout: 20000,
       });
     } else {
       this.logger.warn(
@@ -53,6 +57,9 @@ export class MailService {
           port,
           secure: port === 465,
           auth: { user: smtp.user, pass: smtp.pass },
+          connectionTimeout: 12000,
+          greetingTimeout: 12000,
+          socketTimeout: 20000,
         });
         this.cache.set(key, tx);
       }

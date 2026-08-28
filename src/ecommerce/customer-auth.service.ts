@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -20,6 +21,8 @@ import {
 // Clientes del negocio. El token es un JWT separado del staff (kind:'customer').
 @Injectable()
 export class CustomerAuthService {
+  private readonly log = new Logger(CustomerAuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -251,7 +254,9 @@ export class CustomerAuthService {
         where: { id: website.companyId },
         omit: { mailPassword: false },
       });
-      await this.mail
+      // Envío en SEGUNDO PLANO: no se espera para no bloquear la respuesta
+      // (un SMTP lento/bloqueado no debe colgar la petición).
+      void this.mail
         .sendCustomerPasswordReset(
           customer.email,
           resetUrl,
@@ -272,7 +277,9 @@ export class CustomerAuthService {
               mail?.mailFromName || c.websiteName || c.name || undefined,
           },
         )
-        .catch(() => null);
+        .catch((e) =>
+          this.log?.error?.(`Fallo enviando reset a ${customer.email}: ${e?.message}`),
+        );
     }
 
     return {
