@@ -257,6 +257,12 @@ export class UsersService {
             bankNotifyEnabled: true,
             // Régimen de IVA (para el encabezado de la factura impresa).
             responsableIVA: true,
+            // Vencimiento del pago y precio acordado: el CRM del dueño los usa
+            // para el aviso de renovación (banner) antes/al vencer.
+            paidUntil: true,
+            monthlyPrice: true,
+            discountedPrice: true,
+            discountUntil: true,
           },
         },
         local: true,
