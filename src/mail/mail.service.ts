@@ -75,6 +75,52 @@ export class MailService {
     return null;
   }
 
+  // Envío por API HTTP de Resend (puerto 443). El remitente va desde un dominio
+  // verificado (env RESEND_FROM_EMAIL, ej. no-reply@pegazo.co); el nombre visible
+  // es el de cada empresa (branding). No tiene restricción por IP.
+  private resendEnabled() {
+    return !!process.env.RESEND_API_KEY && !!process.env.RESEND_FROM_EMAIL;
+  }
+
+  // Nombre seguro para la cabecera From (sin caracteres que la rompan).
+  private safeName(name?: string) {
+    return String(name || 'Tienda')
+      .replace(/["<>\r\n,]/g, ' ')
+      .trim()
+      .slice(0, 60);
+  }
+
+  private async sendViaResend(opts: {
+    to: string;
+    subject: string;
+    html: string;
+    fromName?: string;
+    replyTo?: string | null;
+  }) {
+    const email = process.env.RESEND_FROM_EMAIL as string;
+    const from = `${this.safeName(opts.fromName)} <${email}>`;
+    const body: any = {
+      from,
+      to: [opts.to],
+      subject: opts.subject,
+      html: opts.html,
+    };
+    if (opts.replyTo) body.reply_to = opts.replyTo;
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`Resend ${res.status}: ${t.slice(0, 200)}`);
+    }
+  }
+
   // Envío por API HTTP de Brevo (puerto 443), para hosts que BLOQUEAN SMTP
   // (como Railway). Requiere env BREVO_API_KEY y BREVO_SENDER_EMAIL (remitente
   // verificado en Brevo). El nombre del remitente va por empresa (branding).
@@ -118,6 +164,19 @@ export class MailService {
   // DIAGNÓSTICO TEMPORAL: intenta enviar por la cuenta central y devuelve el
   // error exacto. Prueba Brevo (HTTP) si está configurado; si no, SMTP.
   async diag(to: string) {
+    if (this.resendEnabled()) {
+      try {
+        await this.sendViaResend({
+          to,
+          subject: 'Diagnóstico de correo',
+          html: '<p>Prueba de envío por API (Resend).</p>',
+          fromName: 'Pegazo',
+        });
+        return { ok: true, via: 'resend', from: process.env.RESEND_FROM_EMAIL };
+      } catch (e: any) {
+        return { ok: false, via: 'resend', error: e?.message };
+      }
+    }
     if (this.brevoEnabled()) {
       try {
         await this.sendViaBrevo({
@@ -268,8 +327,18 @@ export class MailService {
   </table>
 </body></html>`;
 
-    // PRIORIDAD: si la empresa NO puso su propio SMTP y hay API de Brevo, se
-    // envía por HTTP (funciona en hosts que bloquean SMTP como Railway).
+    // PRIORIDAD (si la empresa NO puso su propio SMTP): API por HTTP, que
+    // funciona en hosts que bloquean SMTP (como Railway). Resend primero.
+    if (!smtp?.host && this.resendEnabled()) {
+      await this.sendViaResend({
+        to,
+        subject,
+        html,
+        fromName: company,
+        replyTo: brand.supportEmail || undefined,
+      });
+      return;
+    }
     if (!smtp?.host && this.brevoEnabled()) {
       await this.sendViaBrevo({
         to,
