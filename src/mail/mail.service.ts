@@ -368,6 +368,105 @@ export class MailService {
     await resolved.tx.sendMail({ from, to, subject, html, replyTo });
   }
 
+  // AVISO DE RENOVACIÓN (Pegazo -> dueño del negocio). A diferencia del correo
+  // de restablecimiento (que va con la marca del negocio a SU cliente), este va
+  // con la marca de Pegazo al dueño, para avisarle que su plan está por vencer
+  // o venció, con un botón para renovar por WhatsApp.
+  async sendRenewalReminder(
+    to: string,
+    info: {
+      ownerName?: string | null;
+      companyName?: string | null;
+      paidUntil: Date;
+      daysLeft: number; // negativo = ya venció
+      price?: number | null; // COP/mes
+      whatsappUrl: string;
+    },
+  ) {
+    const accent = '#f97316'; // naranja Pegazo
+    const brandName = 'Pegazo';
+    const owner = info.ownerName ? String(info.ownerName).trim() : '';
+    const negocio = (info.companyName || 'tu negocio').trim();
+    const year = new Date().getFullYear();
+    const expired = info.daysLeft < 0;
+
+    const fechaTxt = new Date(info.paidUntil).toLocaleDateString('es-CO', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+    const precioTxt =
+      info.price != null
+        ? new Intl.NumberFormat('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            maximumFractionDigits: 0,
+          }).format(Number(info.price))
+        : null;
+
+    const subject = expired
+      ? `Tu plan de Pegazo venció · renueva para reactivar ${negocio}`
+      : info.daysLeft === 0
+        ? `Tu plan de Pegazo vence hoy`
+        : `Tu plan de Pegazo vence en ${info.daysLeft} ${info.daysLeft === 1 ? 'día' : 'días'}`;
+
+    const titulo = expired
+      ? 'Tu plan venció'
+      : info.daysLeft === 0
+        ? 'Tu plan vence hoy'
+        : `Tu plan vence en ${info.daysLeft} ${info.daysLeft === 1 ? 'día' : 'días'}`;
+
+    const cuerpo = expired
+      ? `El plan de <strong>${negocio}</strong> venció el <strong>${fechaTxt}</strong> y el acceso puede quedar suspendido. Renueva ahora para reactivar tu negocio sin perder tu información.`
+      : `El plan de <strong>${negocio}</strong> vence el <strong>${fechaTxt}</strong>${
+          precioTxt ? ` (${precioTxt}/mes)` : ''
+        }. Renueva a tiempo para que tu operación no se interrumpa.`;
+
+    const html = `
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr><td style="background:${accent};padding:26px 32px;text-align:center;">
+          <div style="font-size:24px;font-weight:800;color:#ffffff;font-family:Arial,Helvetica,sans-serif;letter-spacing:-0.5px;">${brandName}</div>
+        </td></tr>
+        <tr><td style="padding:32px;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+          <h1 style="margin:0 0 8px;font-size:20px;color:#111827;">${titulo}</h1>
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+            Hola${owner ? ' ' + owner : ''}, ${cuerpo}
+          </p>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;">
+            <tr><td align="center" style="border-radius:12px;background:#22c55e;">
+              <a href="${info.whatsappUrl}" style="display:inline-block;padding:14px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:12px;">
+                Renovar por WhatsApp
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
+            Si ya renovaste, ignora este mensaje. ¿Dudas? Responde a este correo y te ayudamos.
+          </p>
+        </td></tr>
+        <tr><td style="padding:20px 32px;background:#f9fafb;border-top:1px solid #eef0f3;text-align:center;font-family:Arial,Helvetica,sans-serif;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">© ${year} ${brandName}. Todo tu negocio en un solo lugar.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+    if (this.resendEnabled()) {
+      await this.sendViaResend({ to, subject, html, fromName: brandName });
+      return;
+    }
+    if (this.brevoEnabled()) {
+      await this.sendViaBrevo({ to, subject, html, fromName: brandName });
+      return;
+    }
+    this.logger.warn(`[SIN CORREO] Aviso de renovación para ${to} (${negocio}).`);
+  }
+
   // Solo permite colores hex (#rgb / #rrggbb) para no romper el HTML del correo.
   private safeColor(c?: string | null): string | null {
     if (!c) return null;

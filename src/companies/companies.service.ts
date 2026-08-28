@@ -474,19 +474,127 @@ export class CompaniesService {
   async autoSuspendOverdue() {
     const now = new Date();
 
-    const result = await this.prisma.company.updateMany({
-      where: {
-        status: Status.ACTIVO,
-        paidUntil: { lt: now },
+    // Se buscan ANTES de suspender para poder avisar al dueño por correo.
+    const overdue = await this.prisma.company.findMany({
+      where: { status: Status.ACTIVO, paidUntil: { lt: now } },
+      select: {
+        id: true,
+        name: true,
+        monthlyPrice: true,
+        paidUntil: true,
+        users: {
+          where: {
+            role: Role.SUPER_ADMIN,
+            status: { not: Status.ELIMINADO },
+          },
+          select: { email: true, name: true },
+          take: 1,
+        },
       },
+    });
+
+    if (overdue.length === 0) return;
+
+    const result = await this.prisma.company.updateMany({
+      where: { status: Status.ACTIVO, paidUntil: { lt: now } },
       data: { status: Status.INACTIVO },
     });
 
-    if (result.count > 0) {
-      this.logger.warn(
-        `Auto-suspensión: ${result.count} empresa(s) vencida(s) desactivada(s).`,
-      );
+    this.logger.warn(
+      `Auto-suspensión: ${result.count} empresa(s) vencida(s) desactivada(s).`,
+    );
+
+    // Aviso "venció / acceso suspendido" al dueño (no bloquea la suspensión).
+    for (const c of overdue) {
+      const owner = c.users[0];
+      if (!owner?.email || !c.paidUntil) continue;
+      const days = this.daysBetween(now, c.paidUntil); // negativo (ya venció)
+      void this.mail
+        .sendRenewalReminder(owner.email, {
+          ownerName: owner.name,
+          companyName: c.name,
+          paidUntil: c.paidUntil,
+          daysLeft: days,
+          price: c.monthlyPrice,
+          whatsappUrl: this.buildRenewalWa(c.name, true),
+        })
+        .catch((e) =>
+          this.logger.warn(
+            `No se pudo enviar aviso de vencimiento a ${owner.email}: ${e?.message || e}`,
+          ),
+        );
     }
+  }
+
+  // RECORDATORIO PREVIO: cada día se avisa al dueño de las empresas cuyo plan
+  // está por vencer (7, 3 y 1 días antes). Solo empresas activas con paidUntil.
+  @Cron(CronExpression.EVERY_DAY_AT_9AM)
+  async sendRenewalReminders() {
+    const REMIND_DAYS = new Set([7, 3, 1]);
+    const now = new Date();
+
+    const companies = await this.prisma.company.findMany({
+      where: { status: Status.ACTIVO, paidUntil: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        monthlyPrice: true,
+        paidUntil: true,
+        users: {
+          where: {
+            role: Role.SUPER_ADMIN,
+            status: { not: Status.ELIMINADO },
+          },
+          select: { email: true, name: true },
+          take: 1,
+        },
+      },
+    });
+
+    let sent = 0;
+    for (const c of companies) {
+      if (!c.paidUntil) continue;
+      const days = this.daysBetween(now, c.paidUntil);
+      if (!REMIND_DAYS.has(days)) continue; // solo en 7 / 3 / 1 días antes
+      const owner = c.users[0];
+      if (!owner?.email) continue;
+      try {
+        await this.mail.sendRenewalReminder(owner.email, {
+          ownerName: owner.name,
+          companyName: c.name,
+          paidUntil: c.paidUntil,
+          daysLeft: days,
+          price: c.monthlyPrice,
+          whatsappUrl: this.buildRenewalWa(c.name, false),
+        });
+        sent++;
+      } catch (e: any) {
+        this.logger.warn(
+          `No se pudo enviar recordatorio a ${owner.email}: ${e?.message || e}`,
+        );
+      }
+    }
+
+    if (sent > 0) {
+      this.logger.log(`Recordatorios de renovación enviados: ${sent}.`);
+    }
+  }
+
+  // Diferencia en días calendario (fecha - hoy). Negativo si ya pasó.
+  private daysBetween(now: Date, target: Date | string): number {
+    const t = new Date(target);
+    const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const b = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+  }
+
+  // Enlace de WhatsApp a Pegazo con el mensaje de renovación ya armado.
+  private buildRenewalWa(companyName: string, expired: boolean): string {
+    const nombre = companyName || 'mi negocio';
+    const msg = expired
+      ? `Hola, soy de "${nombre}" y quiero renovar mi plan de Pegazo (ya venció).`
+      : `Hola, soy de "${nombre}" y quiero renovar mi plan de Pegazo antes de que venza.`;
+    return `https://wa.me/573186356609?text=${encodeURIComponent(msg)}`;
   }
 
   // RESUMEN GLOBAL DE PLATAFORMA (para el dashboard del SUPER_PLATFORM_ADMIN)
