@@ -4,6 +4,9 @@ import {
   IsString,
   IsEnum,
   IsDateString,
+  IsArray,
+  IsInt,
+  Min,
 } from 'class-validator';
 import { BusinessType, Status } from '@prisma/client';
 
@@ -55,4 +58,25 @@ export class UpdateCompanyDto {
   @IsOptional()
   @IsBoolean()
   websiteEnabled?: boolean;
+
+  // Control MANUAL de módulos habilitados por empresa (superplatform).
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  enabledModules?: string[];
+
+  // Precio acordado (COP/mes) y descuento inicial por tiempo.
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  monthlyPrice?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  discountedPrice?: number | null;
+
+  @IsOptional()
+  @IsDateString()
+  discountUntil?: string;
 }

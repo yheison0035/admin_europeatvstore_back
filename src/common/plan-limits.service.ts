@@ -140,9 +140,26 @@ export class PlanLimitsService {
 
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
-      select: { plan: true },
+      select: { plan: true, enabledModules: true },
     });
 
+    // Módulos siempre disponibles para el dueño.
+    const CORE = ['dashboard', 'settings'];
+    if (CORE.includes(moduleKey)) return;
+
+    // Control MANUAL por empresa: si tiene lista, esa manda (por encima del plan).
+    const enabled = company?.enabledModules || [];
+    if (enabled.length > 0) {
+      if (enabled.includes(moduleKey)) return;
+      throw new ForbiddenException({
+        error: 'MODULE_DISABLED',
+        module: moduleKey,
+        message:
+          'Esta función no está habilitada para tu negocio. Contacta al administrador de Pegazo.',
+      });
+    }
+
+    // Sin control manual: gating por plan (comportamiento por defecto).
     if (planAllowsModule(company?.plan, moduleKey)) return;
 
     const min = MODULE_MIN_PLAN[moduleKey];

@@ -802,6 +802,23 @@ export class CompaniesService {
         ...(dto.websiteEnabled !== undefined && {
           websiteEnabled: dto.websiteEnabled,
         }),
+        // Control manual de módulos + precio/descuento (superplatform).
+        ...(dto.enabledModules !== undefined && {
+          enabledModules: Array.isArray(dto.enabledModules)
+            ? dto.enabledModules
+            : [],
+        }),
+        ...(dto.monthlyPrice !== undefined && {
+          monthlyPrice:
+            dto.monthlyPrice === null ? null : Number(dto.monthlyPrice),
+        }),
+        ...(dto.discountedPrice !== undefined && {
+          discountedPrice:
+            dto.discountedPrice === null ? null : Number(dto.discountedPrice),
+        }),
+        ...(dto.discountUntil !== undefined && {
+          discountUntil: dto.discountUntil ? new Date(dto.discountUntil) : null,
+        }),
       },
     });
 

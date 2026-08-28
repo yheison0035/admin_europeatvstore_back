@@ -248,6 +248,17 @@ model Company {
   startDate  DateTime? // fecha en que la empresa empezó con nosotros (si null, se usa createdAt)
   couponCode String? // cupón de descuento con el que se registró (informativo)
 
+  // Control MANUAL de módulos por empresa (superplatform). Si tiene valores,
+  // manda sobre el plan: el cliente solo ve/usa los módulos de esta lista.
+  // Vacío = comportamiento por defecto (según su tipo de negocio/plan).
+  enabledModules String[] @default([])
+
+  // Precio acordado con el cliente (COP/mes) y descuento inicial por tiempo
+  // (informativo/manual: se muestra en el superplatform, el cobro es manual).
+  monthlyPrice    Int?
+  discountedPrice Int? // precio durante el descuento inicial
+  discountUntil   DateTime? // hasta cuándo aplica el precio con descuento
+
   //////////////////////////////////////////////////
   // WEBSITE
   //////////////////////////////////////////////////

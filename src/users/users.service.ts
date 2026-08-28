@@ -241,6 +241,9 @@ export class UsersService {
             type: true,
             // El plan gobierna qué funciones/módulos ve la empresa.
             plan: true,
+            // Control MANUAL de módulos por empresa (superplatform): el CRM lo
+            // usa para mostrar/ocultar cada módulo.
+            enabledModules: true,
             // El CRM las usa para mostrar (o no) el módulo de tienda online.
             websiteEnabled: true,
             domain: true,
