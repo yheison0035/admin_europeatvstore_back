@@ -1030,6 +1030,11 @@ model Mesa {
   name   String
   status String @default("LIBRE") // LIBRE | OCUPADA
 
+  // Posición en el plano/maqueta del salón (px desde la esquina superior izq).
+  // null = aún sin ubicar (se muestra en cuadrícula por defecto).
+  posX Int?
+  posY Int?
+
   localId   Int
   local     Local   @relation(fields: [localId], references: [id], onDelete: Cascade)
   companyId Int

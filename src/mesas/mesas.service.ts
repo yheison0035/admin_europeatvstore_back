@@ -33,6 +33,8 @@ export class MesasService {
         id: m.id,
         name: m.name,
         status: m.status,
+        posX: m.posX,
+        posY: m.posY,
         local: m.local,
         localId: m.localId,
         openComandaId: m.comandas[0]?.id || null,
@@ -66,6 +68,12 @@ export class MesasService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.posX !== undefined && {
+          posX: dto.posX === null ? null : Math.round(Number(dto.posX)),
+        }),
+        ...(dto.posY !== undefined && {
+          posY: dto.posY === null ? null : Math.round(Number(dto.posY)),
+        }),
       },
     });
     return { success: true, data: updated };
