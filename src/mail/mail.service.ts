@@ -75,9 +75,66 @@ export class MailService {
     return null;
   }
 
-  // DIAGNÓSTICO TEMPORAL: intenta enviar por la cuenta central (env MAIL_*) y
-  // devuelve el error exacto para saber si el SMTP está bloqueado/mal.
+  // Envío por API HTTP de Brevo (puerto 443), para hosts que BLOQUEAN SMTP
+  // (como Railway). Requiere env BREVO_API_KEY y BREVO_SENDER_EMAIL (remitente
+  // verificado en Brevo). El nombre del remitente va por empresa (branding).
+  private brevoEnabled() {
+    return !!process.env.BREVO_API_KEY && !!process.env.BREVO_SENDER_EMAIL;
+  }
+
+  private async sendViaBrevo(opts: {
+    to: string;
+    subject: string;
+    html: string;
+    fromName?: string;
+    replyTo?: string | null;
+  }) {
+    const body: any = {
+      sender: {
+        name: opts.fromName || process.env.BREVO_SENDER_NAME || 'Tienda',
+        email: process.env.BREVO_SENDER_EMAIL,
+      },
+      to: [{ email: opts.to }],
+      subject: opts.subject,
+      htmlContent: opts.html,
+    };
+    if (opts.replyTo) body.replyTo = { email: opts.replyTo };
+
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY as string,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`Brevo ${res.status}: ${t.slice(0, 200)}`);
+    }
+  }
+
+  // DIAGNÓSTICO TEMPORAL: intenta enviar por la cuenta central y devuelve el
+  // error exacto. Prueba Brevo (HTTP) si está configurado; si no, SMTP.
   async diag(to: string) {
+    if (this.brevoEnabled()) {
+      try {
+        await this.sendViaBrevo({
+          to,
+          subject: 'Diagnóstico de correo',
+          html: '<p>Prueba de envío por API (Brevo).</p>',
+          fromName: 'Pegazo',
+        });
+        return { ok: true, via: 'brevo', from: process.env.BREVO_SENDER_EMAIL };
+      } catch (e: any) {
+        return { ok: false, via: 'brevo', error: e?.message };
+      }
+    }
+    return this.diagSmtp(to);
+  }
+
+  private async diagSmtp(to: string) {
     const r = this.resolveTransporter();
     if (!r) return { ok: false, error: 'Sin transporter: MAIL_* no está cargado en el entorno.' };
     try {
@@ -210,6 +267,19 @@ export class MailService {
     </td></tr>
   </table>
 </body></html>`;
+
+    // PRIORIDAD: si la empresa NO puso su propio SMTP y hay API de Brevo, se
+    // envía por HTTP (funciona en hosts que bloquean SMTP como Railway).
+    if (!smtp?.host && this.brevoEnabled()) {
+      await this.sendViaBrevo({
+        to,
+        subject,
+        html,
+        fromName: company,
+        replyTo: brand.supportEmail || undefined,
+      });
+      return;
+    }
 
     const resolved = this.resolveTransporter(smtp);
     if (!resolved) {
