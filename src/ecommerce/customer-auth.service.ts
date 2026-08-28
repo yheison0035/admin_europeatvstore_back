@@ -335,11 +335,6 @@ export class CustomerAuthService {
     };
   }
 
-  // TEMPORAL: diagnóstico de envío de correo por la cuenta central.
-  async mailDiag(to: string) {
-    return this.mail.diag(to);
-  }
-
   // ---- Inicio/registro con Google (flujo por redirección, MULTI-TENANT) ----
   //
   // No usa el botón client-side (que exige registrar cada dominio en Google).
