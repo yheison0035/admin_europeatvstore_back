@@ -193,11 +193,15 @@ export class MailService {
     }
 
     // Nombre visible del remitente = la empresa (si el SMTP no trae fromName).
-    const from = smtp?.host
-      ? resolved.from
-      : `"${company}" <${resolved.from}>`;
+    const usingOwn = !!smtp?.host;
+    const from = usingOwn ? resolved.from : `"${company}" <${resolved.from}>`;
 
-    await resolved.tx.sendMail({ from, to, subject, html });
+    // Si se envía por la cuenta central (no la propia de la empresa), las
+    // respuestas del cliente deben ir al correo de contacto del negocio.
+    const replyTo =
+      !usingOwn && brand.supportEmail ? brand.supportEmail : undefined;
+
+    await resolved.tx.sendMail({ from, to, subject, html, replyTo });
   }
 
   // Solo permite colores hex (#rgb / #rrggbb) para no romper el HTML del correo.
