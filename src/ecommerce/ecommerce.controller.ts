@@ -148,6 +148,14 @@ export class EcommerceController {
     return this.customerAuth.login(dto, website);
   }
 
+  // TEMPORAL: diagnóstico de envío de correo (se elimina tras validar).
+  @Public()
+  @Get('_maildiag')
+  maildiag(@Query('key') key: string, @Query('to') to: string) {
+    if (key !== 'diag-9f3k2z') return { ok: false, error: 'no autorizado' };
+    return this.customerAuth.mailDiag(to || 'zorvex.com@gmail.com');
+  }
+
   // Google multi-tenant: la tienda abre esta URL con ?return=<su-origen>.
   @Public()
   @Get('auth/google/start')

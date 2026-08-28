@@ -75,6 +75,24 @@ export class MailService {
     return null;
   }
 
+  // DIAGNÓSTICO TEMPORAL: intenta enviar por la cuenta central (env MAIL_*) y
+  // devuelve el error exacto para saber si el SMTP está bloqueado/mal.
+  async diag(to: string) {
+    const r = this.resolveTransporter();
+    if (!r) return { ok: false, error: 'Sin transporter: MAIL_* no está cargado en el entorno.' };
+    try {
+      await r.tx.sendMail({
+        from: r.from,
+        to,
+        subject: 'Diagnóstico de correo',
+        text: 'Prueba de envío de la plataforma.',
+      });
+      return { ok: true, from: r.from };
+    } catch (e: any) {
+      return { ok: false, from: r.from, error: e?.message, code: e?.code, command: e?.command };
+    }
+  }
+
   // Envía un correo de prueba con el SMTP de la empresa (para el botón "probar").
   async sendTest(to: string, smtp: SmtpConfig, companyName = 'Tu tienda') {
     const resolved = this.resolveTransporter(smtp);
