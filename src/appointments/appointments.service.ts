@@ -13,6 +13,7 @@ import { PlanLimitsService } from '@/common/plan-limits.service';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { minutesToColombiaHour, timeToMinutes } from '@/utils/format';
 import { AuditService } from '@/audit/audit.service';
+import { PushService } from '@/push/push.service';
 
 // Colombia es UTC-5 fijo (sin horario de verano).
 const COLOMBIA_OFFSET_MIN = 300;
@@ -31,6 +32,7 @@ export class AppointmentsService {
     private prisma: PrismaService,
     private audit: AuditService,
     private planLimits: PlanLimitsService,
+    private push: PushService,
   ) {}
 
   // Instante UTC real de inicio de una cita. `date` se guarda como medianoche
@@ -297,7 +299,47 @@ export class AppointmentsService {
       user,
     });
 
+    // Aviso push al barbero de su nueva cita (si no la creó él mismo).
+    if (dto.barberId && dto.barberId !== user.id) {
+      void this.notifyBarberNewAppointment(created, user.companyId).catch(
+        () => null,
+      );
+    }
+
     return created;
+  }
+
+  // Construye y envía la notificación "Nueva cita" al barbero asignado.
+  private async notifyBarberNewAppointment(appt: any, companyId: number) {
+    const [service, customer] = await Promise.all([
+      appt.serviceId
+        ? this.prisma.service.findUnique({
+            where: { id: appt.serviceId },
+            select: { name: true },
+          })
+        : null,
+      appt.customerId
+        ? this.prisma.customer.findUnique({
+            where: { id: appt.customerId },
+            select: { name: true },
+          })
+        : null,
+    ]);
+    const fecha = new Date(appt.date).toLocaleDateString('es-CO', {
+      day: '2-digit',
+      month: 'short',
+    });
+    const partes = [
+      customer?.name,
+      service?.name,
+      `${fecha} ${appt.startTime || ''}`.trim(),
+    ].filter(Boolean);
+    await this.push.sendToUser(appt.barberId, {
+      title: '✂️ Nueva cita asignada',
+      body: partes.join(' · ') || 'Tienes una nueva cita.',
+      url: '/dashboard/appointments',
+      tag: `appt-${appt.id}`,
+    });
   }
 
   async update(id: number, dto: any, user: any) {

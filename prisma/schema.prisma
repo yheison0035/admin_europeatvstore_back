@@ -1424,3 +1424,18 @@ model EmployeeCharge {
   @@index([userId])
   @@index([status])
 }
+
+// Suscripción Web Push de un usuario (para notificaciones a la PWA por rol).
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  companyId Int
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([companyId])
+}

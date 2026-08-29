@@ -6,10 +6,14 @@ import {
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '@/prisma.service';
 import { parseBankSms } from './bank-sms.parser';
+import { PushService } from '@/push/push.service';
 
 @Injectable()
 export class BankService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private push: PushService,
+  ) {}
 
   // Webhook PÚBLICO: el reenviador (SMS/correo) manda aquí cada notificación
   // del banco. Un mismo buzón puede tener VARIAS empresas (mismo token): se
@@ -82,6 +86,22 @@ export class BankService {
         raw: p.raw,
       },
     });
+
+    // Aviso push al dueño/administrador: entró una consignación.
+    const monto = new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    }).format(deposit.amount || 0);
+    void this.push
+      .sendToCompanyRoles(target.id, ['SUPER_ADMIN', 'ADMIN'], {
+        title: '💰 Consignación recibida',
+        body: `${monto}${p.senderName ? ' de ' + p.senderName : ''}`,
+        url: '/dashboard/bank',
+        tag: `deposit-${deposit.id}`,
+      })
+      .catch(() => null);
+
     return { success: true, data: { id: deposit.id, amount: deposit.amount } };
   }
 
