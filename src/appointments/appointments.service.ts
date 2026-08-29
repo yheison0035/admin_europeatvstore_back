@@ -111,15 +111,10 @@ export class AppointmentsService {
     if (query.status) {
       where.status = query.status;
     } else if (isBarberRole) {
-      // Por defecto, al barbero solo le mostramos lo pendiente por hacer
-      // (confirmadas / pendientes / en proceso), no las completadas ni las de
-      // no-asistió. Si filtra por un estado puntual, se respeta.
+      // Por defecto, al barbero le mostramos TODOS los estados menos las
+      // completadas (y las canceladas). Si filtra por un estado, se respeta.
       where.status = {
-        in: [
-          AppointmentStatus.CONFIRMADA,
-          AppointmentStatus.PENDIENTE,
-          AppointmentStatus.EN_PROCESO,
-        ],
+        notIn: [AppointmentStatus.COMPLETADA, AppointmentStatus.CANCELADA],
       };
     }
 
@@ -642,14 +637,13 @@ export class AppointmentsService {
     const where: any = {
       companyId: user.companyId,
       date: { gte: today, lt: weekEnd },
-      // Nunca canceladas. Al barbero, además, NO se le muestran las completadas
-      // ni las de no-asistió: solo lo que tiene pendiente por hacer.
+      // Nunca canceladas. Al barbero se le muestran TODOS los estados menos las
+      // completadas (confirmada, pendiente, en proceso, no asistió).
       status: isBarber
         ? {
-            in: [
-              AppointmentStatus.CONFIRMADA,
-              AppointmentStatus.PENDIENTE,
-              AppointmentStatus.EN_PROCESO,
+            notIn: [
+              AppointmentStatus.COMPLETADA,
+              AppointmentStatus.CANCELADA,
             ],
           }
         : { not: AppointmentStatus.CANCELADA },
