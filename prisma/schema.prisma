@@ -955,6 +955,9 @@ model Appointment {
 
   date      DateTime
   startTime String
+  // Minutos desde medianoche (derivado de startTime) para ordenar por hora real
+  // de reloj, ya que startTime se guarda en 12h ("01:00 p. m.") y no ordena bien.
+  startMinutes Int @default(0)
 
   status AppointmentStatus @default(CONFIRMADA)
   notes  String?

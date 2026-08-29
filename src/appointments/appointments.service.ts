@@ -157,8 +157,11 @@ export class AppointmentsService {
         },
         skip,
         take: limit,
-        // Todas (incluido el barbero) de la más reciente a la menos reciente.
-        orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
+        // El barbero: en orden de reloj (fecha y hora ascendente, 9am→8pm). El
+        // dueño/recepción: la más reciente primero.
+        orderBy: isBarberRole
+          ? [{ date: 'asc' }, { startMinutes: 'asc' }]
+          : [{ date: 'desc' }, { startTime: 'desc' }],
       }),
       this.prisma.appointment.count({ where }),
     ]);
@@ -273,6 +276,7 @@ export class AppointmentsService {
       data: {
         date: new Date(dto.date),
         startTime: dto.startTime,
+        startMinutes: timeToMinutes(dto.startTime),
         notes: dto.notes,
         serviceId: dto.serviceId,
         barberId: dto.barberId,
@@ -401,6 +405,7 @@ export class AppointmentsService {
         date: dto.date ? new Date(dto.date) : appt.date,
 
         startTime: dto.startTime ?? appt.startTime,
+        startMinutes: timeToMinutes(dto.startTime ?? appt.startTime),
 
         notes: dto.notes ?? appt.notes,
 
@@ -664,7 +669,7 @@ export class AppointmentsService {
         customer: { select: { id: true, name: true, phone: true } },
         local: { select: { id: true, name: true } },
       },
-      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+      orderBy: [{ date: 'asc' }, { startMinutes: 'asc' }],
     });
 
     const tomorrowMs = tomorrow.getTime();
