@@ -505,6 +505,30 @@ export class UsersService {
       orderBy: { name: 'asc' },
     });
   }
+
+  // PÚBLICO (booking): profesionales (barberos) activos de una sede. La empresa
+  // se deriva del local, no del token (la reserva no requiere iniciar sesión).
+  async getPublicProfessionals(query: any) {
+    const localId = Number(query.localId);
+    if (!localId || Number.isNaN(localId)) {
+      throw new BadRequestException('localId es obligatorio');
+    }
+    const local = await this.prisma.local.findUnique({
+      where: { id: localId },
+      select: { companyId: true },
+    });
+    if (!local) return [];
+    return this.prisma.user.findMany({
+      where: {
+        localId,
+        companyId: local.companyId,
+        status: Status.ACTIVO,
+        role: { in: [Role.PROFESIONAL, Role.BARBERO] },
+      },
+      select: { id: true, name: true, avatar: true },
+      orderBy: { name: 'asc' },
+    });
+  }
 }
 
 export function sanitizeUser(user: any) {
