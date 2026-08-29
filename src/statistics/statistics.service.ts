@@ -625,6 +625,9 @@ export class StatisticsService {
     lt: Date,
     svcRate: number | null,
     prodRate: number | null,
+    // La comisión de productos se paga MENSUAL: solo entra al total en el mes.
+    // En día/semana el total es solo de cortes (los productos se listan aparte).
+    productsInTotal = true,
   ) {
     const r2 = (n: number) => Math.round(n * 100) / 100;
     const sales = await this.prisma.sale.findMany({
@@ -698,7 +701,9 @@ export class StatisticsService {
       products,
       serviceEarn,
       productEarn,
-      earnings: r2(serviceEarn + productEarn),
+      // Total mostrado: cortes siempre; productos solo si aplica (mes).
+      earnings: r2(serviceEarn + (productsInTotal ? productEarn : 0)),
+      productsMonthly: !productsInTotal,
     };
   }
 
@@ -744,6 +749,7 @@ export class StatisticsService {
       lt,
       rates.service,
       rates.product,
+      period === 'month', // productos al total solo en el mes
     );
     return {
       success: true,
@@ -816,6 +822,7 @@ export class StatisticsService {
           w.lt,
           rates.service,
           rates.product,
+          group === 'month', // productos al total solo en el mes
         )),
       })),
     );
