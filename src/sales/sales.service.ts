@@ -732,6 +732,8 @@ export class SalesService {
         color: item.variant?.color,
         sku: item.variant?.sku,
         stock: item.variant?.stock,
+        // Para que al editar los elaborados (sin control de stock) no se topen.
+        trackStock: item.variant?.inventory?.trackStock,
       };
     });
 
