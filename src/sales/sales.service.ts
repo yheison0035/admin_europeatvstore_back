@@ -1117,6 +1117,7 @@ export class SalesService {
         notes: dto.notes ?? sale.notes,
         customerId: dto.customerId ?? sale.customerId,
         userId: dto.userId ?? sale.userId,
+        noCommission: dto.noCommission ?? sale.noCommission,
       };
 
       // ====================================

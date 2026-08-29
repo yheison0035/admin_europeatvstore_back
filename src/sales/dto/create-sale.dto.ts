@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNumber,
@@ -67,6 +68,11 @@ export class CreateSaleDto {
   @IsOptional()
   @IsNumber()
   cashReceived?: number;
+
+  // Venta sin comisión para el empleado (corte de cortesía / mal aplicado).
+  @IsOptional()
+  @IsBoolean()
+  noCommission?: boolean;
 
   @IsArray()
   @IsNotEmpty({ each: true })
