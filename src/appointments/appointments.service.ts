@@ -83,7 +83,8 @@ export class AppointmentsService {
 
     // BLINDAJE: el barbero/profesional SOLO puede ver SUS citas, pase lo que
     // pase por el filtro. Esto sobreescribe cualquier query.barberId.
-    if (['BARBERO', 'PROFESIONAL'].includes(user.role)) {
+    const isBarberRole = ['BARBERO', 'PROFESIONAL'].includes(user.role);
+    if (isBarberRole) {
       where.barberId = user.id;
     }
 
@@ -105,7 +106,20 @@ export class AppointmentsService {
       where.local = byRelationName(String(query.localId));
     }
 
-    if (query.status) where.status = query.status;
+    if (query.status) {
+      where.status = query.status;
+    } else if (isBarberRole) {
+      // Por defecto, al barbero solo le mostramos lo pendiente por hacer
+      // (confirmadas / pendientes / en proceso), no las completadas ni las de
+      // no-asistió. Si filtra por un estado puntual, se respeta.
+      where.status = {
+        in: [
+          AppointmentStatus.CONFIRMADA,
+          AppointmentStatus.PENDIENTE,
+          AppointmentStatus.EN_PROCESO,
+        ],
+      };
+    }
 
     if (query.startTime) {
       where.startTime = { contains: query.startTime, mode: 'insensitive' };
@@ -518,17 +532,31 @@ export class AppointmentsService {
     const today = this.colombiaTodayMidnightUtc();
     const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
     const dayAfter = new Date(today.getTime() + 48 * 3600 * 1000);
+    // Ventana de la semana: del día actual en adelante (7 días), nunca hacia atrás.
+    const weekEnd = new Date(today.getTime() + 7 * 24 * 3600 * 1000);
+
+    const isBarber = ['BARBERO', 'PROFESIONAL'].includes(user.role);
 
     const where: any = {
       companyId: user.companyId,
-      date: { gte: today, lt: dayAfter },
-      status: { not: AppointmentStatus.CANCELADA },
+      date: { gte: today, lt: weekEnd },
+      // Nunca canceladas. Al barbero, además, NO se le muestran las completadas
+      // ni las de no-asistió: solo lo que tiene pendiente por hacer.
+      status: isBarber
+        ? {
+            in: [
+              AppointmentStatus.CONFIRMADA,
+              AppointmentStatus.PENDIENTE,
+              AppointmentStatus.EN_PROCESO,
+            ],
+          }
+        : { not: AppointmentStatus.CANCELADA },
     };
 
     applyLocalFilter(where, user, localIds);
 
     // El barbero/profesional solo ve SU agenda.
-    if (['BARBERO', 'PROFESIONAL'].includes(user.role)) {
+    if (isBarber) {
       where.barberId = user.id;
     }
 
@@ -544,8 +572,10 @@ export class AppointmentsService {
     });
 
     const tomorrowMs = tomorrow.getTime();
+    const dayAfterMs = dayAfter.getTime();
     const todayList: any[] = [];
     const tomorrowList: any[] = [];
+    const weekList: any[] = []; // del día actual en adelante (toda la ventana)
 
     for (const a of items) {
       const start = this.startInstant(a.date, a.startTime);
@@ -567,13 +597,16 @@ export class AppointmentsService {
         local: a.local,
       };
 
-      if (a.date.getTime() < tomorrowMs) todayList.push(item);
-      else tomorrowList.push(item);
+      const t = a.date.getTime();
+      if (t < tomorrowMs) todayList.push(item);
+      else if (t < dayAfterMs) tomorrowList.push(item);
+      // "Semana" incluye todo lo próximo (hoy en adelante).
+      weekList.push(item);
     }
 
     return {
       success: true,
-      data: { today: todayList, tomorrow: tomorrowList },
+      data: { today: todayList, tomorrow: tomorrowList, week: weekList },
     };
   }
 
