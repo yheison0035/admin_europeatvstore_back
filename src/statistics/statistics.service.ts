@@ -636,6 +636,7 @@ export class StatisticsService {
         saleDate: { gte, lt },
       },
       select: {
+        noCommission: true,
         items: {
           select: {
             subtotal: true,
@@ -649,38 +650,44 @@ export class StatisticsService {
       },
     });
 
-    const svc = new Map<string, { name: string; qty: number; earn: number }>();
-    const prod = new Map<string, { name: string; qty: number; earn: number }>();
+    type Line = { name: string; qty: number; earn: number; courtesy: boolean };
+    const svc = new Map<string, Line>();
+    const prod = new Map<string, Line>();
     let cuts = 0;
     let productUnits = 0;
     for (const s of sales) {
+      // Venta de cortesía / mal aplicada: el corte se hizo pero NO genera
+      // comisión (queda en 0). Se marca la línea para explicarlo con un icono.
+      const noCom = s.noCommission;
       for (const it of s.items) {
         const gross = it.subtotal || 0;
         const qty = it.quantity || 0;
         if (it.serviceId) {
           const name = it.service?.name || 'Servicio';
-          const earn = svcRate != null ? (gross * svcRate) / 100 : 0;
-          const c = svc.get(name) || { name, qty: 0, earn: 0 };
+          const earn = svcRate != null && !noCom ? (gross * svcRate) / 100 : 0;
+          const c = svc.get(name) || { name, qty: 0, earn: 0, courtesy: false };
           c.qty += qty;
           c.earn += earn;
+          if (noCom) c.courtesy = true;
           svc.set(name, c);
           cuts += qty;
         } else if (it.inventoryVariantId) {
           const name = it.variant?.inventory?.name || 'Producto';
-          const earn = prodRate != null ? (gross * prodRate) / 100 : 0;
-          const c = prod.get(name) || { name, qty: 0, earn: 0 };
+          const earn = prodRate != null && !noCom ? (gross * prodRate) / 100 : 0;
+          const c = prod.get(name) || { name, qty: 0, earn: 0, courtesy: false };
           c.qty += qty;
           c.earn += earn;
+          if (noCom) c.courtesy = true;
           prod.set(name, c);
           productUnits += qty;
         }
       }
     }
     const services = [...svc.values()]
-      .map((x) => ({ name: x.name, qty: x.qty, earn: r2(x.earn) }))
+      .map((x) => ({ name: x.name, qty: x.qty, earn: r2(x.earn), courtesy: x.courtesy }))
       .sort((a, b) => b.earn - a.earn);
     const products = [...prod.values()]
-      .map((x) => ({ name: x.name, qty: x.qty, earn: r2(x.earn) }))
+      .map((x) => ({ name: x.name, qty: x.qty, earn: r2(x.earn), courtesy: x.courtesy }))
       .sort((a, b) => b.earn - a.earn);
     const serviceEarn = r2(services.reduce((a, x) => a + x.earn, 0));
     const productEarn = r2(products.reduce((a, x) => a + x.earn, 0));
