@@ -1947,7 +1947,8 @@ export class SalesService {
           usersMap[userName].services[name].total += item.subtotal;
 
           const rate = sale.saleDate >= RATE_CHANGE ? RATE_NEW : RATE_OLD;
-          const commission = item.subtotal * rate;
+          // Venta marcada sin comisión (cortesía / mal aplicada) → 0.
+          const commission = sale.noCommission ? 0 : item.subtotal * rate;
 
           usersMap[userName].services[name].commission += commission;
 

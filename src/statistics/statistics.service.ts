@@ -482,6 +482,7 @@ export class StatisticsService {
         },
         select: {
           id: true,
+          noCommission: true,
           items: {
             select: {
               subtotal: true,
@@ -496,13 +497,16 @@ export class StatisticsService {
       let products = 0;
       let cuts = 0; // nº de cortes/servicios realizados
       for (const s of sales) {
+        // Venta sin comisión (cortesía / mal aplicada): no suma a lo que gana,
+        // pero el corte sí se cuenta (lo atendió).
+        const noCom = s.noCommission;
         for (const it of s.items) {
           const v = it.subtotal || 0;
           if (it.serviceId) {
-            services += v;
+            if (!noCom) services += v;
             cuts += it.quantity || 0;
           } else if (it.inventoryVariantId) {
-            products += v;
+            if (!noCom) products += v;
           }
         }
       }

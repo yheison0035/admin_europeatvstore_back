@@ -751,6 +751,9 @@ model Sale {
   dueDate       DateTime? // vencimiento de la venta a crédito (fiado)
   notes         String?
   cashReceived  Float? // efectivo con el que pagó el cliente (para calcular el cambio en la factura)
+  // Venta sin comisión para el empleado (ej. corte de cortesía / mal aplicado):
+  // no le genera comisión, aunque siga contando el total de la venta.
+  noCommission  Boolean @default(false)
 
   source              OrderSource @default(CRM)
   ecommerceCustomerId Int?
