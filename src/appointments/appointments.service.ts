@@ -551,7 +551,8 @@ export class AppointmentsService {
     };
   }
 
-  // Cron global: mantiene los estados al día aunque nadie abra la tabla.
+  // Cron global: mantiene los estados al día y envía los recordatorios de cita
+  // al barbero (aunque nadie abra la app).
   @Cron(CronExpression.EVERY_5_MINUTES)
   async handleAutoTransitionsCron() {
     try {
@@ -564,6 +565,64 @@ export class AppointmentsService {
     } catch (e: any) {
       this.logger.error(`Auto-transición falló: ${e?.message}`);
     }
+    try {
+      const n = await this.sendDueReminders();
+      if (n) this.logger.log(`Recordatorios de cita enviados: ${n}`);
+    } catch (e: any) {
+      this.logger.error(`Recordatorios de cita fallaron: ${e?.message}`);
+    }
+  }
+
+  // Envía al barbero un recordatorio push de las citas próximas (dentro de los
+  // siguientes ~20 min) que aún no se hayan avisado. Marca reminderSent para no
+  // repetir. El corte de aviso coincide con la frecuencia del cron (5 min).
+  private async sendDueReminders() {
+    const now = new Date();
+    const REMIND_MIN = 20;
+    const startDay = this.colombiaTodayMidnightUtc();
+    const appts = await this.prisma.appointment.findMany({
+      where: {
+        reminderSent: false,
+        status: {
+          in: [AppointmentStatus.CONFIRMADA, AppointmentStatus.PENDIENTE],
+        },
+        date: {
+          gte: startDay,
+          lt: new Date(startDay.getTime() + 2 * 86400000),
+        },
+      },
+      include: {
+        service: { select: { name: true } },
+        customer: { select: { name: true } },
+      },
+    });
+
+    const dueIds: number[] = [];
+    for (const a of appts) {
+      const start = this.startInstant(a.date, a.startTime);
+      const mins = Math.round((start.getTime() - now.getTime()) / 60000);
+      if (mins <= 0 || mins > REMIND_MIN) continue;
+      dueIds.push(a.id);
+      const partes = [a.customer?.name, a.service?.name, a.startTime].filter(
+        Boolean,
+      );
+      void this.push
+        .sendToUser(a.barberId, {
+          title: `⏰ Cita en ${mins} min`,
+          body: partes.join(' · ') || 'Tienes una cita próxima.',
+          url: '/dashboard/appointments',
+          tag: `appt-reminder-${a.id}`,
+        })
+        .catch(() => null);
+    }
+
+    if (dueIds.length) {
+      await this.prisma.appointment.updateMany({
+        where: { id: { in: dueIds } },
+        data: { reminderSent: true },
+      });
+    }
+    return dueIds.length;
   }
 
   // Agenda para el modal de inicio de sesión y los recordatorios: citas de hoy

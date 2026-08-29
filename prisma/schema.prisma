@@ -962,6 +962,9 @@ model Appointment {
   // Confirmación explícita con el cliente (p. ej. tras contactarlo por WhatsApp).
   clientConfirmed Boolean @default(false)
 
+  // Ya se le envió al barbero el recordatorio push previo a la cita.
+  reminderSent Boolean @default(false)
+
   serviceId Int
   service   Service @relation(fields: [serviceId], references: [id])
 
