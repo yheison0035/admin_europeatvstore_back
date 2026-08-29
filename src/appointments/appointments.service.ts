@@ -146,6 +146,12 @@ export class AppointmentsService {
       }
     }
 
+    // El barbero solo ve sus citas de HOY en adelante (nada de días pasados),
+    // salvo que filtre una fecha puntual.
+    if (isBarberRole && !query.date) {
+      where.date = { gte: this.colombiaTodayMidnightUtc() };
+    }
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.appointment.findMany({
         where,
