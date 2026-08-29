@@ -489,6 +489,15 @@ export class StatisticsService {
               quantity: true,
               serviceId: true,
               inventoryVariantId: true,
+              variant: {
+                select: {
+                  inventory: {
+                    select: {
+                      category: { select: { earnsCommission: true } },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -506,7 +515,10 @@ export class StatisticsService {
             if (!noCom) services += v;
             cuts += it.quantity || 0;
           } else if (it.inventoryVariantId) {
-            if (!noCom) products += v;
+            // Producto: solo suma a comisión si su categoría genera comisión.
+            const earns =
+              it.variant?.inventory?.category?.earnsCommission === true;
+            if (!noCom && earns) products += v;
           }
         }
       }
@@ -647,7 +659,18 @@ export class StatisticsService {
             serviceId: true,
             inventoryVariantId: true,
             service: { select: { name: true } },
-            variant: { select: { inventory: { select: { name: true } } } },
+            variant: {
+              select: {
+                inventory: {
+                  select: {
+                    name: true,
+                    // Solo comisiona si la categoría del producto está marcada
+                    // como que genera comisión (insumos sí, cervezas no).
+                    category: { select: { earnsCommission: true } },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -676,7 +699,12 @@ export class StatisticsService {
           cuts += qty;
         } else if (it.inventoryVariantId) {
           const name = it.variant?.inventory?.name || 'Producto';
-          const earn = prodRate != null && !noCom ? (gross * prodRate) / 100 : 0;
+          const earns =
+            it.variant?.inventory?.category?.earnsCommission === true;
+          const earn =
+            prodRate != null && !noCom && earns
+              ? (gross * prodRate) / 100
+              : 0;
           const c = prod.get(name) || { name, qty: 0, earn: 0, courtesy: false };
           c.qty += qty;
           c.earn += earn;

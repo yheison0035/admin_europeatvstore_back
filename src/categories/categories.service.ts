@@ -161,6 +161,7 @@ export class CategoriesService {
         name: dto.name,
         description: dto.description,
         status: dto.status ?? Status.ACTIVO,
+        earnsCommission: dto.earnsCommission ?? false,
 
         company: {
           connect: { id: user.companyId },
@@ -218,6 +219,9 @@ export class CategoriesService {
         ...(dto.name && { name: dto.name }),
         ...(dto.description && { description: dto.description }),
         ...(dto.status && { status: dto.status }),
+        ...(dto.earnsCommission !== undefined && {
+          earnsCommission: dto.earnsCommission,
+        }),
 
         ...(dto.localId !== undefined && {
           local: dto.localId

@@ -554,6 +554,9 @@ model Category {
   description String?
   status      Status  @default(ACTIVO)
   localId     Int?
+  // ¿Los productos de esta categoría generan comisión al empleado? (Ej. insumos
+  // sí; cervezas/bebidas no.) Por defecto NO: solo pagan las que se marquen.
+  earnsCommission Boolean @default(false)
 
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)

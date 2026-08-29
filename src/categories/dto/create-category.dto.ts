@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsBoolean } from 'class-validator';
 import { Status } from '@prisma/client';
 
 export class CreateCategoryDto {
@@ -15,4 +15,9 @@ export class CreateCategoryDto {
 
   @IsOptional()
   localId?: number;
+
+  // ¿Los productos de esta categoría generan comisión al empleado?
+  @IsOptional()
+  @IsBoolean()
+  earnsCommission?: boolean;
 }
