@@ -293,6 +293,43 @@ export class CustomersService {
 
   // Ficha 360°: métricas de relación (LTV, visitas, ticket promedio, última
   // visita, lo que suele consumir), historial de ventas y citas, y segmento.
+  // Graduar (o desgraduar) la tarjeta de fidelización a mano. Ej.: al cliente ya
+  // se le dio su corte de cortesía por error → se le completa la tarjeta para
+  // que su próxima visita pague normal, sin que un recálculo lo revierta.
+  async setLoyaltyManualComplete(id: number, complete: boolean, user: any) {
+    const cust = await this.prisma.customer.findFirst({
+      where: { id, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!cust) throw new NotFoundException('Cliente no encontrado');
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: { loyaltyTier2Visits: true },
+    });
+    const tope = company?.loyaltyTier2Visits ?? 8;
+
+    const updated = await this.prisma.customer.update({
+      where: { id },
+      data: complete
+        ? {
+            loyaltyManualComplete: true,
+            loyaltyCompleted: true,
+            loyaltyStamps: tope,
+          }
+        : { loyaltyManualComplete: false },
+    });
+    return {
+      success: true,
+      data: {
+        id: updated.id,
+        loyaltyManualComplete: updated.loyaltyManualComplete,
+        loyaltyStamps: updated.loyaltyStamps,
+        loyaltyCompleted: updated.loyaltyCompleted,
+      },
+    };
+  }
+
   async getCustomerSummary(id: number, user: any) {
     const customer = await this.prisma.customer.findFirst({
       where: { id, companyId: user.companyId },

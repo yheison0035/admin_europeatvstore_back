@@ -67,7 +67,7 @@ export class SalesService {
 
     const customer = await db.customer.findFirst({
       where: { id: customerId, companyId },
-      select: { id: true, document: true },
+      select: { id: true, document: true, loyaltyManualComplete: true },
     });
     if (!customer || customer.document === '222222222222') return;
 
@@ -81,15 +81,17 @@ export class SalesService {
       orderBy: { saleDate: 'asc' },
     });
 
-    const { stamps, last, completed } = replayCustomerStamps(
-      company as any,
-      sales,
-    );
+    const replay = replayCustomerStamps(company as any, sales);
+    // Si el dueño lo graduó a mano, se respeta: tarjeta completa, no acumula más.
+    const stamps = customer.loyaltyManualComplete
+      ? company.loyaltyTier2Visits
+      : replay.stamps;
+    const completed = customer.loyaltyManualComplete || replay.completed;
     await db.customer.update({
       where: { id: customerId },
       data: {
         loyaltyStamps: stamps,
-        loyaltyLastVisit: last,
+        loyaltyLastVisit: replay.last,
         loyaltyCompleted: completed,
       },
     });
@@ -122,6 +124,7 @@ export class SalesService {
         loyaltyStamps: true,
         loyaltyLastVisit: true,
         loyaltyCompleted: true,
+        loyaltyManualComplete: true,
       },
     });
     if (!customer || customer.document === '222222222222') return 0;

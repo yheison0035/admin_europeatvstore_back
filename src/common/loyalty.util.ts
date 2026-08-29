@@ -51,11 +51,15 @@ export function loyaltyStatus(cfg: LoyaltyConfig, customer: any, now: Date) {
 
   // Cliente graduado: ya completó el rango; la fidelización está desactivada
   // (es cliente antiguo y paga normal). Sin descuento y sin próximas visitas.
-  if (customer?.loyaltyCompleted) {
+  // También aplica si el dueño lo graduó a mano (loyaltyManualComplete).
+  if (customer?.loyaltyCompleted || customer?.loyaltyManualComplete) {
     return {
       enabled: true,
       completed: true,
-      currentCount: customer?.loyaltyStamps || 0,
+      // Si fue graduado a mano, la tarjeta se muestra completa (tope tier2).
+      currentCount: customer?.loyaltyManualComplete
+        ? cfg.loyaltyTier2Visits
+        : customer?.loyaltyStamps || 0,
       nextVisit: null,
       nextDiscount: 0,
       tier1,
@@ -119,9 +123,11 @@ export function replayCustomerStamps(
 // visita el cliente COMPLETA el rango (llega al tope) → se gradúa y ya no
 // vuelve a acumular (la fidelización es solo para los primeros cortes).
 export function applyLoyaltyVisit(cfg: LoyaltyConfig, customer: any, now: Date) {
-  // Cliente ya graduado: no acumula ni recibe descuento.
-  if (customer?.loyaltyCompleted) {
-    const c = customer?.loyaltyStamps || 0;
+  // Cliente ya graduado (o graduado a mano): no acumula ni recibe descuento.
+  if (customer?.loyaltyCompleted || customer?.loyaltyManualComplete) {
+    const c = customer?.loyaltyManualComplete
+      ? cfg.loyaltyTier2Visits
+      : customer?.loyaltyStamps || 0;
     return { visit: c, discount: 0, newCount: c, completed: true };
   }
   const lastVisit = customer?.loyaltyLastVisit

@@ -99,6 +99,21 @@ export class CustomersController {
     return this.customersService.redeemLoyaltyReward(id, req.user);
   }
 
+  // Graduar / desgraduar la tarjeta de fidelización a mano (dueño/admin).
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch(':id/loyalty-complete')
+  loyaltyComplete(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+    @Req() req,
+  ) {
+    return this.customersService.setLoyaltyManualComplete(
+      id,
+      body?.complete !== false,
+      req.user,
+    );
+  }
+
   // Crear
   @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA', 'COORDINADOR', 'ASESOR')
   @Post()

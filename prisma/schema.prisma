@@ -449,6 +449,9 @@ model Customer {
   // La fidelización queda desactivada para él de forma permanente (ya es
   // cliente antiguo y paga normal); se lista aparte para futuras ofertas.
   loyaltyCompleted Boolean   @default(false)
+  // Graduado MANUAL por el dueño (ej. se le completó la tarjeta por cortesía):
+  // se respeta aunque los sellos se recalculen desde las ventas.
+  loyaltyManualComplete Boolean @default(false)
 
   // Última vez que se le escribió para reactivarlo (campaña de win-back).
   lastWinbackAt DateTime?
@@ -1378,4 +1381,40 @@ model ReturnItem {
   subtotal           Float
 
   @@index([returnId])
+}
+
+//////////////////////////////////////////////////
+// CARGOS AL EMPLEADO (cuenta del barbero): valores
+// que el empleado debe responder al negocio —
+// error de membresía, préstamo, producto llevado…
+// Se puede saldar en efectivo o descontar de comisiones.
+enum EmployeeChargeType {
+  MEMBRESIA
+  PRESTAMO
+  PRODUCTO
+  OTRO
+}
+
+model EmployeeCharge {
+  id        Int                @id @default(autoincrement())
+  companyId Int
+  userId    Int // empleado/barbero que debe
+  type      EmployeeChargeType @default(OTRO)
+  concept   String
+  amount    Float
+  notes     String?
+  // PENDIENTE (debe) | PAGADO (respondió efectivo) | DESCONTADO (de comisión)
+  status        String    @default("PENDIENTE")
+  settledMethod String? // EFECTIVO | COMISION
+  settledAt     DateTime?
+  saleId        Int? // opcional: venta que originó el cargo (ej. membresía)
+  createdById   Int?
+  createdByName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
 }
