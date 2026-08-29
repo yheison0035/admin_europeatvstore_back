@@ -539,6 +539,15 @@ export class StatisticsService {
 
     const teamBirthdays = await this.teamBirthdays(user, y, m, d);
 
+    // Cargos pendientes del barbero (lo que se le va a descontar del pago).
+    const myCharges = await this.prisma.employeeCharge.findMany({
+      where: { companyId, userId: uid, status: 'PENDIENTE' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, concept: true, amount: true, type: true, createdAt: true },
+    });
+    const chargesTotal = r2(myCharges.reduce((s, c) => s + c.amount, 0));
+    const monthEarn = earn(mMonth.services, mMonth.products);
+
     return {
       success: true,
       data: {
@@ -552,11 +561,15 @@ export class StatisticsService {
           range: weekRange,
         },
         month: {
-          earnings: earn(mMonth.services, mMonth.products),
+          earnings: monthEarn,
           cuts: mMonth.cuts,
           productShare,
           range: cycle.range,
           payDay: cycle.payDay,
+          // Descuentos por cargos y neto a recibir en el ciclo.
+          charges: chargesTotal,
+          chargesList: myCharges,
+          net: r2((monthEarn.total || 0) - chargesTotal),
         },
       },
     };

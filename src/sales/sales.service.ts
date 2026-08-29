@@ -1915,6 +1915,7 @@ export class SalesService {
 
       if (!usersMap[userName]) {
         usersMap[userName] = {
+          userId: sale.user?.id ?? null,
           services: {},
           products: {},
           totals: {
@@ -1986,6 +1987,32 @@ export class SalesService {
     for (const [method, amount] of Object.entries(paymentTotals)) {
       if (amount > 0) {
         paymentBreakdown[method] = amount;
+      }
+    }
+
+    // CARGOS AL EMPLEADO: descuentos pendientes (error de membresía, préstamos,
+    // productos…) que se le restan a lo que se le va a pagar. Se adjunta a cada
+    // usuario del reporte su total pendiente + el detalle, y el NETO a pagar.
+    const userIds = Object.values(usersMap)
+      .map((u: any) => u.userId)
+      .filter((id: any) => id != null);
+    if (userIds.length) {
+      const charges = await this.prisma.employeeCharge.findMany({
+        where: {
+          companyId: user.companyId,
+          userId: { in: userIds as number[] },
+          status: 'PENDIENTE',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      const byUser: Record<number, any[]> = {};
+      for (const c of charges) (byUser[c.userId] ||= []).push(c);
+      for (const entry of Object.values(usersMap) as any[]) {
+        const list = entry.userId != null ? byUser[entry.userId] || [] : [];
+        const chargesTotal = list.reduce((s, c) => s + c.amount, 0);
+        entry.chargesList = list;
+        entry.totals.charges = chargesTotal;
+        entry.totals.netCommission = entry.totals.commission - chargesTotal;
       }
     }
 
