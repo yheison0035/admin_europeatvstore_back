@@ -162,11 +162,8 @@ export class AppointmentsService {
         },
         skip,
         take: limit,
-        // El barbero ve/imprime sus citas de la más temprana a la más tarde;
-        // el dueño/recepción las ve con la más reciente primero.
-        orderBy: isBarberRole
-          ? [{ date: 'asc' }, { startTime: 'asc' }]
-          : [{ date: 'desc' }, { startTime: 'desc' }],
+        // Todas (incluido el barbero) de la más reciente a la menos reciente.
+        orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
       }),
       this.prisma.appointment.count({ where }),
     ]);
