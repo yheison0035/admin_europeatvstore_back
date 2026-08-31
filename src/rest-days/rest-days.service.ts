@@ -43,7 +43,7 @@ export class RestDaysService {
       where: {
         companyId: user.companyId,
         role: { in: PRO_ROLES },
-        status: { not: 'ELIMINADO' as any },
+        status: 'ACTIVO' as any,
       },
       select: { id: true, name: true, avatar: true, restWeekdays: true },
       orderBy: { name: 'asc' },
