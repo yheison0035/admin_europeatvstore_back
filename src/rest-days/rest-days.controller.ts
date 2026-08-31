@@ -33,6 +33,13 @@ export class RestDaysController {
     return this.service.mine(req.user);
   }
 
+  // Resumen de descansos de todos los profesionales (calendario de agenda).
+  @Roles('SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA')
+  @Get('overview')
+  overview(@Req() req) {
+    return this.service.overview(req.user);
+  }
+
   @Get(':userId')
   getForUser(@Req() req, @Param('userId', ParseIntPipe) userId: number) {
     return this.service.getForUser(req.user, userId);

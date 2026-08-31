@@ -76,6 +76,43 @@ export class RestDaysService {
     };
   }
 
+  // Resumen de descansos de TODOS los profesionales activos (para el calendario
+  // de la agenda). Lectura para dueño/admin/recepción.
+  async overview(user: any) {
+    const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
+    const rows = await this.prisma.user.findMany({
+      where: {
+        companyId: user.companyId,
+        role: { in: PRO_ROLES },
+        status: 'ACTIVO' as any,
+      },
+      select: { id: true, name: true, restWeekdays: true },
+      orderBy: { name: 'asc' },
+    });
+    const ids = rows.map((r) => r.id);
+    const timeOff = ids.length
+      ? await this.prisma.employeeTimeOff.findMany({
+          where: { userId: { in: ids }, date: { gte: today } },
+          select: { userId: true, date: true, reason: true },
+        })
+      : [];
+    const byUser = new Map<number, { date: Date; reason: string | null }[]>();
+    for (const t of timeOff) {
+      const arr = byUser.get(t.userId) || [];
+      arr.push({ date: t.date, reason: t.reason });
+      byUser.set(t.userId, arr);
+    }
+    return {
+      success: true,
+      data: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        restWeekdays: r.restWeekdays || [],
+        timeOff: byUser.get(r.id) || [],
+      })),
+    };
+  }
+
   async getForUser(user: any, userId: number) {
     this.assertAdmin(user);
     const u = await this.proOfCompany(userId, user.companyId);
