@@ -4,9 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { Role } from '@prisma/client';
 import { PrismaService } from '@/prisma.service';
 import { ExpensesService } from '@/expenses/expenses.service';
+import { PushService } from '@/push/push.service';
 import { CreatePayableDto } from './dto/create-payable.dto';
 
 const MANAGE_ROLES: Role[] = [
@@ -15,12 +17,24 @@ const MANAGE_ROLES: Role[] = [
   Role.RECEPCIONISTA,
 ];
 
+// Colombia = UTC-5.
+const COLOMBIA_OFFSET_MIN = 300;
+
 @Injectable()
 export class PayablesService {
   constructor(
     private prisma: PrismaService,
     private expenses: ExpensesService,
+    private push: PushService,
   ) {}
+
+  // Medianoche de hoy en Colombia, expresada en UTC.
+  static colombiaTodayMidnightUtc(): Date {
+    const col = new Date(Date.now() - COLOMBIA_OFFSET_MIN * 60000);
+    return new Date(
+      Date.UTC(col.getUTCFullYear(), col.getUTCMonth(), col.getUTCDate()),
+    );
+  }
 
   private assertManage(user: any) {
     if (!MANAGE_ROLES.includes(user.role)) {
@@ -65,14 +79,31 @@ export class PayablesService {
       where: { companyId: user.companyId, status: 'PENDIENTE' },
       select: { amount: true, dueDate: true },
     });
-    const now = new Date();
+    const today = PayablesService.colombiaTodayMidnightUtc();
+    const soonLimit = new Date(today.getTime() + 3 * 86400000); // hoy + 3 días
     const pending = pend.reduce((s, p) => s + p.amount, 0);
-    const overdue = pend
-      .filter((p) => p.dueDate && new Date(p.dueDate) < now)
-      .reduce((s, p) => s + p.amount, 0);
+    const overduePs = pend.filter(
+      (p) => p.dueDate && new Date(p.dueDate) < today,
+    );
+    // "Vence pronto": vence entre hoy y los próximos 3 días (sin incluir vencidos).
+    const soonPs = pend.filter(
+      (p) =>
+        p.dueDate &&
+        new Date(p.dueDate) >= today &&
+        new Date(p.dueDate) < soonLimit,
+    );
+    const sum = (arr: { amount: number }[]) =>
+      arr.reduce((s, p) => s + p.amount, 0);
     return {
       success: true,
-      data: { pending, overdue, count: pend.length },
+      data: {
+        pending,
+        overdue: sum(overduePs),
+        overdueCount: overduePs.length,
+        dueSoon: sum(soonPs),
+        dueSoonCount: soonPs.length,
+        count: pend.length,
+      },
     };
   }
 
@@ -205,5 +236,74 @@ export class PayablesService {
     }
     await this.prisma.payable.delete({ where: { id } });
     return { success: true };
+  }
+
+  // Aviso diario 9:00 a. m. Colombia (14:00 UTC): notifica al dueño/admin/
+  // recepción las cuentas vencidas o que vencen en los próximos 3 días.
+  @Cron('0 14 * * *')
+  async notifyDuePayables() {
+    try {
+      const today = PayablesService.colombiaTodayMidnightUtc();
+      const soonLimit = new Date(today.getTime() + 3 * 86400000);
+
+      const pend = await this.prisma.payable.findMany({
+        where: {
+          status: 'PENDIENTE',
+          dueDate: { not: null, lt: soonLimit },
+        },
+        select: { companyId: true, amount: true, dueDate: true },
+      });
+      if (!pend.length) return;
+
+      // Agrupa por empresa.
+      const byCompany = new Map<
+        number,
+        { overdue: number; soon: number; overdueAmt: number; soonAmt: number }
+      >();
+      for (const p of pend) {
+        const g =
+          byCompany.get(p.companyId) ??
+          { overdue: 0, soon: 0, overdueAmt: 0, soonAmt: 0 };
+        if (p.dueDate && new Date(p.dueDate) < today) {
+          g.overdue += 1;
+          g.overdueAmt += p.amount;
+        } else {
+          g.soon += 1;
+          g.soonAmt += p.amount;
+        }
+        byCompany.set(p.companyId, g);
+      }
+
+      const fmt = (n: number) =>
+        '$' + Math.round(n).toLocaleString('es-CO');
+
+      for (const [companyId, g] of byCompany) {
+        const parts: string[] = [];
+        if (g.overdue) {
+          parts.push(
+            `${g.overdue} vencida${g.overdue > 1 ? 's' : ''} (${fmt(g.overdueAmt)})`,
+          );
+        }
+        if (g.soon) {
+          parts.push(
+            `${g.soon} por vencer (${fmt(g.soonAmt)})`,
+          );
+        }
+        await this.push
+          .sendToCompanyRoles(
+            companyId,
+            ['SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA'],
+            {
+              title: 'Cuentas por pagar',
+              body: `Tienes ${parts.join(' y ')}.`,
+              url: '/dashboard/payables',
+              tag: 'payables-due',
+            },
+          )
+          .catch(() => null);
+      }
+    } catch {
+      // Silencioso: el cron nunca debe tumbar la app.
+    }
   }
 }
