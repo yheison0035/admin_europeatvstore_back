@@ -400,6 +400,9 @@ export class CompaniesService {
       'rose',
       'violet',
       'cyan',
+      'graphite',
+      'indigo',
+      'wine',
     ];
     const value = allowed.includes(theme) ? theme : 'orange';
     const company = await this.prisma.company.update({
