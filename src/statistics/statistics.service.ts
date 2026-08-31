@@ -68,13 +68,13 @@ const PAYMENT_LABELS: Record<string, string> = {
   CREDITO: 'Crédito (fiado)',
 };
 
-// Nombre a mostrar/agrupar del método de pago de una venta.
+// Nombre a mostrar/agrupar del método de pago de una venta (en MAYÚSCULAS).
 function paymentName(sale: any): string {
   return (
     sale.paymentMethodCatalog?.name ||
     PAYMENT_LABELS[sale.paymentMethod] ||
     sale.paymentMethod
-  );
+  ).toUpperCase();
 }
 
 function topFrom(

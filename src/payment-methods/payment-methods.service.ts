@@ -12,12 +12,12 @@ const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN];
 // Métodos base (comportamiento). El "code" define la lógica: EFECTIVO mueve
 // caja, CREDITO marca fiado, el resto va como pago normal (banco).
 const DEFAULTS: { code: PaymentMethod; name: string }[] = [
-  { code: 'EFECTIVO', name: 'Efectivo' },
-  { code: 'BANCOLOMBIA', name: 'Bancolombia' },
-  { code: 'TRANSFERENCIA', name: 'Transferencia' },
-  { code: 'DATAFONO', name: 'Datáfono' },
-  { code: 'ADDI', name: 'Addi' },
-  { code: 'CREDITO', name: 'Crédito (fiado)' },
+  { code: 'EFECTIVO', name: 'EFECTIVO' },
+  { code: 'BANCOLOMBIA', name: 'BANCOLOMBIA' },
+  { code: 'TRANSFERENCIA', name: 'TRANSFERENCIA' },
+  { code: 'DATAFONO', name: 'DATÁFONO' },
+  { code: 'ADDI', name: 'ADDI' },
+  { code: 'CREDITO', name: 'CRÉDITO (FIADO)' },
 ];
 
 const VALID_CODES = Object.values(PaymentMethod) as string[];
@@ -77,7 +77,7 @@ export class PaymentMethodsService {
 
   async create(user: any, dto: any) {
     this.assertAdmin(user);
-    const name = String(dto?.name || '').trim();
+    const name = String(dto?.name || '').trim().toUpperCase();
     if (!name) throw new BadRequestException('El nombre es obligatorio');
     const code = this.validateCode(dto?.code);
     const dup = await this.prisma.paymentMethodCatalog.findFirst({
@@ -107,7 +107,7 @@ export class PaymentMethodsService {
     await this.own(user, id);
     const data: any = {};
     if (dto.name !== undefined) {
-      const name = String(dto.name).trim();
+      const name = String(dto.name).trim().toUpperCase();
       if (!name) throw new BadRequestException('El nombre es obligatorio');
       data.name = name;
     }
