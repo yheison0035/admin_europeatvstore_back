@@ -252,6 +252,14 @@ export class AppointmentsService {
     }
     if (!local) throw new NotFoundException('Local no encontrado');
 
+    // Bloqueo por descanso: no se puede agendar en un día libre del profesional.
+    const restCreate = await this.barberOff(dto.barberId, dto.date);
+    if (restCreate.off) {
+      throw new BadRequestException(
+        `El profesional está de descanso ese día (${restCreate.reason}). Por favor elige otra fecha.`,
+      );
+    }
+
     const startMinutes = timeToMinutes(dto.startTime);
     const endMinutes = startMinutes + service.duration;
 
@@ -365,6 +373,15 @@ export class AppointmentsService {
     const appointmentDate = dto.date ? new Date(dto.date) : appt.date;
 
     const startTime = dto.startTime ?? appt.startTime;
+
+    // Bloqueo por descanso del profesional en la fecha (nueva o existente).
+    const restDateStr = (dto.date ?? appt.date.toISOString()).slice(0, 10);
+    const restUpdate = await this.barberOff(barberId, restDateStr);
+    if (restUpdate.off) {
+      throw new BadRequestException(
+        `El profesional está de descanso ese día (${restUpdate.reason}). Por favor elige otra fecha.`,
+      );
+    }
 
     const service = await this.prisma.service.findUnique({
       where: {
@@ -798,6 +815,34 @@ export class AppointmentsService {
   }
 
   // Devuelve los horarios disponibles para un barbero, fecha y servicio dado
+  // ¿El profesional descansa ese día? (día de la semana recurrente o fecha
+  // puntual de ausencia). Devuelve el motivo para mostrar un mensaje claro.
+  async barberOff(
+    barberId: number | string,
+    dateStr: string,
+  ): Promise<{ off: boolean; reason: string | null }> {
+    const id = Number(barberId);
+    if (!id || !dateStr) return { off: false, reason: null };
+    const day = new Date(`${String(dateStr).slice(0, 10)}T00:00:00Z`);
+    const weekday = day.getUTCDay(); // 0=Dom..6=Sáb
+
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { restWeekdays: true },
+    });
+    if (user?.restWeekdays?.includes(weekday)) {
+      return { off: true, reason: 'Descanso semanal' };
+    }
+    const specific = await this.prisma.employeeTimeOff.findFirst({
+      where: { userId: id, date: day },
+      select: { reason: true },
+    });
+    if (specific) {
+      return { off: true, reason: specific.reason || 'Día libre' };
+    }
+    return { off: false, reason: null };
+  }
+
   async getAvailability(query: any) {
     const {
       barberId,
@@ -808,6 +853,12 @@ export class AppointmentsService {
 
     if (!barberId || !date || !serviceId) {
       throw new BadRequestException('Faltan datos');
+    }
+
+    // Si el profesional descansa ese día, no hay horarios disponibles.
+    const rest = await this.barberOff(barberId, date);
+    if (rest.off) {
+      return { off: true, reason: rest.reason, slots: [] };
     }
 
     const service = await this.prisma.service.findUnique({
@@ -887,6 +938,10 @@ export class AppointmentsService {
 
     const visibleSlots = available.filter((minutes) => minutes % 30 === 0);
 
-    return visibleSlots.map((minutes) => minutesToColombiaHour(minutes));
+    return {
+      off: false,
+      reason: null,
+      slots: visibleSlots.map((minutes) => minutesToColombiaHour(minutes)),
+    };
   }
 }

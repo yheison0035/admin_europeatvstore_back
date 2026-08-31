@@ -42,6 +42,7 @@ import { ChargeCategoriesModule } from './charge-categories/charge-categories.mo
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module';
 import { CustomerSegmentsModule } from './customer-segments/customer-segments.module';
+import { RestDaysModule } from './rest-days/rest-days.module';
 import { AuditModule } from './audit/audit.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { SubscriptionModule } from './subscription/subscription.module';
@@ -90,6 +91,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     PaymentMethodsModule,
     UnitsOfMeasureModule,
     CustomerSegmentsModule,
+    RestDaysModule,
     AuditModule,
     CouponsModule,
     SubscriptionModule,
