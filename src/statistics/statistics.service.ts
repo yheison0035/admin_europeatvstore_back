@@ -114,6 +114,111 @@ export class StatisticsService {
     };
   }
 
+  // Vista anual: 12 meses con ventas, gastos, costo de ventas y utilidad.
+  // Base para la gráfica anual y el comparativo mensual tipo Alegra/Siigo.
+  async annual(user: any, dto: any) {
+    await this.planLimits.assertModule(user.companyId, 'statistics');
+    const companyId = user.companyId;
+    const localId = dto?.localId ? Number(dto.localId) : null;
+    const year = Number(dto?.year) || new Date().getFullYear();
+
+    const accessible = await getAccessibleLocalIds(this.prisma, user);
+    let localFilter: any = {};
+    if (localId) {
+      localFilter =
+        accessible && !accessible.includes(localId)
+          ? { localId: { in: [] } }
+          : { localId };
+    } else if (accessible) {
+      localFilter = { localId: { in: accessible } };
+    }
+
+    const start = dayStartUtc(year, 1, 1);
+    const end = dayStartUtc(year + 1, 1, 1);
+    const expStart = new Date(Date.UTC(year, 0, 1));
+    const expEnd = new Date(Date.UTC(year + 1, 0, 1));
+
+    const [sales, expenses] = await Promise.all([
+      this.prisma.sale.findMany({
+        where: {
+          local: { companyId },
+          ...localFilter,
+          saleDate: { gte: start, lt: end },
+          paymentStatus: 'PAGADA' as any,
+        },
+        select: {
+          saleDate: true,
+          totalAmount: true,
+          items: {
+            select: {
+              quantity: true,
+              inventoryVariantId: true,
+              variant: {
+                select: { inventory: { select: { purchasePrice: true } } },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.expense.findMany({
+        where: {
+          local: { companyId },
+          ...localFilter,
+          status: { not: 'ELIMINADO' as any },
+          expenseDate: { gte: expStart, lt: expEnd },
+        },
+        select: { expenseDate: true, amount: true },
+      }),
+    ]);
+
+    const months = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      ventas: 0,
+      gastos: 0,
+      costoVentas: 0,
+      count: 0,
+    }));
+
+    for (const s of sales) {
+      const m = Number(colombiaDay(s.saleDate).slice(5, 7)) - 1;
+      months[m].ventas += s.totalAmount;
+      months[m].count += 1;
+      for (const it of s.items) {
+        if (it.inventoryVariantId && it.variant?.inventory) {
+          months[m].costoVentas +=
+            it.quantity * (it.variant.inventory.purchasePrice || 0);
+        }
+      }
+    }
+    for (const e of expenses) {
+      const m = Number(utcDay(e.expenseDate).slice(5, 7)) - 1;
+      months[m].gastos += e.amount;
+    }
+
+    const data = months.map((m) => ({
+      month: m.month,
+      count: m.count,
+      ventas: Math.round(m.ventas),
+      gastos: Math.round(m.gastos),
+      costoVentas: Math.round(m.costoVentas),
+      utilidadBruta: Math.round(m.ventas - m.costoVentas),
+      utilidad: Math.round(m.ventas - m.gastos),
+    }));
+
+    const totals = data.reduce(
+      (a, m) => ({
+        ventas: a.ventas + m.ventas,
+        gastos: a.gastos + m.gastos,
+        costoVentas: a.costoVentas + m.costoVentas,
+        utilidad: a.utilidad + m.utilidad,
+        count: a.count + m.count,
+      }),
+      { ventas: 0, gastos: 0, costoVentas: 0, utilidad: 0, count: 0 },
+    );
+
+    return { success: true, data: { year, months: data, totals } };
+  }
+
   // Resumen ligero para el Home del dashboard (universal, sin gate de plan):
   // ventas de hoy (cobradas) + conteos para el checklist de primeros pasos.
   async homeSummary(user: any) {
@@ -1080,6 +1185,7 @@ export class StatisticsService {
         include: {
           user: { select: { id: true, name: true } },
           local: { select: { id: true, name: true } },
+          customer: { select: { name: true, document: true } },
           items: {
             include: {
               service: { select: { name: true } },
@@ -1144,10 +1250,19 @@ export class StatisticsService {
     const sellerMap: Record<string, number> = {};
     const productMap: Record<string, { quantity: number; total: number }> = {};
     const serviceMap: Record<string, { quantity: number; total: number }> = {};
+    // Mejores clientes (excluye Consumidor Final).
+    const customerMap: Record<string, { total: number; count: number }> = {};
 
     let costOfGoods = 0; // costo de la mercancía vendida (solo productos)
     for (const sale of sales) {
       totalSales += sale.totalAmount;
+
+      if (sale.customer && sale.customer.document !== CONSUMIDOR_FINAL) {
+        const cn = sale.customer.name || 'Cliente';
+        if (!customerMap[cn]) customerMap[cn] = { total: 0, count: 0 };
+        customerMap[cn].total += sale.totalAmount;
+        customerMap[cn].count += 1;
+      }
       const day = colombiaDay(sale.saleDate);
       salesByDay[day] = (salesByDay[day] || 0) + sale.totalAmount;
       paymentMap[sale.paymentMethod] =
@@ -1186,6 +1301,16 @@ export class StatisticsService {
       const day = utcDay(e.expenseDate);
       expensesByDay[day] = (expensesByDay[day] || 0) + e.amount;
     }
+
+    // Mejores clientes por monto comprado.
+    const topCustomers = Object.entries(customerMap)
+      .map(([name, v]) => ({
+        name,
+        total: Math.round(v.total),
+        count: v.count,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
 
     // Detalle de gastos del periodo (con fecha de pago) para el panel de gastos.
     const expensesDetail = expenses.map((e) => ({
@@ -1299,6 +1424,7 @@ export class StatisticsService {
         topProducts: topFrom(productMap, 8),
         topServices: topFrom(serviceMap, 8),
         topSellers: pairs(sellerMap, 'name').slice(0, 6),
+        topCustomers,
         expensesByType: pairs(expenseTypeMap, 'type'),
         expensesDetail,
         receivables,

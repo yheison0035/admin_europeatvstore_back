@@ -31,6 +31,13 @@ export class StatisticsController {
     return this.statisticsService.compare(req.user, dto);
   }
 
+  // Vista anual (12 meses).
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Post('annual')
+  annual(@Req() req, @Body() dto: any) {
+    return this.statisticsService.annual(req.user, dto);
+  }
+
   // Reporte de IVA (generado vs descontable) de un periodo.
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post('tax-report')
