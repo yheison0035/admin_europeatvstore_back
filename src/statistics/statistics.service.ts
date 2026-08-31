@@ -28,6 +28,31 @@ function pct(current: number, previous: number): number {
   return Math.round(((current - previous) / previous) * 100);
 }
 
+// Etiquetas legibles de los tipos de gasto base (enum ExpenseType). Deben
+// coincidir con los nombres de las categorías precargadas para que los gastos
+// viejos (por enum) y los nuevos (por categoría) se agrupen bajo el mismo nombre.
+const EXPENSE_TYPE_LABELS: Record<string, string> = {
+  ARRIENDO: 'Arriendo',
+  SERVICIOS_PUBLICOS: 'Servicios públicos',
+  EMPLEADOS: 'Empleados / nómina',
+  TRANSPORTE: 'Transporte',
+  PEDIDOS: 'Pedidos / mercancía',
+  PLAN_CELULAR: 'Plan celular',
+  PLAN_INTERNET: 'Plan internet',
+  ASEO: 'Aseo',
+  MANTENIMIENTO: 'Mantenimiento',
+  PUBLICIDAD: 'Publicidad',
+  IMPUESTOS: 'Impuestos',
+  COMISIONES: 'Comisiones',
+  OTROS: 'Otros',
+};
+
+// Nombre a mostrar/agrupar de un gasto: su categoría personalizada si tiene,
+// si no la etiqueta del enum.
+function expenseCatName(e: any): string {
+  return e.expenseCategory?.name || EXPENSE_TYPE_LABELS[e.type] || e.type;
+}
+
 function topFrom(
   map: Record<string, { quantity: number; total: number }>,
   n: number,
@@ -1284,6 +1309,7 @@ export class StatisticsService {
           expenseDate: true,
           provider: { select: { name: true } },
           local: { select: { name: true } },
+          expenseCategory: { select: { name: true } },
         },
         orderBy: { expenseDate: 'desc' },
       }),
@@ -1372,7 +1398,8 @@ export class StatisticsService {
     let totalExpenses = 0;
     for (const e of expenses) {
       totalExpenses += e.amount;
-      expenseTypeMap[e.type] = (expenseTypeMap[e.type] || 0) + e.amount;
+      const catName = expenseCatName(e);
+      expenseTypeMap[catName] = (expenseTypeMap[catName] || 0) + e.amount;
       const day = utcDay(e.expenseDate);
       expensesByDay[day] = (expensesByDay[day] || 0) + e.amount;
     }
@@ -1408,7 +1435,8 @@ export class StatisticsService {
     const expensesDetail = expenses.map((e) => ({
       id: e.id,
       concept: e.concept,
-      type: e.type,
+      // Nombre de la categoría (personalizada o base) para mostrar/filtrar.
+      type: expenseCatName(e),
       amount: Math.round(e.amount),
       paymentMethod: e.paymentMethod || null,
       paidTo: e.paidTo || e.provider?.name || null,

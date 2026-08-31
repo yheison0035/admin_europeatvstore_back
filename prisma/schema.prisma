@@ -726,9 +726,13 @@ model Expense {
 
   providerId Int?
   localId    Int
+  // Categoría administrable por el negocio (opcional). El enum `type` se
+  // mantiene sincronizado para compatibilidad (payables/estadísticas legacy).
+  expenseCategoryId Int?
 
   provider Provider? @relation("ProviderExpenses", fields: [providerId], references: [id], onDelete: SetNull)
   local    Local     @relation("LocalExpenses", fields: [localId], references: [id], onDelete: Cascade)
+  expenseCategory ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -736,6 +740,24 @@ model Expense {
   @@index([localId])
   @@index([expenseDate])
   @@index([type])
+  @@index([expenseCategoryId])
+}
+
+// Tipos/categorías de gasto administrables por cada empresa (CRUD del dueño).
+model ExpenseCategory {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String
+  // Si corresponde a un tipo base, guarda el valor del enum ExpenseType para
+  // derivar `Expense.type` y no romper estadísticas/payables.
+  code      String?
+  status    Status   @default(ACTIVO)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenses Expense[]
+
+  @@index([companyId])
 }
 
 //////////////////////////////////////////////////

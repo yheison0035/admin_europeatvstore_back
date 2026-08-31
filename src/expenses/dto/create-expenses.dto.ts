@@ -12,8 +12,15 @@ export class CreateExpenseDto {
   @IsString()
   concept: string;
 
+  // Tipo de gasto: ahora se elige por categoría administrable (expenseCategoryId);
+  // el enum `type` queda opcional y se deriva en el backend para compatibilidad.
+  @IsOptional()
   @IsEnum(ExpenseType)
-  type: ExpenseType;
+  type?: ExpenseType;
+
+  @IsOptional()
+  @IsInt()
+  expenseCategoryId?: number;
 
   @IsNumber()
   amount: number;

@@ -4,7 +4,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma.service';
-import { PaymentMethod, Role, Status } from '@prisma/client';
+import { ExpenseType, PaymentMethod, Role, Status } from '@prisma/client';
 import { hasRole } from '@/common/role-check.util';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { CreateExpenseDto } from './dto/create-expenses.dto';
@@ -177,6 +177,31 @@ export class ExpensesService {
     };
   }
 
+  // Resuelve la categoría elegida (expenseCategoryId) al enum `type` para
+  // mantener compatibilidad con estadísticas/payables. Si la categoría es una
+  // "base" (tiene code = valor del enum), usa ese; si es personalizada, OTROS.
+  private async resolveCategory(
+    companyId: number,
+    dto: any,
+  ): Promise<{ expenseCategoryId: number | null; type: ExpenseType }> {
+    if (dto.expenseCategoryId) {
+      const cat = await this.prisma.expenseCategory.findFirst({
+        where: { id: Number(dto.expenseCategoryId), companyId },
+      });
+      if (cat) {
+        const code = cat.code || '';
+        const type = (Object.values(ExpenseType) as string[]).includes(code)
+          ? (code as ExpenseType)
+          : ExpenseType.OTROS;
+        return { expenseCategoryId: cat.id, type };
+      }
+    }
+    return {
+      expenseCategoryId: null,
+      type: dto.type ?? ExpenseType.OTROS,
+    };
+  }
+
   async create(dto: CreateExpenseDto, user: any) {
     if (!hasRole(user.role, [Role.SUPER_ADMIN, Role.ADMIN, Role.RECEPCIONISTA])) {
       throw new ForbiddenException('No tienes permisos');
@@ -200,10 +225,16 @@ export class ExpensesService {
       throw new ForbiddenException('No tienes acceso a este local');
     }
 
+    const { expenseCategoryId, type } = await this.resolveCategory(
+      user.companyId,
+      dto,
+    );
+
     const expense = await this.prisma.expense.create({
       data: {
         concept: dto.concept,
-        type: dto.type,
+        type,
+        expenseCategoryId,
         amount: dto.amount,
         paymentMethod: dto.paymentMethod,
         paidTo: dto.paidTo,
@@ -274,10 +305,20 @@ export class ExpensesService {
       throw new NotFoundException(`Gasto con ID ${id} no encontrado`);
     }
 
+    // Si cambian la categoría, re-derivamos el enum `type`.
+    const catData =
+      dto.expenseCategoryId !== undefined
+        ? await this.resolveCategory(user.companyId, dto)
+        : null;
+
     const updated = await this.prisma.expense.update({
       where: { id },
       data: {
         ...dto,
+        ...(catData && {
+          expenseCategoryId: catData.expenseCategoryId,
+          type: catData.type,
+        }),
         ...(dto.expenseDate && { expenseDate: new Date(dto.expenseDate) }),
       },
     });
