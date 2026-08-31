@@ -51,4 +51,8 @@ export class CreateCustomerDto {
 
   @IsOptional()
   localId?: number;
+
+  // Segmento/etiqueta del cliente (catálogo administrable).
+  @IsOptional()
+  segmentId?: number;
 }

@@ -41,6 +41,7 @@ import { ExpenseCategoriesModule } from './expense-categories/expense-categories
 import { ChargeCategoriesModule } from './charge-categories/charge-categories.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module';
+import { CustomerSegmentsModule } from './customer-segments/customer-segments.module';
 import { AuditModule } from './audit/audit.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { SubscriptionModule } from './subscription/subscription.module';
@@ -88,6 +89,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     ChargeCategoriesModule,
     PaymentMethodsModule,
     UnitsOfMeasureModule,
+    CustomerSegmentsModule,
     AuditModule,
     CouponsModule,
     SubscriptionModule,
