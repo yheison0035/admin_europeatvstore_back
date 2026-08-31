@@ -47,10 +47,14 @@ const EXPENSE_TYPE_LABELS: Record<string, string> = {
   OTROS: 'Otros',
 };
 
-// Nombre a mostrar/agrupar de un gasto: su categoría personalizada si tiene,
-// si no la etiqueta del enum.
+// Nombre a mostrar/agrupar de un gasto (en MAYÚSCULAS): su categoría
+// personalizada si tiene, si no la etiqueta del enum.
 function expenseCatName(e: any): string {
-  return e.expenseCategory?.name || EXPENSE_TYPE_LABELS[e.type] || e.type;
+  return (
+    e.expenseCategory?.name ||
+    EXPENSE_TYPE_LABELS[e.type] ||
+    e.type
+  ).toUpperCase();
 }
 
 // Etiquetas de los métodos de pago base (deben coincidir con los nombres

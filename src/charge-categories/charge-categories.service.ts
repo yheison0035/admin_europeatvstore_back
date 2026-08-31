@@ -11,10 +11,10 @@ const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN];
 
 // Categorías base (equivalen al enum EmployeeChargeType).
 const DEFAULTS: { code: string; name: string }[] = [
-  { code: 'MEMBRESIA', name: 'Membresía' },
-  { code: 'PRESTAMO', name: 'Préstamo' },
-  { code: 'PRODUCTO', name: 'Producto' },
-  { code: 'OTRO', name: 'Otro' },
+  { code: 'MEMBRESIA', name: 'MEMBRESÍA' },
+  { code: 'PRESTAMO', name: 'PRÉSTAMO' },
+  { code: 'PRODUCTO', name: 'PRODUCTO' },
+  { code: 'OTRO', name: 'OTRO' },
 ];
 
 @Injectable()
@@ -61,7 +61,7 @@ export class ChargeCategoriesService {
 
   async create(user: any, dto: any) {
     this.assertAdmin(user);
-    const name = String(dto?.name || '').trim();
+    const name = String(dto?.name || '').trim().toUpperCase();
     if (!name) throw new BadRequestException('El nombre es obligatorio');
     const dup = await this.prisma.chargeCategory.findFirst({
       where: {
@@ -90,7 +90,7 @@ export class ChargeCategoriesService {
     await this.own(user, id);
     const data: any = {};
     if (dto.name !== undefined) {
-      const name = String(dto.name).trim();
+      const name = String(dto.name).trim().toUpperCase();
       if (!name) throw new BadRequestException('El nombre es obligatorio');
       data.name = name;
     }

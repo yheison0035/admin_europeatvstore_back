@@ -11,20 +11,21 @@ import { PrismaService } from '@/prisma.service';
 const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN];
 
 // Categorías base (equivalen al enum ExpenseType) que se precargan por empresa.
+// Los tipos se manejan en MAYÚSCULAS.
 const DEFAULTS: { code: string; name: string }[] = [
-  { code: 'ARRIENDO', name: 'Arriendo' },
-  { code: 'SERVICIOS_PUBLICOS', name: 'Servicios públicos' },
-  { code: 'EMPLEADOS', name: 'Empleados / nómina' },
-  { code: 'TRANSPORTE', name: 'Transporte' },
-  { code: 'PEDIDOS', name: 'Pedidos / mercancía' },
-  { code: 'PLAN_CELULAR', name: 'Plan celular' },
-  { code: 'PLAN_INTERNET', name: 'Plan internet' },
-  { code: 'ASEO', name: 'Aseo' },
-  { code: 'MANTENIMIENTO', name: 'Mantenimiento' },
-  { code: 'PUBLICIDAD', name: 'Publicidad' },
-  { code: 'IMPUESTOS', name: 'Impuestos' },
-  { code: 'COMISIONES', name: 'Comisiones' },
-  { code: 'OTROS', name: 'Otros' },
+  { code: 'ARRIENDO', name: 'ARRIENDO' },
+  { code: 'SERVICIOS_PUBLICOS', name: 'SERVICIOS PÚBLICOS' },
+  { code: 'EMPLEADOS', name: 'EMPLEADOS / NÓMINA' },
+  { code: 'TRANSPORTE', name: 'TRANSPORTE' },
+  { code: 'PEDIDOS', name: 'PEDIDOS / MERCANCÍA' },
+  { code: 'PLAN_CELULAR', name: 'PLAN CELULAR' },
+  { code: 'PLAN_INTERNET', name: 'PLAN INTERNET' },
+  { code: 'ASEO', name: 'ASEO' },
+  { code: 'MANTENIMIENTO', name: 'MANTENIMIENTO' },
+  { code: 'PUBLICIDAD', name: 'PUBLICIDAD' },
+  { code: 'IMPUESTOS', name: 'IMPUESTOS' },
+  { code: 'COMISIONES', name: 'COMISIONES' },
+  { code: 'OTROS', name: 'OTROS' },
 ];
 
 @Injectable()
@@ -78,7 +79,7 @@ export class ExpenseCategoriesService {
 
   async create(user: any, dto: any) {
     this.assertAdmin(user);
-    const name = String(dto?.name || '').trim();
+    const name = String(dto?.name || '').trim().toUpperCase();
     if (!name) throw new BadRequestException('El nombre es obligatorio');
     const dup = await this.prisma.expenseCategory.findFirst({
       where: {
@@ -107,7 +108,7 @@ export class ExpenseCategoriesService {
     await this.own(user, id);
     const data: any = {};
     if (dto.name !== undefined) {
-      const name = String(dto.name).trim();
+      const name = String(dto.name).trim().toUpperCase();
       if (!name) throw new BadRequestException('El nombre es obligatorio');
       data.name = name;
     }
