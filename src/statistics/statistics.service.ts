@@ -56,6 +56,64 @@ export class StatisticsService {
     return this.dashboardInternal(user, dto);
   }
 
+  // Comparación entre dos periodos (p. ej. mes A vs mes B). Reutiliza el mismo
+  // cálculo del dashboard para cada rango y alinea la serie por día del periodo
+  // para poder superponer las curvas en la gráfica.
+  async compare(user: any, dto: any) {
+    await this.planLimits.assertModule(user.companyId, 'statistics');
+    const localId = dto?.localId || null;
+    const a = dto?.periodA || {};
+    const b = dto?.periodB || {};
+
+    const [ra, rb] = await Promise.all([
+      this.dashboardInternal(user, {
+        startDate: a.startDate,
+        endDate: a.endDate,
+        localId,
+      }),
+      this.dashboardInternal(user, {
+        startDate: b.startDate,
+        endDate: b.endDate,
+        localId,
+      }),
+    ]);
+
+    // Serie alineada por índice de día (día 1, 2, 3…) para superponer A y B
+    // aunque los meses tengan distinta cantidad de días.
+    const maxLen = Math.max(ra.data.series.length, rb.data.series.length);
+    const alignedSeries = Array.from({ length: maxLen }, (_, i) => ({
+      day: i + 1,
+      a: ra.data.series[i]?.ventas ?? null,
+      b: rb.data.series[i]?.ventas ?? null,
+      aGastos: ra.data.series[i]?.gastos ?? null,
+      bGastos: rb.data.series[i]?.gastos ?? null,
+    }));
+
+    return {
+      success: true,
+      data: {
+        a: {
+          range: ra.data.range,
+          summary: ra.data.summary,
+          paymentMethods: ra.data.paymentMethods,
+          expensesByType: ra.data.expensesByType,
+          topProducts: ra.data.topProducts,
+          topServices: ra.data.topServices,
+        },
+        b: {
+          range: rb.data.range,
+          summary: rb.data.summary,
+          paymentMethods: rb.data.paymentMethods,
+          expensesByType: rb.data.expensesByType,
+          topProducts: rb.data.topProducts,
+          topServices: rb.data.topServices,
+        },
+        series: alignedSeries,
+        hasMultipleLocals: ra.data.hasMultipleLocals,
+      },
+    };
+  }
+
   // Resumen ligero para el Home del dashboard (universal, sin gate de plan):
   // ventas de hoy (cobradas) + conteos para el checklist de primeros pasos.
   async homeSummary(user: any) {
@@ -1040,7 +1098,18 @@ export class StatisticsService {
       }),
       this.prisma.expense.findMany({
         where: expenseWhere(expStart, expEnd),
-        select: { amount: true, type: true, expenseDate: true },
+        select: {
+          id: true,
+          concept: true,
+          type: true,
+          amount: true,
+          paymentMethod: true,
+          paidTo: true,
+          expenseDate: true,
+          provider: { select: { name: true } },
+          local: { select: { name: true } },
+        },
+        orderBy: { expenseDate: 'desc' },
       }),
       this.prisma.expense.aggregate({
         where: expenseWhere(prevExpStart, prevExpEnd),
@@ -1117,6 +1186,18 @@ export class StatisticsService {
       const day = utcDay(e.expenseDate);
       expensesByDay[day] = (expensesByDay[day] || 0) + e.amount;
     }
+
+    // Detalle de gastos del periodo (con fecha de pago) para el panel de gastos.
+    const expensesDetail = expenses.map((e) => ({
+      id: e.id,
+      concept: e.concept,
+      type: e.type,
+      amount: Math.round(e.amount),
+      paymentMethod: e.paymentMethod || null,
+      paidTo: e.paidTo || e.provider?.name || null,
+      date: e.expenseDate,
+      local: e.local?.name || '—',
+    }));
 
     // Serie temporal día a día (ingresos vs gastos)
     const series: { date: string; ventas: number; gastos: number }[] = [];
@@ -1219,6 +1300,7 @@ export class StatisticsService {
         topServices: topFrom(serviceMap, 8),
         topSellers: pairs(sellerMap, 'name').slice(0, 6),
         expensesByType: pairs(expenseTypeMap, 'type'),
+        expensesDetail,
         receivables,
         hasMultipleLocals: locals.length > 1,
       },

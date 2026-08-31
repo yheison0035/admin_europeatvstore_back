@@ -24,6 +24,13 @@ export class StatisticsController {
     return this.statisticsService.getDashboard(req.user, dto);
   }
 
+  // Comparación entre dos periodos (mes A vs mes B).
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Post('compare')
+  compare(@Req() req, @Body() dto: any) {
+    return this.statisticsService.compare(req.user, dto);
+  }
+
   // Reporte de IVA (generado vs descontable) de un periodo.
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post('tax-report')
