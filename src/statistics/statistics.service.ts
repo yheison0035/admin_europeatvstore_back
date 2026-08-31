@@ -565,7 +565,7 @@ export class StatisticsService {
         userId: uid,
         OR: [
           { status: 'PENDIENTE' },
-          { status: 'DESCONTADO', settledAt: { gte: wStart, lt: wEnd } },
+          { status: 'DESCONTADO', settledAt: { gte: wStart } },
         ],
       },
       orderBy: { createdAt: 'desc' },

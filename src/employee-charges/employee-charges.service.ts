@@ -147,9 +147,12 @@ export class EmployeeChargesService {
       throw new BadRequestException('Método inválido (EFECTIVO o COMISION)');
     }
     const status = method === 'EFECTIVO' ? 'PAGADO' : 'DESCONTADO';
+    // Fecha del pago elegida por el dueño (para saber qué día pagó); si no
+    // llega, se usa hoy.
+    const settledAt = dto?.settledAt ? new Date(dto.settledAt) : new Date();
     const updated = await this.prisma.employeeCharge.update({
       where: { id },
-      data: { status, settledMethod: method, settledAt: new Date() },
+      data: { status, settledMethod: method, settledAt },
     });
     return { success: true, data: updated };
   }

@@ -2011,7 +2011,7 @@ export class SalesService {
           userId: { in: userIds as number[] },
           OR: [
             { status: 'PENDIENTE' },
-            { status: 'DESCONTADO', settledAt: { gte: start, lt: end } },
+            { status: 'DESCONTADO', settledAt: { gte: start } },
           ],
         },
         orderBy: { createdAt: 'desc' },
