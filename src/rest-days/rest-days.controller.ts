@@ -26,6 +26,13 @@ export class RestDaysController {
     return this.service.professionals(req.user);
   }
 
+  // Mis propios descansos (rol barbero/profesional). Debe ir antes de :userId.
+  @Roles('SUPER_ADMIN', 'ADMIN', 'BARBERO', 'PROFESIONAL')
+  @Get('mine')
+  mine(@Req() req) {
+    return this.service.mine(req.user);
+  }
+
   @Get(':userId')
   getForUser(@Req() req, @Param('userId', ParseIntPipe) userId: number) {
     return this.service.getForUser(req.user, userId);

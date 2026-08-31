@@ -51,6 +51,31 @@ export class RestDaysService {
     return { success: true, data: rows };
   }
 
+  // Los propios descansos del profesional que consulta (rol barbero).
+  async mine(user: any) {
+    const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
+    const [u, timeOff] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { restWeekdays: true, name: true },
+      }),
+      this.prisma.employeeTimeOff.findMany({
+        where: { userId: user.id, date: { gte: today } },
+        orderBy: { date: 'asc' },
+        select: { id: true, date: true, reason: true },
+      }),
+    ]);
+    return {
+      success: true,
+      data: {
+        userId: user.id,
+        name: u?.name,
+        restWeekdays: u?.restWeekdays || [],
+        timeOff,
+      },
+    };
+  }
+
   async getForUser(user: any, userId: number) {
     this.assertAdmin(user);
     const u = await this.proOfCompany(userId, user.companyId);
