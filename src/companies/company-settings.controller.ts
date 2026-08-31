@@ -58,6 +58,12 @@ export class CompanySettingsController {
     return this.service.updateCrmTheme(req.user, theme);
   }
 
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('font')
+  updateFont(@Body('font') font: string, @Req() req) {
+    return this.service.updateCrmFont(req.user, font);
+  }
+
   // Correo propio del negocio (SMTP) para enviar sus correos.
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch('mail')

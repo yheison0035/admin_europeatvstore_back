@@ -249,6 +249,7 @@ export class UsersService {
             domain: true,
             // Tema de diseño del panel elegido por el dueño.
             crmTheme: true,
+            crmFont: true,
             // Overrides de vocabulario propios (barbería vs estética, etc.).
             terminology: true,
             // Si exige "abrir el día" (caja) para poder vender.

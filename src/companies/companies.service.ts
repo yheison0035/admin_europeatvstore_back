@@ -36,6 +36,7 @@ export class CompaniesService {
         type: true,
         nit: true,
         crmTheme: true,
+        crmFont: true,
         terminology: true,
         requireCashOpen: true,
         responsableIVA: true,
@@ -409,6 +410,29 @@ export class CompaniesService {
       where: { id: user.companyId },
       data: { crmTheme: value },
       select: { crmTheme: true },
+    });
+    return { success: true, data: company };
+  }
+
+  async updateCrmFont(user: any, font: string) {
+    const allowed = [
+      'system',
+      'inter',
+      'roboto',
+      'poppins',
+      'montserrat',
+      'opensans',
+      'lato',
+      'nunito',
+      'dmsans',
+      'worksans',
+      'jakarta',
+    ];
+    const value = allowed.includes(font) ? font : 'system';
+    const company = await this.prisma.company.update({
+      where: { id: user.companyId },
+      data: { crmFont: value },
+      select: { crmFont: true },
     });
     return { success: true, data: company };
   }

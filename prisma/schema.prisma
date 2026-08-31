@@ -221,6 +221,7 @@ model Company {
 
   // Tema de diseño del panel/CRM elegido por el dueño (orange | blue | emerald).
   crmTheme String @default("orange")
+  crmFont  String @default("system")
 
   // Overrides de vocabulario propios de la empresa (barbería vs estética, etc.).
   // Se fusionan sobre los términos por tipo de negocio. Ej: { "attendant": "Especialista" }

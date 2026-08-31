@@ -1,0 +1,1 @@
+ALTER TABLE "Company" ADD COLUMN "crmFont" TEXT NOT NULL DEFAULT 'system';
