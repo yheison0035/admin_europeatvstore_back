@@ -636,6 +636,10 @@ model Inventory {
   local     Local?    @relation("LocalInventory", fields: [localId], references: [id], onDelete: SetNull)
   provider  Provider? @relation("ProviderProducts", fields: [providerId], references: [id], onDelete: SetNull)
   category  Category? @relation("CategoryProducts", fields: [categoryId], references: [id], onDelete: SetNull)
+  // Unidad de medida del catálogo administrable (opcional). El string `unit`
+  // (UNIDAD|PESO) se deriva de su code para la lógica del POS.
+  unitId        Int?
+  unitOfMeasure UnitOfMeasure? @relation(fields: [unitId], references: [id], onDelete: SetNull)
   brand     Brand?    @relation("BrandProducts", fields: [brandId], references: [id], onDelete: SetNull)
 
   variants       InventoryVariant[]
@@ -741,6 +745,22 @@ model Expense {
   @@index([expenseDate])
   @@index([type])
   @@index([expenseCategoryId])
+}
+
+// Unidades de medida administrables por empresa (UNIDAD, KG, LITRO, CAJA…).
+// `code` (UNIDAD|PESO) define si la cantidad admite decimales (peso) o no.
+model UnitOfMeasure {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String
+  code      String   @default("UNIDAD")
+  status    Status   @default(ACTIVO)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Inventory[]
+
+  @@index([companyId])
 }
 
 // Métodos de pago administrables por cada empresa. `code` es el comportamiento

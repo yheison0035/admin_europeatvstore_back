@@ -2,6 +2,7 @@ import {
   IsString,
   IsOptional,
   IsNumber,
+  IsInt,
   IsArray,
   IsBoolean,
   ValidateNested,
@@ -50,6 +51,11 @@ export class CreateInventoryDto {
   @IsOptional()
   @IsString()
   unit?: string;
+
+  // Unidad de medida del catálogo (deriva `unit` UNIDAD/PESO en el backend).
+  @IsOptional()
+  @IsInt()
+  unitId?: number;
 
   // ¿Controla inventario/stock? (false = elaborado sin stock, ej. platos).
   @IsOptional()

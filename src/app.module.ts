@@ -40,6 +40,7 @@ import { ElectronicInvoicingModule } from './electronic-invoicing/electronic-inv
 import { ExpenseCategoriesModule } from './expense-categories/expense-categories.module';
 import { ChargeCategoriesModule } from './charge-categories/charge-categories.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
+import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module';
 import { AuditModule } from './audit/audit.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { SubscriptionModule } from './subscription/subscription.module';
@@ -86,6 +87,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     ExpenseCategoriesModule,
     ChargeCategoriesModule,
     PaymentMethodsModule,
+    UnitsOfMeasureModule,
     AuditModule,
     CouponsModule,
     SubscriptionModule,

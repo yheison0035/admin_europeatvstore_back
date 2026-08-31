@@ -602,6 +602,19 @@ export class InventoryService {
       slug = `${baseSlug}-${counter++}`;
     }
 
+    // Unidad de medida: si llega del catálogo, su code define `unit` (UNIDAD/PESO).
+    let unitId: number | null = null;
+    let unitCode = dto.unit ?? 'UNIDAD';
+    if (dto.unitId) {
+      const u = await this.prisma.unitOfMeasure.findFirst({
+        where: { id: Number(dto.unitId), companyId: user.companyId },
+      });
+      if (u) {
+        unitId = u.id;
+        unitCode = u.code;
+      }
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       const product = await tx.inventory.create({
         data: {
@@ -613,7 +626,8 @@ export class InventoryService {
           salePrice: dto.salePrice,
           status: dto.status,
           minStock: dto.minStock ?? 0,
-          unit: dto.unit ?? 'UNIDAD',
+          unit: unitCode,
+          ...(unitId ? { unitOfMeasure: { connect: { id: unitId } } } : {}),
           trackStock: dto.trackStock ?? true,
           ...(dto.expiryDate ? { expiryDate: new Date(dto.expiryDate) } : {}),
           ...(dto.lot !== undefined && { lot: dto.lot || null }),
@@ -693,9 +707,23 @@ export class InventoryService {
     // La categoría/marca/proveedor deben ser de la empresa.
     await this.assertRefsOwnership(dto, user.companyId);
 
+    // Unidad de medida del catálogo: deriva `unit` (UNIDAD/PESO).
+    let unitPatch: any = {};
+    if (dto.unitId !== undefined) {
+      if (dto.unitId) {
+        const u = await this.prisma.unitOfMeasure.findFirst({
+          where: { id: Number(dto.unitId), companyId: user.companyId },
+        });
+        if (u) unitPatch = { unitId: u.id, unit: u.code };
+      } else {
+        unitPatch = { unitId: null };
+      }
+    }
+
     const updated = await this.prisma.inventory.update({
       where: { id },
       data: {
+        ...unitPatch,
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.barcode !== undefined && { barcode: dto.barcode }),

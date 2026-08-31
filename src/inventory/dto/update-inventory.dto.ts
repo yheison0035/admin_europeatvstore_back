@@ -63,6 +63,10 @@ export class UpdateInventoryDto {
   unit?: string;
 
   @IsOptional()
+  @IsInt()
+  unitId?: number;
+
+  @IsOptional()
   @IsBoolean()
   trackStock?: boolean;
 
