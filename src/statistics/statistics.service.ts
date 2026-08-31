@@ -1252,7 +1252,10 @@ export class StatisticsService {
     const paymentMap: Record<string, number> = {};
     const localMap: Record<string, number> = {};
     const sellerMap: Record<string, number> = {};
-    const productMap: Record<string, { quantity: number; total: number }> = {};
+    const productMap: Record<
+      string,
+      { quantity: number; total: number; cost: number }
+    > = {};
     const serviceMap: Record<string, { quantity: number; total: number }> = {};
     // Mejores clientes (excluye Consumidor Final).
     const customerMap: Record<string, { total: number; count: number }> = {};
@@ -1286,11 +1289,13 @@ export class StatisticsService {
         }
         if (item.inventoryVariantId && item.variant?.inventory) {
           const n = item.variant.inventory.name;
-          if (!productMap[n]) productMap[n] = { quantity: 0, total: 0 };
+          if (!productMap[n]) productMap[n] = { quantity: 0, total: 0, cost: 0 };
+          const lineCost =
+            item.quantity * (item.variant.inventory.purchasePrice || 0);
           productMap[n].quantity += item.quantity;
           productMap[n].total += item.subtotal;
-          costOfGoods +=
-            item.quantity * (item.variant.inventory.purchasePrice || 0);
+          productMap[n].cost += lineCost;
+          costOfGoods += lineCost;
         }
       }
     }
@@ -1305,6 +1310,23 @@ export class StatisticsService {
       const day = utcDay(e.expenseDate);
       expensesByDay[day] = (expensesByDay[day] || 0) + e.amount;
     }
+
+    // Rentabilidad por producto: vendido − costo = utilidad, con margen %.
+    const productProfit = Object.entries(productMap)
+      .map(([name, v]) => {
+        const revenue = Math.round(v.total);
+        const cost = Math.round(v.cost);
+        const profit = revenue - cost;
+        return {
+          name,
+          quantity: v.quantity,
+          revenue,
+          cost,
+          profit,
+          margin: revenue ? Math.round((profit / revenue) * 100) : 0,
+        };
+      })
+      .sort((a, b) => b.profit - a.profit);
 
     // Mejores clientes por monto comprado.
     const topCustomers = Object.entries(customerMap)
@@ -1429,6 +1451,7 @@ export class StatisticsService {
         topServices: topFrom(serviceMap, 8),
         topSellers: pairs(sellerMap, 'name').slice(0, 6),
         topCustomers,
+        productProfit,
         expensesByType: pairs(expenseTypeMap, 'type'),
         expensesDetail,
         receivables,
