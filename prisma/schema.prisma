@@ -743,6 +743,21 @@ model Expense {
   @@index([expenseCategoryId])
 }
 
+// Tipos de cargo a empleado administrables por cada empresa (CRUD del dueño).
+model ChargeCategory {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String
+  code      String?
+  status    Status   @default(ACTIVO)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  charges EmployeeCharge[]
+
+  @@index([companyId])
+}
+
 // Tipos/categorías de gasto administrables por cada empresa (CRUD del dueño).
 model ExpenseCategory {
   id        Int      @id @default(autoincrement())
@@ -1434,6 +1449,9 @@ model EmployeeCharge {
   companyId Int
   userId    Int // empleado/barbero que debe
   type      EmployeeChargeType @default(OTRO)
+  // Categoría administrable por el negocio (opcional); `type` se deriva de ella.
+  chargeCategoryId Int?
+  chargeCategory   ChargeCategory? @relation(fields: [chargeCategoryId], references: [id], onDelete: SetNull)
   concept   String
   amount    Float
   notes     String?

@@ -16,6 +16,10 @@ export class CreateEmployeeChargeDto {
   @IsEnum(EmployeeChargeType)
   type?: EmployeeChargeType;
 
+  @IsOptional()
+  @IsInt()
+  chargeCategoryId?: number;
+
   @IsString()
   concept: string;
 

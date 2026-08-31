@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { EmployeeChargeType, Role } from '@prisma/client';
 import { PrismaService } from '@/prisma.service';
 import { CreateEmployeeChargeDto } from './dto/create-employee-charge.dto';
 
@@ -35,6 +35,7 @@ export class EmployeeChargesService {
     const charges = await this.prisma.employeeCharge.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      include: { chargeCategory: { select: { name: true } } },
     });
 
     // Adjunta el nombre del empleado para pintarlo (sin exponer datos sensibles).
@@ -52,6 +53,7 @@ export class EmployeeChargesService {
       data: charges.map((c) => ({
         ...c,
         userName: nameById.get(c.userId) || null,
+        categoryName: c.chargeCategory?.name || null,
       })),
     };
   }
@@ -89,6 +91,31 @@ export class EmployeeChargesService {
     };
   }
 
+  // Deriva el enum `type` a partir de la categoría elegida (para compatibilidad).
+  private async resolveCategory(
+    companyId: number,
+    dto: any,
+  ): Promise<{ chargeCategoryId: number | null; type: EmployeeChargeType }> {
+    if (dto.chargeCategoryId) {
+      const cat = await this.prisma.chargeCategory.findFirst({
+        where: { id: Number(dto.chargeCategoryId), companyId },
+      });
+      if (cat) {
+        const code = cat.code || '';
+        const type = (Object.values(EmployeeChargeType) as string[]).includes(
+          code,
+        )
+          ? (code as EmployeeChargeType)
+          : EmployeeChargeType.OTRO;
+        return { chargeCategoryId: cat.id, type };
+      }
+    }
+    return {
+      chargeCategoryId: null,
+      type: (dto.type as EmployeeChargeType) ?? EmployeeChargeType.OTRO,
+    };
+  }
+
   async create(dto: CreateEmployeeChargeDto, user: any) {
     if (!this.isOwner(user)) throw new ForbiddenException('No tienes permisos');
 
@@ -99,11 +126,17 @@ export class EmployeeChargesService {
     });
     if (!emp) throw new BadRequestException('Empleado no válido');
 
+    const { chargeCategoryId, type } = await this.resolveCategory(
+      user.companyId,
+      dto,
+    );
+
     const charge = await this.prisma.employeeCharge.create({
       data: {
         companyId: user.companyId,
         userId: Number(dto.userId),
-        type: dto.type ?? 'OTRO',
+        type,
+        chargeCategoryId,
         concept: dto.concept,
         amount: Number(dto.amount),
         notes: dto.notes ?? null,
@@ -126,12 +159,19 @@ export class EmployeeChargesService {
   async update(id: number, dto: any, user: any) {
     if (!this.isOwner(user)) throw new ForbiddenException('No tienes permisos');
     await this.own(id, user);
+    const catData =
+      dto.chargeCategoryId !== undefined
+        ? await this.resolveCategory(user.companyId, dto)
+        : null;
+
     const updated = await this.prisma.employeeCharge.update({
       where: { id },
       data: {
         ...(dto.concept !== undefined && { concept: dto.concept }),
         ...(dto.amount !== undefined && { amount: Number(dto.amount) }),
-        ...(dto.type !== undefined && { type: dto.type }),
+        ...(catData
+          ? { chargeCategoryId: catData.chargeCategoryId, type: catData.type }
+          : dto.type !== undefined && { type: dto.type }),
         ...(dto.notes !== undefined && { notes: dto.notes || null }),
       },
     });
