@@ -53,6 +53,26 @@ function expenseCatName(e: any): string {
   return e.expenseCategory?.name || EXPENSE_TYPE_LABELS[e.type] || e.type;
 }
 
+// Etiquetas de los métodos de pago base (deben coincidir con los nombres
+// precargados en el catálogo, para agrupar ventas viejas y nuevas igual).
+const PAYMENT_LABELS: Record<string, string> = {
+  EFECTIVO: 'Efectivo',
+  BANCOLOMBIA: 'Bancolombia',
+  TRANSFERENCIA: 'Transferencia',
+  DATAFONO: 'Datáfono',
+  ADDI: 'Addi',
+  CREDITO: 'Crédito (fiado)',
+};
+
+// Nombre a mostrar/agrupar del método de pago de una venta.
+function paymentName(sale: any): string {
+  return (
+    sale.paymentMethodCatalog?.name ||
+    PAYMENT_LABELS[sale.paymentMethod] ||
+    sale.paymentMethod
+  );
+}
+
 function topFrom(
   map: Record<string, { quantity: number; total: number }>,
   n: number,
@@ -1281,6 +1301,7 @@ export class StatisticsService {
           user: { select: { id: true, name: true } },
           local: { select: { id: true, name: true } },
           customer: { select: { name: true, document: true } },
+          paymentMethodCatalog: { select: { name: true } },
           items: {
             include: {
               service: { select: { name: true } },
@@ -1364,8 +1385,8 @@ export class StatisticsService {
       }
       const day = colombiaDay(sale.saleDate);
       salesByDay[day] = (salesByDay[day] || 0) + sale.totalAmount;
-      paymentMap[sale.paymentMethod] =
-        (paymentMap[sale.paymentMethod] || 0) + sale.totalAmount;
+      const payName = paymentName(sale);
+      paymentMap[payName] = (paymentMap[payName] || 0) + sale.totalAmount;
       const localName = sale.local?.name || 'Sin local';
       localMap[localName] = (localMap[localName] || 0) + sale.totalAmount;
       const seller = sale.user?.name || 'Sin asesor';

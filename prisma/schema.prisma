@@ -743,6 +743,23 @@ model Expense {
   @@index([expenseCategoryId])
 }
 
+// Métodos de pago administrables por cada empresa. `code` es el comportamiento
+// base (enum PaymentMethod): así "Nequi" puede comportarse como TRANSFERENCIA
+// (va al banco) y la caja/estadísticas siguen funcionando por el enum.
+model PaymentMethodCatalog {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String
+  code      PaymentMethod
+  status    Status   @default(ACTIVO)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales Sale[]
+
+  @@index([companyId])
+}
+
 // Tipos de cargo a empleado administrables por cada empresa (CRUD del dueño).
 model ChargeCategory {
   id        Int      @id @default(autoincrement())
@@ -811,6 +828,11 @@ model Sale {
   appointmentId Int?
 
   ecommerceCustomer EcommerceCustomer? @relation("EcommerceOrders", fields: [ecommerceCustomerId], references: [id])
+
+  // Método de pago del catálogo administrable (opcional); `paymentMethod` (enum)
+  // se deriva de su code para la lógica de caja/banco/estadísticas.
+  paymentMethodCatalogId Int?
+  paymentMethodCatalog   PaymentMethodCatalog? @relation(fields: [paymentMethodCatalogId], references: [id], onDelete: SetNull)
 
   local       Local        @relation("LocalSales", fields: [localId], references: [id], onDelete: Cascade)
   user        User?        @relation("UserSales", fields: [userId], references: [id], onDelete: SetNull)

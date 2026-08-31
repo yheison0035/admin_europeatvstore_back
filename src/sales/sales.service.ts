@@ -755,6 +755,22 @@ export class SalesService {
       throw new BadRequestException('Faltan datos obligatorios');
     }
 
+    // Si llega un método del catálogo, su "code" define el comportamiento base
+    // (enum paymentMethod) que usa toda la lógica de caja/banco/fiado.
+    let paymentMethodCatalogId: number | null = null;
+    if (dto.paymentMethodCatalogId) {
+      const pm = await this.prisma.paymentMethodCatalog.findFirst({
+        where: {
+          id: Number(dto.paymentMethodCatalogId),
+          companyId: user.companyId,
+        },
+      });
+      if (pm) {
+        paymentMethodCatalogId = pm.id;
+        dto.paymentMethod = pm.code; // autoritativo: comportamiento base
+      }
+    }
+
     // Venta de mostrador: si no se eligió cliente, se asigna el "Consumidor
     // Final" de la empresa (document 222222222222).
     if (!dto.customerId) {
@@ -997,6 +1013,7 @@ export class SalesService {
           subtotal: r2(saleSubtotal),
           taxTotal: r2(saleTax),
           paymentMethod: dto.paymentMethod,
+          paymentMethodCatalogId,
           paymentStatus: dto.paymentStatus ?? 'PAGADA',
           saleStatus: 'NUEVA',
           saleDate: saleDate,

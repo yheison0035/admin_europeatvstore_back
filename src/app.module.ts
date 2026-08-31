@@ -39,6 +39,7 @@ import { StatisticsModule } from './statistics/statistics.module';
 import { ElectronicInvoicingModule } from './electronic-invoicing/electronic-invoicing.module';
 import { ExpenseCategoriesModule } from './expense-categories/expense-categories.module';
 import { ChargeCategoriesModule } from './charge-categories/charge-categories.module';
+import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { AuditModule } from './audit/audit.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { SubscriptionModule } from './subscription/subscription.module';
@@ -84,6 +85,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     ElectronicInvoicingModule,
     ExpenseCategoriesModule,
     ChargeCategoriesModule,
+    PaymentMethodsModule,
     AuditModule,
     CouponsModule,
     SubscriptionModule,

@@ -32,6 +32,12 @@ export class CreateSaleDto {
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
 
+  // Método del catálogo administrable (opcional). Si llega, define el enum
+  // `paymentMethod` (su comportamiento base) y se guarda para reportes.
+  @IsOptional()
+  @IsInt()
+  paymentMethodCatalogId?: number;
+
   @IsEnum(PaymentStatus)
   @IsOptional()
   paymentStatus: PaymentStatus;
