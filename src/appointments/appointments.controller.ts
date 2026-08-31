@@ -48,6 +48,12 @@ export class AppointmentsController {
     return this.service.myAppointments(req.user, range);
   }
 
+  // Citas de un mes para la vista de calendario. Antes de :id.
+  @Get('month')
+  month(@Req() req, @Query() query) {
+    return this.service.getMonth(req.user, query);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.findOne(id, req.user);

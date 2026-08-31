@@ -815,6 +815,40 @@ export class AppointmentsService {
   }
 
   // Devuelve los horarios disponibles para un barbero, fecha y servicio dado
+  // Citas de un mes (para la vista de calendario de la agenda). Respeta acceso
+  // por sede y el blindaje del barbero (solo ve las suyas).
+  async getMonth(user: any, query: any) {
+    const year = Number(query.year) || new Date().getFullYear();
+    const month = Number(query.month); // 0-11
+    const localIds = await getAccessibleLocalIds(this.prisma, user);
+    const where: any = { companyId: user.companyId };
+    applyLocalFilter(where, user, localIds);
+    if (query.barberId && /^\d+$/.test(String(query.barberId))) {
+      where.barberId = Number(query.barberId);
+    }
+    if (['BARBERO', 'PROFESIONAL'].includes(user.role)) {
+      where.barberId = user.id;
+    }
+    where.date = {
+      gte: new Date(Date.UTC(year, month, 1)),
+      lt: new Date(Date.UTC(year, month + 1, 1)),
+    };
+    const appts = await this.prisma.appointment.findMany({
+      where,
+      orderBy: [{ date: 'asc' }, { startMinutes: 'asc' }],
+      select: {
+        id: true,
+        date: true,
+        startTime: true,
+        status: true,
+        barber: { select: { id: true, name: true } },
+        service: { select: { name: true } },
+        customer: { select: { name: true } },
+      },
+    });
+    return { success: true, data: appts };
+  }
+
   // ¿El profesional descansa ese día? (día de la semana recurrente o fecha
   // puntual de ausencia). Devuelve el motivo para mostrar un mensaje claro.
   async barberOff(
