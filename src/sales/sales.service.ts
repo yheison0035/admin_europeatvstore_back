@@ -2001,11 +2001,18 @@ export class SalesService {
       .map((u: any) => u.userId)
       .filter((id: any) => id != null);
     if (userIds.length) {
+      // Descuento del periodo = pendientes + los descontados de comisión dentro
+      // del rango de fechas del reporte. Así el descuento NO desaparece al
+      // marcar el cargo como pagado por comisión (queda el registro) y NO se
+      // repite en otros periodos.
       const charges = await this.prisma.employeeCharge.findMany({
         where: {
           companyId: user.companyId,
           userId: { in: userIds as number[] },
-          status: 'PENDIENTE',
+          OR: [
+            { status: 'PENDIENTE' },
+            { status: 'DESCONTADO', settledAt: { gte: start, lt: end } },
+          ],
         },
         orderBy: { createdAt: 'desc' },
       });

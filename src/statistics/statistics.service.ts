@@ -555,14 +555,37 @@ export class StatisticsService {
 
     const teamBirthdays = await this.teamBirthdays(user, y, m, d);
 
-    // Cargos pendientes del barbero (lo que se le va a descontar del pago).
-    const myCharges = await this.prisma.employeeCharge.findMany({
-      where: { companyId, userId: uid, status: 'PENDIENTE' },
+    // Cargos que afectan el pago del BARBERO. Para que el descuento NO
+    // desaparezca al marcar "pagó con comisión" (y NO se repita en semanas
+    // siguientes), el descuento de LA SEMANA = pendientes + los que se
+    // descontaron de comisión dentro de esta misma semana.
+    const chargeRows = await this.prisma.employeeCharge.findMany({
+      where: {
+        companyId,
+        userId: uid,
+        OR: [
+          { status: 'PENDIENTE' },
+          { status: 'DESCONTADO', settledAt: { gte: wStart, lt: wEnd } },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, concept: true, amount: true, type: true, createdAt: true },
+      select: {
+        id: true,
+        concept: true,
+        amount: true,
+        type: true,
+        status: true,
+        settledAt: true,
+        createdAt: true,
+      },
     });
-    const chargesTotal = r2(myCharges.reduce((s, c) => s + c.amount, 0));
+    const pendingRows = chargeRows.filter((c) => c.status === 'PENDIENTE');
+    const pendingTotal = r2(pendingRows.reduce((s, c) => s + c.amount, 0));
+    const weekChargeDeduction = r2(
+      chargeRows.reduce((s, c) => s + c.amount, 0),
+    );
     const monthEarn = earn(mMonth.services, mMonth.products);
+    const weekEarn = earn(wWeek.services, wWeek.products);
 
     return {
       success: true,
@@ -572,9 +595,14 @@ export class StatisticsService {
         rates: { service: svcRate, product: prodRate },
         today: { earnings: earn(tDay.services, tDay.products), cuts: tDay.cuts },
         week: {
-          earnings: earn(wWeek.services, wWeek.products),
+          earnings: weekEarn,
           cuts: wWeek.cuts,
           range: weekRange,
+          // Descuento de la semana (pendientes + descontados esta semana) y el
+          // neto a pagar de los cortes de la semana.
+          charges: weekChargeDeduction,
+          chargesList: chargeRows,
+          net: r2((weekEarn.service || 0) - weekChargeDeduction),
         },
         month: {
           earnings: monthEarn,
@@ -582,10 +610,9 @@ export class StatisticsService {
           productShare,
           range: cycle.range,
           payDay: cycle.payDay,
-          // Descuentos por cargos y neto a recibir en el ciclo.
-          charges: chargesTotal,
-          chargesList: myCharges,
-          net: r2((monthEarn.total || 0) - chargesTotal),
+          charges: pendingTotal,
+          chargesList: pendingRows,
+          net: r2((monthEarn.total || 0) - pendingTotal),
         },
       },
     };
