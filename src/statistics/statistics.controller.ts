@@ -38,6 +38,13 @@ export class StatisticsController {
     return this.statisticsService.annual(req.user, dto);
   }
 
+  // Inventario valorizado (stock a costo/venta + alertas).
+  @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR')
+  @Post('inventory-valuation')
+  inventoryValuation(@Req() req, @Body() dto: any) {
+    return this.statisticsService.inventoryValuation(req.user, dto);
+  }
+
   // Reporte de IVA (generado vs descontable) de un periodo.
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post('tax-report')

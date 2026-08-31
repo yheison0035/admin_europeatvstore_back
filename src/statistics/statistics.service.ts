@@ -223,6 +223,72 @@ export class StatisticsService {
     return { success: true, data: { year, months: data, totals } };
   }
 
+  // Inventario valorizado: stock actual a costo y a precio de venta, con
+  // utilidad potencial y alerta de stock bajo (tipo Siigo/Alegra).
+  async inventoryValuation(user: any, dto: any) {
+    await this.planLimits.assertModule(user.companyId, 'statistics');
+    const categoryId = dto?.categoryId ? Number(dto.categoryId) : undefined;
+
+    const products = await this.prisma.inventory.findMany({
+      where: {
+        companyId: user.companyId,
+        trackStock: true,
+        ...(categoryId ? { categoryId } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        purchasePrice: true,
+        salePrice: true,
+        minStock: true,
+        category: { select: { name: true } },
+        variants: { where: { isActive: true }, select: { stock: true } },
+      },
+    });
+
+    const items = products
+      .map((p) => {
+        const units = p.variants.reduce((s, v) => s + (v.stock || 0), 0);
+        const valueCost = Math.round(units * (p.purchasePrice || 0));
+        const valueSale = Math.round(units * (p.salePrice || 0));
+        const low = (p.minStock > 0 && units <= p.minStock) || units <= 0;
+        return {
+          id: p.id,
+          name: p.name,
+          category: p.category?.name || 'Sin categoría',
+          units,
+          costUnit: Math.round(p.purchasePrice || 0),
+          saleUnit: Math.round(p.salePrice || 0),
+          valueCost,
+          valueSale,
+          margin: valueSale - valueCost,
+          minStock: p.minStock,
+          low,
+        };
+      })
+      .sort((a, b) => b.valueCost - a.valueCost);
+
+    const totals = items.reduce(
+      (a, i) => ({
+        valueCost: a.valueCost + i.valueCost,
+        valueSale: a.valueSale + i.valueSale,
+        margin: a.margin + i.margin,
+        units: a.units + i.units,
+      }),
+      { valueCost: 0, valueSale: 0, margin: 0, units: 0 },
+    );
+
+    return {
+      success: true,
+      data: {
+        items,
+        totals,
+        products: items.length,
+        lowStockCount: items.filter((i) => i.low).length,
+      },
+    };
+  }
+
   // Resumen ligero para el Home del dashboard (universal, sin gate de plan):
   // ventas de hoy (cobradas) + conteos para el checklist de primeros pasos.
   async homeSummary(user: any) {
