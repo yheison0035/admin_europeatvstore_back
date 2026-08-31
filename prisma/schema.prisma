@@ -1472,3 +1472,49 @@ model Payable {
   @@index([companyId])
   @@index([status])
 }
+
+// Configuración de facturación electrónica DIAN vía proveedor tecnológico (Factus).
+// Las credenciales viven por empresa en BD (no en el código, que es público).
+model FactusConfig {
+  id                  Int       @id @default(autoincrement())
+  companyId           Int       @unique
+  enabled             Boolean   @default(false)
+  environment         String    @default("SANDBOX") // SANDBOX | PRODUCTION
+  clientId            String?
+  clientSecret        String?
+  username            String?
+  password            String?
+  numberingRangeId    Int?
+  paymentMethodCode   String    @default("10") // 10 = contado
+  legalOrganizationId String    @default("2") // 1 jurídica, 2 natural
+  tributeId           String    @default("21") // 21 = No responsable de IVA
+  municipalityId      String?
+  unitMeasureId       String    @default("70") // 70 = unidad
+  accessToken         String?
+  refreshToken        String?
+  tokenExpiresAt      DateTime?
+  testedAt            DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+// Resultado de emitir la factura electrónica de una venta.
+model ElectronicInvoice {
+  id          Int       @id @default(autoincrement())
+  companyId   Int
+  saleId      Int       @unique
+  provider    String    @default("FACTUS")
+  number      String?
+  cufe        String?
+  status      String    @default("PENDIENTE") // PENDIENTE | EMITIDA | ERROR
+  qrUrl       String?
+  pdfUrl      String?
+  xmlUrl      String?
+  validatedAt DateTime?
+  error       String?
+  raw         Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([companyId])
+}

@@ -36,6 +36,7 @@ import { QuotesModule } from './quotes/quotes.module';
 import { ReturnsModule } from './returns/returns.module';
 import { WebsiteModule } from './modules/website/website.module';
 import { StatisticsModule } from './statistics/statistics.module';
+import { ElectronicInvoicingModule } from './electronic-invoicing/electronic-invoicing.module';
 import { AuditModule } from './audit/audit.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { SubscriptionModule } from './subscription/subscription.module';
@@ -78,6 +79,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     ReturnsModule,
     WebsiteModule,
     StatisticsModule,
+    ElectronicInvoicingModule,
     AuditModule,
     CouponsModule,
     SubscriptionModule,
