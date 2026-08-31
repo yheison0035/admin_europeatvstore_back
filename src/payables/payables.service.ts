@@ -1,0 +1,209 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Role } from '@prisma/client';
+import { PrismaService } from '@/prisma.service';
+import { ExpensesService } from '@/expenses/expenses.service';
+import { CreatePayableDto } from './dto/create-payable.dto';
+
+const MANAGE_ROLES: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN,
+  Role.RECEPCIONISTA,
+];
+
+@Injectable()
+export class PayablesService {
+  constructor(
+    private prisma: PrismaService,
+    private expenses: ExpensesService,
+  ) {}
+
+  private assertManage(user: any) {
+    if (!MANAGE_ROLES.includes(user.role)) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+  }
+
+  async findAllPaginated(user: any, query: any = {}) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = { companyId: user.companyId };
+    if (query.status) where.status = String(query.status).toUpperCase();
+    if (query.concept) {
+      where.concept = { contains: query.concept, mode: 'insensitive' };
+    }
+    if (query.paidTo) {
+      where.paidTo = { contains: query.paidTo, mode: 'insensitive' };
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.payable.findMany({
+        where,
+        orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      this.prisma.payable.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: items,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  // Resumen para las tarjetas: por pagar, vencido y pagado (del periodo actual).
+  async summary(user: any) {
+    const pend = await this.prisma.payable.findMany({
+      where: { companyId: user.companyId, status: 'PENDIENTE' },
+      select: { amount: true, dueDate: true },
+    });
+    const now = new Date();
+    const pending = pend.reduce((s, p) => s + p.amount, 0);
+    const overdue = pend
+      .filter((p) => p.dueDate && new Date(p.dueDate) < now)
+      .reduce((s, p) => s + p.amount, 0);
+    return {
+      success: true,
+      data: { pending, overdue, count: pend.length },
+    };
+  }
+
+  async create(dto: CreatePayableDto, user: any) {
+    this.assertManage(user);
+    const local = await this.prisma.local.findFirst({
+      where: { id: Number(dto.localId), companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!local) throw new BadRequestException('Local no válido');
+
+    const payable = await this.prisma.payable.create({
+      data: {
+        companyId: user.companyId,
+        localId: Number(dto.localId),
+        concept: dto.concept,
+        paidTo: dto.paidTo ?? null,
+        type: dto.type ?? 'OTROS',
+        amount: Number(dto.amount),
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+        notes: dto.notes ?? null,
+        createdById: user.id,
+        createdByName: user.name ?? null,
+      },
+    });
+    return { success: true, data: payable };
+  }
+
+  private async own(id: number, user: any) {
+    const p = await this.prisma.payable.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+    if (!p) throw new NotFoundException('Cuenta por pagar no encontrada');
+    return p;
+  }
+
+  async update(id: number, dto: any, user: any) {
+    this.assertManage(user);
+    const p = await this.own(id, user);
+    if (p.status === 'PAGADO') {
+      throw new BadRequestException('Ya está pagada; no se puede editar');
+    }
+    const updated = await this.prisma.payable.update({
+      where: { id },
+      data: {
+        ...(dto.concept !== undefined && { concept: dto.concept }),
+        ...(dto.paidTo !== undefined && { paidTo: dto.paidTo || null }),
+        ...(dto.type !== undefined && { type: dto.type }),
+        ...(dto.amount !== undefined && { amount: Number(dto.amount) }),
+        ...(dto.dueDate !== undefined && {
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+        }),
+        ...(dto.notes !== undefined && { notes: dto.notes || null }),
+        ...(dto.localId !== undefined && { localId: Number(dto.localId) }),
+      },
+    });
+    return { success: true, data: updated };
+  }
+
+  // Registrar el pago: genera un GASTO con la fecha del pago y marca PAGADO.
+  async pay(id: number, dto: any, user: any) {
+    this.assertManage(user);
+    const p = await this.own(id, user);
+    if (p.status === 'PAGADO') {
+      throw new BadRequestException('Esta cuenta ya está pagada');
+    }
+    const paidAt = dto?.paidAt ? new Date(dto.paidAt) : new Date();
+    const paymentMethod = dto?.paymentMethod || 'EFECTIVO';
+
+    // Se genera el gasto reutilizando el servicio de gastos (integra la caja).
+    const exp = await this.expenses.create(
+      {
+        localId: p.localId,
+        concept: p.concept,
+        type: p.type,
+        amount: p.amount,
+        paymentMethod,
+        paidTo: p.paidTo ?? undefined,
+        notes: p.notes ?? undefined,
+        expenseDate: paidAt.toISOString(),
+      } as any,
+      user,
+    );
+    const expenseId = (exp?.data as any)?.id ?? null;
+
+    const updated = await this.prisma.payable.update({
+      where: { id },
+      data: {
+        status: 'PAGADO',
+        paidAt,
+        paymentMethod,
+        expenseId,
+      },
+    });
+    return { success: true, data: updated };
+  }
+
+  // Deshacer el pago: borra el gasto generado y vuelve a PENDIENTE.
+  async unpay(id: number, user: any) {
+    this.assertManage(user);
+    const p = await this.own(id, user);
+    if (p.status !== 'PAGADO') {
+      throw new BadRequestException('Esta cuenta no está pagada');
+    }
+    if (p.expenseId) {
+      await this.prisma.expense
+        .delete({ where: { id: p.expenseId } })
+        .catch(() => null);
+    }
+    const updated = await this.prisma.payable.update({
+      where: { id },
+      data: {
+        status: 'PENDIENTE',
+        paidAt: null,
+        paymentMethod: null,
+        expenseId: null,
+      },
+    });
+    return { success: true, data: updated };
+  }
+
+  async remove(id: number, user: any) {
+    this.assertManage(user);
+    const p = await this.own(id, user);
+    // Si estaba pagada, se elimina también el gasto generado.
+    if (p.expenseId) {
+      await this.prisma.expense
+        .delete({ where: { id: p.expenseId } })
+        .catch(() => null);
+    }
+    await this.prisma.payable.delete({ where: { id } });
+    return { success: true };
+  }
+}

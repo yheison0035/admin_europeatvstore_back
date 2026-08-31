@@ -1445,3 +1445,30 @@ model PushSubscription {
   @@index([userId])
   @@index([companyId])
 }
+
+// CUENTAS POR PAGAR: algo pendiente de pagar (proveedor, servicio, etc.) con su
+// fecha de vencimiento. Al pagarlo se genera un Gasto con la fecha del pago.
+model Payable {
+  id        Int          @id @default(autoincrement())
+  companyId Int
+  localId   Int
+  concept   String
+  paidTo    String? // proveedor / a quién se le paga
+  type      ExpenseType  @default(OTROS) // categoría (misma del gasto)
+  amount    Float
+  dueDate   DateTime? // cuándo se debe pagar (vencimiento)
+  notes     String?
+  // PENDIENTE (por pagar) | PAGADO (ya se pagó → generó gasto)
+  status        String         @default("PENDIENTE")
+  paidAt        DateTime? // fecha real del pago
+  paymentMethod PaymentMethod?
+  expenseId     Int? // gasto generado al pagar
+  createdById   Int?
+  createdByName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+}

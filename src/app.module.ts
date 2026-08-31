@@ -25,6 +25,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { MesasModule } from './mesas/mesas.module';
 import { EmployeeChargesModule } from './employee-charges/employee-charges.module';
 import { PushModule } from './push/push.module';
+import { PayablesModule } from './payables/payables.module';
 import { ComandasModule } from './comandas/comandas.module';
 import { SuppliesModule } from './supplies/supplies.module';
 import { RecipesModule } from './recipes/recipes.module';
@@ -66,6 +67,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     MesasModule,
     EmployeeChargesModule,
     PushModule,
+    PayablesModule,
     ComandasModule,
     SuppliesModule,
     RecipesModule,

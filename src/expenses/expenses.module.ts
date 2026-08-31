@@ -8,5 +8,6 @@ import { PlanLimitsModule } from '@/common/plan-limits.module';
   controllers: [ExpensesController],
   providers: [ExpensesService, PrismaService],
   imports: [PlanLimitsModule],
+  exports: [ExpensesService],
 })
 export class ExpensesModule {}
