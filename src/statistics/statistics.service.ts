@@ -439,14 +439,13 @@ export class StatisticsService {
       },
       _sum: { totalAmount: true, taxTotal: true },
     });
-    const expMonthStart = new Date(Date.UTC(y, m - 1, 1));
-    const expMonthEnd = new Date(Date.UTC(y, m - 1, d + 1));
+    // Los gastos del cierre usan la MISMA ventana del ciclo que las ventas.
     const monthExpAgg = await this.prisma.expense.aggregate({
       where: {
         local: { companyId },
         ...localFilter,
         status: 'ACTIVO' as any,
-        expenseDate: { gte: expMonthStart, lt: expMonthEnd },
+        expenseDate: { gte: monthStart, lt: end },
       },
       _sum: { amount: true },
     });

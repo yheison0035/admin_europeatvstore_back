@@ -487,6 +487,9 @@ export class UsersService {
             // Tema de diseño del panel elegido por el dueño.
             crmTheme: true,
             crmFont: true,
+            // Día de inicio del ciclo de cierre (para que las estadísticas del
+            // front usen la misma ventana que los cierres, ej. RAGNOR 3→2).
+            cycleStartDay: true,
             // Overrides de vocabulario propios (barbería vs estética, etc.).
             terminology: true,
             // Si exige "abrir el día" (caja) para poder vender.
