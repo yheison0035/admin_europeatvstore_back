@@ -44,6 +44,12 @@ export class CompaniesController {
     return this.service.platformAudit(req.user, query);
   }
 
+  // Actividad reciente de todas las empresas (feed de auditoría).
+  @Get('platform/activity')
+  activity(@Req() req, @Query() query) {
+    return this.service.platformActivity(req.user, query);
+  }
+
   // Vista 360° de una empresa (antes de :id).
   @Get('platform/:id/detail')
   detail(@Param('id', ParseIntPipe) id: number, @Req() req) {

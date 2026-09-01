@@ -1021,6 +1021,48 @@ export class CompaniesService {
     return { success: true, data: logs };
   }
 
+  // ACTIVIDAD GLOBAL: últimos movimientos (creado/editado/eliminado) de TODAS
+  // las empresas, con el nombre de la empresa resuelto.
+  async platformActivity(user: any, query: any = {}) {
+    if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+    const take = Math.min(Number(query.limit) || 60, 200);
+    const where: any = {};
+    if (query.companyId) where.companyId = Number(query.companyId);
+    if (query.entity) where.entity = String(query.entity);
+
+    const logs = await this.prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        entity: true,
+        entityId: true,
+        action: true,
+        userName: true,
+        companyId: true,
+        createdAt: true,
+      },
+    });
+
+    const companyIds = [...new Set(logs.map((l) => l.companyId))];
+    const companies = await this.prisma.company.findMany({
+      where: { id: { in: companyIds } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(companies.map((c) => [c.id, c.name]));
+
+    return {
+      success: true,
+      data: logs.map((l) => ({
+        ...l,
+        companyName: nameById.get(l.companyId) || `#${l.companyId}`,
+      })),
+    };
+  }
+
   // LISTADO GLOBAL
   async findAllPaginated(user: any, query: any) {
     if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
