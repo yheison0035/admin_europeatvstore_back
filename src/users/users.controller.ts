@@ -79,6 +79,30 @@ export class UsersController {
     return this.usersService.findAllGlobal(req.user, query);
   }
 
+  // Activar/desactivar cualquier usuario (soporte) — solo plataforma.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_PLATFORM_ADMIN')
+  @Patch('platform/:id/status')
+  platformToggleStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('status') status: string,
+    @Req() req,
+  ) {
+    return this.usersService.platformSetStatus(req.user, id, status);
+  }
+
+  // Resetear la contraseña de cualquier usuario (soporte) — solo plataforma.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_PLATFORM_ADMIN')
+  @Patch('platform/:id/reset-password')
+  platformResetPassword(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('password') password: string,
+    @Req() req,
+  ) {
+    return this.usersService.platformResetPassword(req.user, id, password);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get('/:id')

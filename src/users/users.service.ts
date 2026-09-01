@@ -25,6 +25,55 @@ export class UsersService {
   ) {}
 
   // LISTADO GLOBAL (todos los usuarios de todas las empresas) — plataforma
+  // Activar/desactivar cualquier usuario (soporte de plataforma).
+  async platformSetStatus(actingUser: any, id: number, status: string) {
+    if (actingUser.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+    const st = String(status || '').toUpperCase();
+    if (!['ACTIVO', 'INACTIVO'].includes(st)) {
+      throw new BadRequestException('Estado inválido');
+    }
+    const u = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true },
+    });
+    if (!u) throw new NotFoundException('Usuario no encontrado');
+    if (u.role === Role.SUPER_PLATFORM_ADMIN) {
+      throw new BadRequestException(
+        'No puedes cambiar un administrador de plataforma.',
+      );
+    }
+    await this.prisma.user.update({
+      where: { id },
+      data: { status: st as any },
+    });
+    return { success: true };
+  }
+
+  // Resetear la contraseña de cualquier usuario (soporte de plataforma).
+  async platformResetPassword(actingUser: any, id: number, password: string) {
+    if (actingUser.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+    const pass = String(password || '');
+    if (pass.length < 6) {
+      throw new BadRequestException(
+        'La contraseña debe tener al menos 6 caracteres.',
+      );
+    }
+    const u = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!u) throw new NotFoundException('Usuario no encontrado');
+    await this.prisma.user.update({
+      where: { id },
+      data: { password: await bcrypt.hash(pass, 10) },
+    });
+    return { success: true, message: 'Contraseña actualizada.' };
+  }
+
   async findAllGlobal(user: any, query: any) {
     if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
       throw new ForbiddenException('No tienes permisos');

@@ -3,6 +3,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { BusinessType, Role, Status } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
@@ -340,6 +342,53 @@ export class AuthService {
           ...safeUser,
           company: user.company ?? null,
         },
+      },
+    };
+  }
+
+  // Impersonación de soporte: la plataforma "entra como" el dueño (SUPER_ADMIN)
+  // de una empresa para ver/configurar exactamente lo que él ve. Devuelve un
+  // token de ese usuario (marcado con impersonatedBy para auditoría).
+  async impersonate(companyId: number, actingUser: any) {
+    if (actingUser?.role !== 'SUPER_PLATFORM_ADMIN') {
+      throw new ForbiddenException('Solo la plataforma puede impersonar');
+    }
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, name: true, status: true, type: true },
+    });
+    if (!company) throw new NotFoundException('Empresa no encontrada');
+    if (company.status !== 'ACTIVO') {
+      throw new BadRequestException(
+        'La empresa está suspendida. Actívala antes de entrar como ella.',
+      );
+    }
+    const admin = await this.prisma.user.findFirst({
+      where: {
+        companyId,
+        role: Role.SUPER_ADMIN,
+        status: { not: 'ELIMINADO' as any },
+      },
+      orderBy: { id: 'asc' },
+    });
+    if (!admin) {
+      throw new NotFoundException('La empresa no tiene un administrador dueño.');
+    }
+    const payload = {
+      sub: admin.id,
+      email: admin.email,
+      name: admin.name,
+      role: admin.role,
+      companyId: admin.companyId,
+      localId: admin.localId,
+      impersonatedBy: actingUser.sub,
+    };
+    const { password, ...safeUser } = admin;
+    return {
+      success: true,
+      data: {
+        access_token: await this.jwtService.signAsync(payload),
+        user: { ...safeUser, company },
       },
     };
   }

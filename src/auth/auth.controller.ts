@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  ParseIntPipe,
   Patch,
   Post,
   Req,
@@ -40,6 +42,16 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  // Impersonación de soporte (solo plataforma): entra como el dueño de la empresa.
+  @UseGuards(JwtAuthGuard)
+  @Post('impersonate/:companyId')
+  impersonate(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Req() req,
+  ) {
+    return this.authService.impersonate(companyId, req.user);
   }
 
   // Auto-registro de negocio (público): crea empresa + admin y devuelve token.
