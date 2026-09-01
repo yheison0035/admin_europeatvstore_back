@@ -910,7 +910,7 @@ export class CompaniesService {
     const now = new Date();
     const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [users, localsCount, salesMonth, salesMonthPaid] = await Promise.all([
+    const [users, locals, salesMonth, salesMonthPaid] = await Promise.all([
       this.prisma.user.findMany({
         where: { companyId: id, status: { not: Status.ELIMINADO } },
         select: {
@@ -919,11 +919,14 @@ export class CompaniesService {
           email: true,
           role: true,
           status: true,
+          localId: true,
         },
         orderBy: [{ role: 'asc' }, { name: 'asc' }],
       }),
-      this.prisma.local.count({
+      this.prisma.local.findMany({
         where: { companyId: id, status: { not: Status.ELIMINADO } },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
       }),
       this.prisma.sale.aggregate({
         where: { local: { companyId: id }, createdAt: { gte: startMonth } },
@@ -961,8 +964,9 @@ export class CompaniesService {
         },
         counts: {
           users: users.length,
-          locals: localsCount,
+          locals: locals.length,
         },
+        locals,
         salesMonth: {
           count: salesMonth._count._all,
           total: salesMonth._sum.totalAmount || 0,

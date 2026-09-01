@@ -103,6 +103,30 @@ export class UsersController {
     return this.usersService.platformResetPassword(req.user, id, password);
   }
 
+  // Crear un usuario en una empresa (plataforma).
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_PLATFORM_ADMIN')
+  @Post('platform/company/:companyId')
+  platformCreateUser(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Body() dto: any,
+    @Req() req,
+  ) {
+    return this.usersService.platformCreateUser(req.user, companyId, dto);
+  }
+
+  // Editar rol/estado/sede/empresa de un usuario (plataforma).
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_PLATFORM_ADMIN')
+  @Patch('platform/:id')
+  platformUpdateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: any,
+    @Req() req,
+  ) {
+    return this.usersService.platformUpdateUser(req.user, id, dto);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'COORDINADOR', 'AUXILIAR', 'ASESOR')
   @Get('/:id')

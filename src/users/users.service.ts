@@ -74,6 +74,194 @@ export class UsersService {
     return { success: true, message: 'Contraseña actualizada.' };
   }
 
+  // Roles que la plataforma puede asignar (nunca el de plataforma).
+  private assertAssignableRole(role: string) {
+    const r = String(role || '').toUpperCase();
+    if (!(r in Role) || r === Role.SUPER_PLATFORM_ADMIN) {
+      throw new BadRequestException('Rol inválido.');
+    }
+    return r as Role;
+  }
+
+  // Crear un usuario en CUALQUIER empresa (plataforma). No pasa por el límite de
+  // plan (aprovisionamiento del rol supremo), pero sí valida email/sede/rol.
+  async platformCreateUser(
+    actingUser: any,
+    companyId: number,
+    dto: {
+      name?: string;
+      email?: string;
+      password?: string;
+      role?: string;
+      localId?: number | null;
+      phone?: string;
+    },
+  ) {
+    if (actingUser.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true },
+    });
+    if (!company) throw new NotFoundException('Empresa no encontrada');
+
+    const email = String(dto.email || '')
+      .trim()
+      .toLowerCase();
+    if (!email) throw new BadRequestException('El correo es obligatorio.');
+    if (!dto.password || dto.password.length < 6) {
+      throw new BadRequestException(
+        'La contraseña debe tener al menos 6 caracteres.',
+      );
+    }
+    const role = this.assertAssignableRole(dto.role || Role.ASESOR);
+
+    const exists = await this.prisma.user.findUnique({ where: { email } });
+    if (exists) throw new ConflictException('Ya existe una cuenta con ese correo.');
+
+    // Un solo SUPER_ADMIN por empresa.
+    if (role === Role.SUPER_ADMIN) {
+      const ya = await this.prisma.user.findFirst({
+        where: {
+          companyId,
+          role: Role.SUPER_ADMIN,
+          status: { not: Status.ELIMINADO },
+        },
+        select: { id: true },
+      });
+      if (ya)
+        throw new ConflictException(
+          'Esa empresa ya tiene administrador principal.',
+        );
+    }
+
+    if (dto.localId) {
+      const local = await this.prisma.local.findFirst({
+        where: { id: dto.localId, companyId },
+        select: { id: true },
+      });
+      if (!local) throw new BadRequestException('La sede no es de esa empresa.');
+    }
+
+    const created = await this.prisma.user.create({
+      data: {
+        name: dto.name?.trim() || 'Usuario',
+        email,
+        phone: dto.phone?.trim() || null,
+        password: await bcrypt.hash(dto.password, 10),
+        role,
+        status: Status.ACTIVO,
+        companyId,
+        localId: dto.localId || null,
+      },
+      select: { id: true, name: true, email: true, role: true, status: true },
+    });
+    return { success: true, data: created };
+  }
+
+  // Editar rol/estado/sede (y opcionalmente reasignar empresa) de cualquier
+  // usuario, desde la plataforma.
+  async platformUpdateUser(
+    actingUser: any,
+    id: number,
+    dto: {
+      name?: string;
+      role?: string;
+      status?: string;
+      localId?: number | null;
+      companyId?: number;
+    },
+  ) {
+    if (actingUser.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+    const current = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true, companyId: true },
+    });
+    if (!current) throw new NotFoundException('Usuario no encontrado');
+    if (current.role === Role.SUPER_PLATFORM_ADMIN) {
+      throw new BadRequestException(
+        'No puedes editar un administrador de plataforma.',
+      );
+    }
+
+    const data: any = {};
+    if (dto.name !== undefined) data.name = dto.name?.trim() || undefined;
+
+    // Empresa destino (para validar sede y unicidad de SUPER_ADMIN).
+    const targetCompanyId =
+      dto.companyId !== undefined ? Number(dto.companyId) : current.companyId;
+
+    if (dto.companyId !== undefined && dto.companyId !== current.companyId) {
+      const company = await this.prisma.company.findUnique({
+        where: { id: Number(dto.companyId) },
+        select: { id: true },
+      });
+      if (!company) throw new NotFoundException('Empresa destino no existe.');
+      data.companyId = Number(dto.companyId);
+      data.localId = null; // al cambiar de empresa, se limpia la sede
+    }
+
+    if (dto.role !== undefined) {
+      const role = this.assertAssignableRole(dto.role);
+      if (role === Role.SUPER_ADMIN) {
+        const ya = await this.prisma.user.findFirst({
+          where: {
+            companyId: targetCompanyId,
+            role: Role.SUPER_ADMIN,
+            status: { not: Status.ELIMINADO },
+            NOT: { id },
+          },
+          select: { id: true },
+        });
+        if (ya)
+          throw new ConflictException(
+            'Esa empresa ya tiene administrador principal.',
+          );
+      }
+      data.role = role;
+    }
+
+    if (dto.status !== undefined) {
+      const st = String(dto.status).toUpperCase();
+      if (!['ACTIVO', 'INACTIVO'].includes(st)) {
+        throw new BadRequestException('Estado inválido.');
+      }
+      data.status = st;
+    }
+
+    if (dto.localId !== undefined && data.localId === undefined) {
+      if (dto.localId) {
+        const local = await this.prisma.local.findFirst({
+          where: { id: Number(dto.localId), companyId: targetCompanyId },
+          select: { id: true },
+        });
+        if (!local)
+          throw new BadRequestException('La sede no es de esa empresa.');
+        data.localId = Number(dto.localId);
+      } else {
+        data.localId = null;
+      }
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        localId: true,
+        companyId: true,
+      },
+    });
+    return { success: true, data: updated };
+  }
+
   async findAllGlobal(user: any, query: any) {
     if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
       throw new ForbiddenException('No tienes permisos');
