@@ -1177,14 +1177,18 @@ export class CompaniesService {
   // está activo en BusinessTypeConfig (tipos creados por la plataforma).
   async assertBusinessType(type?: string) {
     if (!type) return;
-    if ((Object.values(BusinessType) as string[]).includes(type)) return;
     const cfg = await this.prisma.businessTypeConfig.findUnique({
       where: { type },
       select: { active: true },
     });
-    if (!cfg || !cfg.active) {
-      throw new BadRequestException('Tipo de negocio no válido.');
+    // Si hay fila de config, manda su estado (un base desactivado, ej. ZORVEX,
+    // queda inválido). Sin fila, se acepta solo si es uno de los base del enum.
+    if (cfg) {
+      if (!cfg.active) throw new BadRequestException('Tipo de negocio no válido.');
+      return;
     }
+    if ((Object.values(BusinessType) as string[]).includes(type)) return;
+    throw new BadRequestException('Tipo de negocio no válido.');
   }
 
   async create(dto: CreateCompanyDto, user: any) {

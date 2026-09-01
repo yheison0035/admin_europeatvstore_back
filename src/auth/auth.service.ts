@@ -204,14 +204,19 @@ export class AuthService {
       throw new ConflictException('Ya existe una cuenta con ese correo.');
     }
 
-    // Tipo de negocio válido: uno de los base (enum) o creado y activo en
-    // BusinessTypeConfig.
-    if (dto.type && !(Object.values(BusinessType) as string[]).includes(dto.type)) {
+    // Tipo de negocio válido: si tiene fila de config manda su estado (un base
+    // desactivado queda inválido); sin fila, se acepta solo si es base del enum.
+    if (dto.type) {
       const cfg = await this.prisma.businessTypeConfig.findUnique({
         where: { type: dto.type },
         select: { active: true },
       });
-      if (!cfg || !cfg.active) {
+      if (cfg) {
+        if (!cfg.active)
+          throw new BadRequestException('Tipo de negocio no válido.');
+      } else if (
+        !(Object.values(BusinessType) as string[]).includes(dto.type)
+      ) {
         throw new BadRequestException('Tipo de negocio no válido.');
       }
     }

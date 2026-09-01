@@ -60,14 +60,19 @@ export class EnumsService {
   // por si aún no se ha sembrado la tabla.
   async getTypeCompanies() {
     const configs = await this.prisma.businessTypeConfig.findMany({
-      where: { active: true },
-      select: { type: true, label: true },
+      select: { type: true, label: true, active: true },
       orderBy: { label: 'asc' },
     });
-    const map = new Map(configs.map((c) => [c.type, c.label]));
-    // Respaldo: asegura que los base siempre aparezcan aunque falte su fila.
+    // Solo los ACTIVOS entran al desplegable.
+    const map = new Map(
+      configs.filter((c) => c.active).map((c) => [c.type, c.label]),
+    );
+    // Un tipo YA configurado (aunque esté inactivo, ej. ZORVEX desactivado) no
+    // se re-agrega. Solo los base del enum que nunca tuvieron fila entran como
+    // respaldo.
+    const configured = new Set(configs.map((c) => c.type));
     for (const t of Object.values(BusinessType)) {
-      if (!map.has(t)) map.set(t, (t as string).replace(/_/g, ' '));
+      if (!configured.has(t)) map.set(t, (t as string).replace(/_/g, ' '));
     }
     return [...map.entries()].map(([id, name]) => ({ id, name }));
   }
