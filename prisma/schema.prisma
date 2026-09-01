@@ -1730,6 +1730,9 @@ model BusinessTypeConfig {
   // Valores por defecto que se aplican al CREAR una empresa de este tipo
   // (requireCashOpen, openHour, closeHour, loyaltyEnabled). Editables.
   defaults     Json?
+  // Ajustes de la TIENDA online por tipo: modos de entrega (fulfillment) y
+  // layout del catálogo. Lo consume el storefront vía /website/config.
+  storefront   Json?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

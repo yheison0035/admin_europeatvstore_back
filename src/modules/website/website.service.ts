@@ -58,6 +58,17 @@ export class WebsiteService {
 
     const systemUserId = await this.getSystemUser(company.id);
 
+    // Ajustes de tienda por tipo (fulfillment/layout) configurados por la
+    // plataforma: la tienda los usa para adaptar entrega y catálogo.
+    const typeCfg = company.type
+      ? await this.prisma.businessTypeConfig.findUnique({
+          where: { type: company.type },
+          select: { storefront: true, active: true },
+        })
+      : null;
+    (company as any).typeStorefront =
+      typeCfg && typeCfg.active ? (typeCfg.storefront ?? null) : null;
+
     return {
       companyId: company.id,
       localId: company.websiteSetting.ecommerceLocalId,

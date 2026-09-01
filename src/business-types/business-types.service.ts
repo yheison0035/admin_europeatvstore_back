@@ -72,6 +72,7 @@ export class BusinessTypesService {
       productFields?: any;
       roles?: string[];
       defaults?: any;
+      storefront?: any;
     },
   ) {
     this.assertPlatform(user);
@@ -96,6 +97,7 @@ export class BusinessTypesService {
         productFields: dto.productFields ?? undefined,
         roles: Array.isArray(dto.roles) ? dto.roles : [],
         defaults: dto.defaults ?? undefined,
+        storefront: dto.storefront ?? undefined,
         active: true,
       },
     });
@@ -124,6 +126,7 @@ export class BusinessTypesService {
       productFields?: any;
       roles?: string[];
       defaults?: any;
+      storefront?: any;
     },
   ) {
     this.assertPlatform(user);
@@ -143,6 +146,7 @@ export class BusinessTypesService {
     if (dto.roles !== undefined)
       data.roles = Array.isArray(dto.roles) ? dto.roles : [];
     if (dto.defaults !== undefined) data.defaults = dto.defaults ?? null;
+    if (dto.storefront !== undefined) data.storefront = dto.storefront ?? null;
 
     const updated = await this.prisma.businessTypeConfig.update({
       where: { type },
