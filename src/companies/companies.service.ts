@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { randomBytes } from 'crypto';
 import { applyLoyaltyVisit } from '@/common/loyalty.util';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/prisma.service';
@@ -917,9 +918,24 @@ export class CompaniesService {
       }
     }
 
+    // Consignaciones: al activar por primera vez, generamos el token del webhook.
+    const bankPatch: any = {};
+    if (dto.bankNotifyEnabled !== undefined) {
+      bankPatch.bankNotifyEnabled = dto.bankNotifyEnabled;
+      if (dto.bankNotifyEnabled && !found.bankNotifyToken) {
+        bankPatch.bankNotifyToken = randomBytes(24).toString('hex');
+      }
+    }
+
     const updated = await this.prisma.company.update({
       where: { id },
       data: {
+        ...bankPatch,
+        ...(dto.electronicInvoicingEnabled !== undefined && {
+          electronicInvoicingEnabled: dto.electronicInvoicingEnabled,
+        }),
+        ...(dto.crmTheme !== undefined && { crmTheme: dto.crmTheme }),
+        ...(dto.crmFont !== undefined && { crmFont: dto.crmFont }),
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.logo !== undefined && { logo: dto.logo }),
         ...(dto.phone !== undefined && { phone: dto.phone }),

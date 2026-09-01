@@ -65,6 +65,23 @@ export class UpdateCompanyDto {
   @IsString({ each: true })
   enabledModules?: string[];
 
+  // Funciones que la PLATAFORMA activa por empresa.
+  @IsOptional()
+  @IsBoolean()
+  bankNotifyEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  electronicInvoicingEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  crmTheme?: string;
+
+  @IsOptional()
+  @IsString()
+  crmFont?: string;
+
   // Precio acordado (COP/mes) y descuento inicial por tiempo.
   @IsOptional()
   @IsInt()

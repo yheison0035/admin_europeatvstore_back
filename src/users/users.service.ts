@@ -256,6 +256,8 @@ export class UsersService {
             requireCashOpen: true,
             // Aviso de consignaciones al banco (voz + notificación).
             bankNotifyEnabled: true,
+            // Facturación electrónica DIAN habilitada por la plataforma.
+            electronicInvoicingEnabled: true,
             // Régimen de IVA (para el encabezado de la factura impresa).
             responsableIVA: true,
             // Vencimiento del pago y precio acordado: el CRM del dueño los usa

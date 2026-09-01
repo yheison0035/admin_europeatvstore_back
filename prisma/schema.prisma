@@ -314,6 +314,9 @@ model Company {
 
   // Notificaciones de consignaciones a la cuenta del banco (SMS/correo reenviado).
   bankNotifyEnabled Boolean @default(false)
+  // Facturación electrónica DIAN habilitada por la plataforma para esta empresa
+  // (muestra el módulo/menú y su configuración; se emite vía Factus).
+  electronicInvoicingEnabled Boolean @default(false)
   // Secreto del webhook. NO es único: varias empresas que comparten el mismo
   // buzón/cuenta usan el mismo token y se distinguen por bankIdentifier.
   bankNotifyToken   String?
