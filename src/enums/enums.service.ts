@@ -8,9 +8,12 @@ import {
   ExpenseType,
   BusinessType,
 } from '@prisma/client';
+import { PrismaService } from '@/prisma.service';
 
 @Injectable()
 export class EnumsService {
+  constructor(private prisma: PrismaService) {}
+
   private mapEnumToOptions(enumObj: object) {
     return Object.values(enumObj).map((value) => ({
       id: value,
@@ -52,7 +55,20 @@ export class EnumsService {
     return this.mapEnumToOptions(ExpenseType);
   }
 
-  getTypeCompanies() {
-    return this.mapEnumToOptions(BusinessType);
+  // Tipos de negocio para los selects: los configurados y ACTIVOS en BD
+  // (incluye los creados por la plataforma), con respaldo a los 17 base del enum
+  // por si aún no se ha sembrado la tabla.
+  async getTypeCompanies() {
+    const configs = await this.prisma.businessTypeConfig.findMany({
+      where: { active: true },
+      select: { type: true, label: true },
+      orderBy: { label: 'asc' },
+    });
+    const map = new Map(configs.map((c) => [c.type, c.label]));
+    // Respaldo: asegura que los base siempre aparezcan aunque falte su fila.
+    for (const t of Object.values(BusinessType)) {
+      if (!map.has(t)) map.set(t, (t as string).replace(/_/g, ' '));
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name }));
   }
 }

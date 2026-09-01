@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -22,6 +23,11 @@ export class BusinessTypesController {
   @Get()
   findAll(@Req() req) {
     return this.service.findAll(req.user);
+  }
+
+  @Post()
+  create(@Body() dto: any, @Req() req) {
+    return this.service.create(req.user, dto);
   }
 
   @Patch(':type')

@@ -38,7 +38,7 @@ export class EnumsController {
   }
 
   @Get('type-companies')
-  getTypeCompanies() {
-    return { success: true, data: this.enumsService.getTypeCompanies() };
+  async getTypeCompanies() {
+    return { success: true, data: await this.enumsService.getTypeCompanies() };
   }
 }

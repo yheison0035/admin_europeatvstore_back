@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -47,6 +48,46 @@ export class BusinessTypesService {
       orderBy: { label: 'asc' },
     });
     return { success: true, data: items };
+  }
+
+  // Clave normalizada para un tipo nuevo: MAYÚSCULAS, sin acentos, espacios y
+  // símbolos → guion bajo. Ej. "Ferretería mayorista" -> "FERRETERIA_MAYORISTA".
+  private normalizeKey(raw: string) {
+    return (raw || '')
+      .normalize('NFD')
+      .replace(new RegExp('[\u0300-\u036f]', 'g'), '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 40);
+  }
+
+  async create(
+    user: any,
+    dto: { label?: string; type?: string; modules?: string[] },
+  ) {
+    this.assertPlatform(user);
+    const label = (dto.label || '').trim();
+    if (!label) throw new NotFoundException('El nombre es obligatorio.');
+    const type = this.normalizeKey(dto.type || label);
+    if (!type) {
+      throw new NotFoundException('El nombre no genera una clave válida.');
+    }
+    const exists = await this.prisma.businessTypeConfig.findUnique({
+      where: { type },
+    });
+    if (exists) {
+      throw new ConflictException(`Ya existe un tipo con la clave ${type}.`);
+    }
+    const created = await this.prisma.businessTypeConfig.create({
+      data: {
+        type,
+        label,
+        modules: Array.isArray(dto.modules) ? dto.modules : [],
+        active: true,
+      },
+    });
+    return { success: true, data: created };
   }
 
   async update(

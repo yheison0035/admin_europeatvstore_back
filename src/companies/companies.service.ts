@@ -14,7 +14,7 @@ import { PrismaService } from '@/prisma.service';
 import { MailService } from '@/mail/mail.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
-import { Role, Status, Prisma } from '@prisma/client';
+import { Role, Status, Prisma, BusinessType } from '@prisma/client';
 
 @Injectable()
 export class CompaniesService {
@@ -1173,10 +1173,25 @@ export class CompaniesService {
   }
 
   // CREAR EMPRESA
+  // El tipo de negocio es válido si es uno de los 17 base (enum) o si existe y
+  // está activo en BusinessTypeConfig (tipos creados por la plataforma).
+  async assertBusinessType(type?: string) {
+    if (!type) return;
+    if ((Object.values(BusinessType) as string[]).includes(type)) return;
+    const cfg = await this.prisma.businessTypeConfig.findUnique({
+      where: { type },
+      select: { active: true },
+    });
+    if (!cfg || !cfg.active) {
+      throw new BadRequestException('Tipo de negocio no válido.');
+    }
+  }
+
   async create(dto: CreateCompanyDto, user: any) {
     if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
       throw new ForbiddenException('No tienes permisos');
     }
+    await this.assertBusinessType(dto.type);
 
     // Si se van a crear credenciales de administrador, validar el correo antes
     // (email es único global) y preparar el hash fuera de la transacción.
@@ -1266,6 +1281,8 @@ export class CompaniesService {
     if (!found) {
       throw new NotFoundException('Empresa no encontrada');
     }
+
+    await this.assertBusinessType(dto.type);
 
     // Dominio de la tienda: se normaliza (sin protocolo, sin www, sin puerto)
     // y se comprueba que no lo esté usando otra empresa, porque es la clave

@@ -196,7 +196,10 @@ model Company {
   logo    String?
   nit     String?
   email   String?
-  type    BusinessType @default(COMERCIO)
+  // Clave del tipo de negocio. Es TEXTO (no enum) para permitir tipos nuevos
+  // creados desde la plataforma (BusinessTypeConfig). El enum BusinessType se
+  // conserva como catálogo de referencia/semilla de los 17 tipos base.
+  type    String       @default("COMERCIO")
   status  Status       @default(ACTIVO)
   phone   String?
   manager String?

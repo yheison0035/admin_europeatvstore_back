@@ -204,6 +204,18 @@ export class AuthService {
       throw new ConflictException('Ya existe una cuenta con ese correo.');
     }
 
+    // Tipo de negocio válido: uno de los base (enum) o creado y activo en
+    // BusinessTypeConfig.
+    if (dto.type && !(Object.values(BusinessType) as string[]).includes(dto.type)) {
+      const cfg = await this.prisma.businessTypeConfig.findUnique({
+        where: { type: dto.type },
+        select: { active: true },
+      });
+      if (!cfg || !cfg.active) {
+        throw new BadRequestException('Tipo de negocio no válido.');
+      }
+    }
+
     // Si viene cupón, se valida contra el plan elegido (lanza si no sirve).
     const couponCode = dto.couponCode?.trim();
     const coupon = couponCode

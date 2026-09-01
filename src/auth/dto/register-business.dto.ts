@@ -1,12 +1,10 @@
 import {
   IsEmail,
-  IsEnum,
   IsIn,
   IsOptional,
   IsString,
   MinLength,
 } from 'class-validator';
-import { BusinessType } from '@prisma/client';
 
 export const PLAN_IDS = ['DESPEGUE', 'IMPULSO', 'ALTURA', 'ORBITA'] as const;
 
@@ -18,8 +16,8 @@ export class RegisterBusinessDto {
   companyName: string;
 
   @IsOptional()
-  @IsEnum(BusinessType)
-  type?: BusinessType;
+  @IsString()
+  type?: string;
 
   @IsString()
   @MinLength(2)

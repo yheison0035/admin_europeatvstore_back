@@ -8,7 +8,7 @@ import {
   IsInt,
   Min,
 } from 'class-validator';
-import { BusinessType, Status } from '@prisma/client';
+import { Status } from '@prisma/client';
 
 export class UpdateCompanyDto {
   @IsOptional()
@@ -28,8 +28,8 @@ export class UpdateCompanyDto {
   manager?: string;
 
   @IsOptional()
-  @IsEnum(BusinessType)
-  type?: BusinessType;
+  @IsString()
+  type?: string;
 
   @IsOptional()
   @IsEnum(Status)

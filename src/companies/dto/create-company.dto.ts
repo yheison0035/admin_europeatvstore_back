@@ -7,7 +7,7 @@ import {
   IsBoolean,
   MinLength,
 } from 'class-validator';
-import { BusinessType, Status } from '@prisma/client';
+import { Status } from '@prisma/client';
 
 export class CreateCompanyDto {
   @IsString()
@@ -34,8 +34,8 @@ export class CreateCompanyDto {
   manager?: string;
 
   @IsOptional()
-  @IsEnum(BusinessType)
-  type?: BusinessType;
+  @IsString()
+  type?: string;
 
   @IsOptional()
   @IsEnum(Status)
