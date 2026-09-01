@@ -520,10 +520,29 @@ export class UsersService {
     if (user.company?.type) {
       const typeCfg = await this.prisma.businessTypeConfig.findUnique({
         where: { type: user.company.type },
-        select: { modules: true, active: true },
+        select: {
+          modules: true,
+          active: true,
+          terminology: true,
+          productFields: true,
+          roles: true,
+        },
       });
-      (user.company as any).typeModules =
-        typeCfg && typeCfg.active ? typeCfg.modules : null;
+      const c = user.company as any;
+      if (typeCfg && typeCfg.active) {
+        c.typeModules = typeCfg.modules;
+        c.typeTerminology = typeCfg.terminology ?? null;
+        c.typeProductFields = typeCfg.productFields ?? null;
+        c.typeRoles =
+          Array.isArray(typeCfg.roles) && typeCfg.roles.length
+            ? typeCfg.roles
+            : null;
+      } else {
+        c.typeModules = null;
+        c.typeTerminology = null;
+        c.typeProductFields = null;
+        c.typeRoles = null;
+      }
     }
 
     if (requester?.id === user.id) {

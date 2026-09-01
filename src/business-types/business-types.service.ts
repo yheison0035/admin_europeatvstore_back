@@ -64,7 +64,14 @@ export class BusinessTypesService {
 
   async create(
     user: any,
-    dto: { label?: string; type?: string; modules?: string[] },
+    dto: {
+      label?: string;
+      type?: string;
+      modules?: string[];
+      terminology?: any;
+      productFields?: any;
+      roles?: string[];
+    },
   ) {
     this.assertPlatform(user);
     const label = (dto.label || '').trim();
@@ -84,6 +91,9 @@ export class BusinessTypesService {
         type,
         label,
         modules: Array.isArray(dto.modules) ? dto.modules : [],
+        terminology: dto.terminology ?? undefined,
+        productFields: dto.productFields ?? undefined,
+        roles: Array.isArray(dto.roles) ? dto.roles : [],
         active: true,
       },
     });
@@ -93,7 +103,14 @@ export class BusinessTypesService {
   async update(
     user: any,
     type: string,
-    dto: { label?: string; modules?: string[]; active?: boolean },
+    dto: {
+      label?: string;
+      modules?: string[];
+      active?: boolean;
+      terminology?: any;
+      productFields?: any;
+      roles?: string[];
+    },
   ) {
     this.assertPlatform(user);
     const found = await this.prisma.businessTypeConfig.findUnique({
@@ -106,6 +123,11 @@ export class BusinessTypesService {
     if (dto.modules !== undefined)
       data.modules = Array.isArray(dto.modules) ? dto.modules : [];
     if (dto.active !== undefined) data.active = dto.active;
+    if (dto.terminology !== undefined) data.terminology = dto.terminology ?? null;
+    if (dto.productFields !== undefined)
+      data.productFields = dto.productFields ?? null;
+    if (dto.roles !== undefined)
+      data.roles = Array.isArray(dto.roles) ? dto.roles : [];
 
     const updated = await this.prisma.businessTypeConfig.update({
       where: { type },
