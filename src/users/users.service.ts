@@ -514,6 +514,18 @@ export class UsersService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
+    // Módulos configurados para el TIPO de negocio (BusinessTypeConfig, editable
+    // por la plataforma). El front los usa para el menú; si no hay fila o está
+    // inactiva, queda null y el front cae a su mapa por defecto.
+    if (user.company?.type) {
+      const typeCfg = await this.prisma.businessTypeConfig.findUnique({
+        where: { type: user.company.type },
+        select: { modules: true, active: true },
+      });
+      (user.company as any).typeModules =
+        typeCfg && typeCfg.active ? typeCfg.modules : null;
+    }
+
     if (requester?.id === user.id) {
       return {
         success: true,

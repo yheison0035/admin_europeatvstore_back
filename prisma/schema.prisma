@@ -1706,3 +1706,19 @@ model SubscriptionPayment {
 
   @@index([companyId])
 }
+
+// Configuración editable de cada TIPO DE NEGOCIO (vertical): su etiqueta y el
+// set de módulos que trae por defecto. Es GLOBAL (no por empresa) y la gestiona
+// el rol plataforma. `type` = clave del enum BusinessType. Reemplaza al mapa
+// hardcode del front (businessTypes.js) cuando existe; si no, el front usa el
+// hardcode como respaldo. El override por empresa (Company.enabledModules)
+// sigue mandando sobre esto.
+model BusinessTypeConfig {
+  id        Int      @id @default(autoincrement())
+  type      String   @unique
+  label     String
+  modules   String[] @default([])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
