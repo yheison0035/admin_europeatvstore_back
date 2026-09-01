@@ -9,7 +9,10 @@ import {
   Put,
   Req,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ClinicalService } from './clinical.service';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/auth/guards/roles.guard';
@@ -43,6 +46,12 @@ export class ClinicalController {
     @Req() req,
   ) {
     return this.service.addEntry(req.user, customerId, dto);
+  }
+
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file'))
+  upload(@UploadedFile() file: Express.Multer.File, @Req() req) {
+    return this.service.uploadImage(req.user, file);
   }
 
   @Delete('entry/:id')

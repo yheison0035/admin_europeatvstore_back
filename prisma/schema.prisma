@@ -1754,6 +1754,7 @@ model ClinicalRecord {
   medications String? // medicamentos actuales
   conditions  String? // antecedentes / enfermedades
   notes       String? // observaciones generales
+  odontogram  Json? // odontograma (dental): estado por diente
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

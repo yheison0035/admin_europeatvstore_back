@@ -1,13 +1,18 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma.service';
+import { CloudinaryService } from '@/cloudinary/cloudinary.service';
 
 @Injectable()
 export class ClinicalService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cloudinary: CloudinaryService,
+  ) {}
 
   // El paciente (Customer) debe ser de la empresa del usuario.
   private async assertCustomer(user: any, customerId: number) {
@@ -35,13 +40,15 @@ export class ClinicalService {
 
   async upsertRecord(user: any, customerId: number, dto: any) {
     await this.assertCustomer(user, customerId);
-    const data = {
+    const data: any = {
       bloodType: dto.bloodType?.trim() || null,
       allergies: dto.allergies?.trim() || null,
       medications: dto.medications?.trim() || null,
       conditions: dto.conditions?.trim() || null,
       notes: dto.notes?.trim() || null,
     };
+    // Odontograma (dental): solo se toca si viene en el DTO.
+    if (dto.odontogram !== undefined) data.odontogram = dto.odontogram ?? null;
     const record = await this.prisma.clinicalRecord.upsert({
       where: { companyId_customerId: { companyId: user.companyId, customerId } },
       create: { companyId: user.companyId, customerId, ...data },
@@ -68,6 +75,16 @@ export class ClinicalService {
       },
     });
     return { success: true, data: entry };
+  }
+
+  // Sube una imagen (foto/radiografía) y devuelve su URL para adjuntarla.
+  async uploadImage(user: any, file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No se recibió ninguna imagen.');
+    const { url } = await this.cloudinary.uploadImage(
+      file,
+      `clinical/${user.companyId}`,
+    );
+    return { success: true, data: { url } };
   }
 
   async removeEntry(user: any, id: number) {
