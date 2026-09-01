@@ -1657,3 +1657,25 @@ model ImpersonationLog {
   @@index([createdAt])
   @@index([companyId])
 }
+
+// Comunicados/anuncios de la PLATAFORMA hacia los negocios. Se pueden dirigir a
+// todos, o segmentar por tipo de negocio y/o por plan (nada mezclado: cada
+// negocio solo ve lo que le corresponde). Ventana opcional de vigencia.
+model Announcement {
+  id        Int       @id @default(autoincrement())
+  title     String
+  body      String
+  level     String    @default("INFO") // INFO | SUCCESS | WARNING | CRITICAL
+  audience  String    @default("ALL") // ALL | TYPE | PLAN
+  types     String[]  @default([]) // claves de BusinessType si audience=TYPE
+  plans     String[]  @default([]) // ids de plan si audience=PLAN
+  ctaLabel  String?
+  ctaUrl    String?
+  active    Boolean   @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([active])
+}

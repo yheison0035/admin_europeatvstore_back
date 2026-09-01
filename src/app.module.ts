@@ -45,6 +45,7 @@ import { CustomerSegmentsModule } from './customer-segments/customer-segments.mo
 import { RestDaysModule } from './rest-days/rest-days.module';
 import { AuditModule } from './audit/audit.module';
 import { CouponsModule } from './coupons/coupons.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 
 @Module({
@@ -94,6 +95,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     RestDaysModule,
     AuditModule,
     CouponsModule,
+    AnnouncementsModule,
     SubscriptionModule,
   ],
   providers: [
