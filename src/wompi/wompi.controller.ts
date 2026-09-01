@@ -1,8 +1,19 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Public } from '@/auth/decorators/public.decorator';
 import { WompiService } from './wompi.service';
 import { CreateSignatureDto } from './dto/create-signature.dto';
 import { PrismaService } from '@/prisma.service';
+import { WebsiteGuard } from '@/common/guards/website.guard';
+import { Website } from '@/common/decorators/website.decorator';
+import { WebsiteContext } from '@/modules/website/interfaces/website-context.interface';
 
 @Controller('wompi')
 export class WompiController {
@@ -11,10 +22,28 @@ export class WompiController {
     private readonly prisma: PrismaService,
   ) {}
 
+  // Firma de integridad para el checkout de la TIENDA. Usa el secreto de la
+  // empresa dueña del dominio (WebsiteGuard resuelve la empresa por el host).
   @Public()
+  @UseGuards(WebsiteGuard)
   @Post('signature')
-  createSignature(@Body() dto: CreateSignatureDto) {
-    return this.wompiService.generateSignature(dto);
+  async createSignature(
+    @Body() dto: CreateSignatureDto,
+    @Website() website: WebsiteContext,
+  ) {
+    const company: any = await this.prisma.company.findUnique({
+      where: { id: website.companyId },
+      omit: { wompiIntegritySecret: false },
+    });
+    if (!company?.wompiEnabled || !company?.wompiIntegritySecret) {
+      throw new BadRequestException(
+        'Esta tienda no tiene pagos en línea configurados.',
+      );
+    }
+    return this.wompiService.generateSignature({
+      ...dto,
+      integritySecret: company.wompiIntegritySecret,
+    });
   }
 
   @Public()
@@ -23,41 +52,59 @@ export class WompiController {
     return this.wompiService.getTransaction(id);
   }
 
-  // Webhook de confirmación de pago que Wompi llama directamente. Verifica la
-  // firma y actualiza la venta correspondiente por su referencia.
+  // Webhook de confirmación de pago que Wompi llama directamente. La firma se
+  // verifica con el secreto de eventos que corresponda: el de la empresa (venta
+  // de tienda) o el global de Pegazo (suscripción SUB-*).
   @Public()
   @Post('webhook')
   async webhook(@Body() event: any) {
-    if (!this.wompiService.verifyEventChecksum(event)) {
-      return { received: true, valid: false };
-    }
-
     const tx = event?.data?.transaction;
     const reference = tx?.reference;
     const status = tx?.status; // APPROVED | DECLINED | VOIDED | ERROR
 
-    if (reference && status) {
-      // Pago de SUSCRIPCIÓN (upgrade de plan): referencia SUB-*.
-      if (reference.startsWith('SUB-')) {
-        await this.applySubscription(reference, status, tx?.id);
-      } else {
-        // Pago de una venta de la tienda.
-        const sale = await this.prisma.sale.findFirst({
-          where: { wompiReference: reference },
-          select: { id: true },
-        });
-        if (sale) {
-          await this.prisma.sale.update({
-            where: { id: sale.id },
-            data: {
-              wompiStatus: status,
-              wompiTransactionId: tx?.id ?? undefined,
-              ...(status === 'APPROVED' && { paymentStatus: 'PAGADA' as any }),
-            },
-          });
-        }
-      }
+    if (!reference || !status) {
+      return { received: true, valid: false };
     }
+
+    // Pago de SUSCRIPCIÓN de Pegazo: secreto de eventos global.
+    if (reference.startsWith('SUB-')) {
+      if (!this.wompiService.verifyEventChecksum(event)) {
+        return { received: true, valid: false };
+      }
+      await this.applySubscription(reference, status, tx?.id);
+      return { received: true, valid: true };
+    }
+
+    // Pago de una VENTA de la tienda: ubicar la empresa por la venta y verificar
+    // con SU secreto de eventos.
+    const sale = await this.prisma.sale.findFirst({
+      where: { wompiReference: reference },
+      select: { id: true, local: { select: { companyId: true } } },
+    });
+    if (!sale) {
+      return { received: true, valid: false };
+    }
+    const company: any = await this.prisma.company.findUnique({
+      where: { id: sale.local.companyId },
+      omit: { wompiEventsSecret: false },
+    });
+    if (
+      !this.wompiService.verifyEventChecksum(
+        event,
+        company?.wompiEventsSecret || undefined,
+      )
+    ) {
+      return { received: true, valid: false };
+    }
+
+    await this.prisma.sale.update({
+      where: { id: sale.id },
+      data: {
+        wompiStatus: status,
+        wompiTransactionId: tx?.id ?? undefined,
+        ...(status === 'APPROVED' && { paymentStatus: 'PAGADA' as any }),
+      },
+    });
 
     return { received: true, valid: true };
   }

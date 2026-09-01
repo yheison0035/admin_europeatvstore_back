@@ -278,6 +278,16 @@ model Company {
   heroTitle      String?
   heroSubtitle   String?
 
+  // Pasarela de pagos PROPIA de la tienda online (Wompi por empresa). Cada
+  // negocio conecta su cuenta Wompi y el dinero cae en SU banco; Pegazo no lo
+  // toca. La llave pública se expone a la tienda; los secretos se OMITEN
+  // globalmente (ver prisma.service.ts) igual que mailPassword.
+  wompiEnabled         Boolean @default(false)
+  wompiPublicKey       String?
+  wompiIntegritySecret String?
+  wompiEventsSecret    String?
+  wompiPrivateKey      String?
+
   // Correo propio del negocio (SMTP) para enviar sus correos (p. ej. el
   // restablecimiento de contraseña de sus clientes) DESDE su propia cuenta.
   // mailPassword se omite globalmente en las respuestas (igual que la del cliente).

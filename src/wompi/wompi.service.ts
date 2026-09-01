@@ -7,16 +7,20 @@ const WOMPI_BASE = process.env.WOMPI_API_URL || 'https://sandbox.wompi.co/v1';
 
 @Injectable()
 export class WompiService {
+  // `integritySecret` opcional: para pagos de la TIENDA se pasa el secreto de la
+  // empresa; si no viene, usa el global (suscripción de Pegazo).
   generateSignature({
     reference,
     amountInCents,
     currency,
+    integritySecret: overrideSecret,
   }: {
     reference: string;
     amountInCents: number;
     currency: string;
+    integritySecret?: string;
   }) {
-    const integritySecret = process.env.WOMPI_INTEGRITY_SECRET;
+    const integritySecret = overrideSecret || process.env.WOMPI_INTEGRITY_SECRET;
 
     if (!integritySecret) {
       throw new Error('WOMPI_INTEGRITY_SECRET no definido');
@@ -50,9 +54,10 @@ export class WompiService {
     return response.json();
   }
 
-  // Verifica la firma (checksum) de un evento de webhook de Wompi.
-  verifyEventChecksum(event: any): boolean {
-    const secret = process.env.WOMPI_EVENTS_SECRET;
+  // Verifica la firma (checksum) de un evento de webhook de Wompi. `eventsSecret`
+  // opcional: el de la empresa (tienda) o el global (suscripción).
+  verifyEventChecksum(event: any, eventsSecret?: string): boolean {
+    const secret = eventsSecret || process.env.WOMPI_EVENTS_SECRET;
     if (!secret) return false;
     const props: string[] = event?.signature?.properties || [];
     const timestamp = event?.timestamp;

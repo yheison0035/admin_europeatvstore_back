@@ -109,6 +109,96 @@ export class CompaniesService {
     return this.getOwnSettings(user);
   }
 
+  // Pasarela Wompi PROPIA de la tienda del negocio. Devuelve la llave pública y
+  // banderas de si los secretos están puestos (nunca los secretos en sí).
+  async getWompiConfig(user: any) {
+    const c: any = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      omit: {
+        wompiIntegritySecret: false,
+        wompiEventsSecret: false,
+        wompiPrivateKey: false,
+      },
+    });
+    return {
+      success: true,
+      data: {
+        wompiEnabled: !!c?.wompiEnabled,
+        wompiPublicKey: c?.wompiPublicKey || '',
+        hasIntegrity: !!c?.wompiIntegritySecret,
+        hasEvents: !!c?.wompiEventsSecret,
+        hasPrivate: !!c?.wompiPrivateKey,
+      },
+    };
+  }
+
+  // Guarda la config de Wompi del negocio. Cada secreto solo se actualiza si
+  // viene en el DTO (para no borrarlo al reguardar). '' explícito lo limpia.
+  async updateWompiConfig(
+    user: any,
+    dto: {
+      wompiEnabled?: boolean;
+      wompiPublicKey?: string | null;
+      wompiIntegritySecret?: string;
+      wompiEventsSecret?: string;
+      wompiPrivateKey?: string;
+    },
+  ) {
+    const data: any = {};
+    if (dto.wompiPublicKey !== undefined) {
+      data.wompiPublicKey = dto.wompiPublicKey?.trim() || null;
+    }
+    if (dto.wompiIntegritySecret !== undefined) {
+      data.wompiIntegritySecret = dto.wompiIntegritySecret?.trim() || null;
+    }
+    if (dto.wompiEventsSecret !== undefined) {
+      data.wompiEventsSecret = dto.wompiEventsSecret?.trim() || null;
+    }
+    if (dto.wompiPrivateKey !== undefined) {
+      data.wompiPrivateKey = dto.wompiPrivateKey?.trim() || null;
+    }
+
+    // Estado que quedará tras aplicar los cambios (para validar el encendido).
+    const current: any = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      omit: {
+        wompiIntegritySecret: false,
+        wompiEventsSecret: false,
+        wompiPrivateKey: false,
+      },
+    });
+    const finalPublic =
+      data.wompiPublicKey !== undefined
+        ? data.wompiPublicKey
+        : current?.wompiPublicKey;
+    const finalIntegrity =
+      data.wompiIntegritySecret !== undefined
+        ? data.wompiIntegritySecret
+        : current?.wompiIntegritySecret;
+    const finalEvents =
+      data.wompiEventsSecret !== undefined
+        ? data.wompiEventsSecret
+        : current?.wompiEventsSecret;
+
+    if (dto.wompiEnabled !== undefined) {
+      if (
+        dto.wompiEnabled &&
+        (!finalPublic || !finalIntegrity || !finalEvents)
+      ) {
+        throw new BadRequestException(
+          'Para activar los pagos necesitas la llave pública, el secreto de integridad y el secreto de eventos de Wompi.',
+        );
+      }
+      data.wompiEnabled = dto.wompiEnabled;
+    }
+
+    await this.prisma.company.update({
+      where: { id: user.companyId },
+      data,
+    });
+    return this.getWompiConfig(user);
+  }
+
   // Envía un correo de prueba con el SMTP guardado de la empresa al destinatario.
   async sendMailTest(user: any, to: string) {
     const c: any = await this.prisma.company.findUnique({

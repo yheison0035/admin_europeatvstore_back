@@ -77,6 +77,19 @@ export class CompanySettingsController {
     return this.service.sendMailTest(req.user, to);
   }
 
+  // Pasarela de pagos propia de la tienda (Wompi por empresa).
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Get('wompi')
+  getWompi(@Req() req) {
+    return this.service.getWompiConfig(req.user);
+  }
+
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('wompi')
+  updateWompi(@Body() dto: any, @Req() req) {
+    return this.service.updateWompiConfig(req.user, dto);
+  }
+
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch('cash-policy')
   updateCashPolicy(@Body('requireCashOpen') requireCashOpen: boolean, @Req() req) {

@@ -10,7 +10,14 @@ export class PrismaService extends PrismaClient {
       // hay que pedirlos explícitamente con `omit: { ...: false }`.
       omit: {
         customer: { password: true },
-        company: { mailPassword: true },
+        company: {
+          mailPassword: true,
+          // Secretos de la pasarela Wompi por empresa: nunca en respuestas por
+          // defecto. La llave pública (wompiPublicKey) sí se expone a la tienda.
+          wompiIntegritySecret: true,
+          wompiEventsSecret: true,
+          wompiPrivateKey: true,
+        },
       },
     });
   }
