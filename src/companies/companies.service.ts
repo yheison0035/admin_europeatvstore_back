@@ -1191,6 +1191,28 @@ export class CompaniesService {
     throw new BadRequestException('Tipo de negocio no válido.');
   }
 
+  // Convierte los defaults del tipo (JSON) en campos válidos de Company para el
+  // create. Solo se aceptan campos conocidos y con el tipo correcto.
+  private async companyDefaultsForType(type?: string) {
+    if (!type) return {};
+    const cfg = await this.prisma.businessTypeConfig.findUnique({
+      where: { type },
+      select: { defaults: true, active: true },
+    });
+    const d: any =
+      cfg && cfg.active && cfg.defaults ? (cfg.defaults as any) : {};
+    const out: any = {};
+    if (typeof d.requireCashOpen === 'boolean')
+      out.requireCashOpen = d.requireCashOpen;
+    if (typeof d.loyaltyEnabled === 'boolean')
+      out.loyaltyEnabled = d.loyaltyEnabled;
+    if (Number.isInteger(d.openHour) && d.openHour >= 0 && d.openHour <= 23)
+      out.openHour = d.openHour;
+    if (Number.isInteger(d.closeHour) && d.closeHour >= 0 && d.closeHour <= 23)
+      out.closeHour = d.closeHour;
+    return out;
+  }
+
   async create(dto: CreateCompanyDto, user: any) {
     if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
       throw new ForbiddenException('No tienes permisos');
@@ -1222,6 +1244,10 @@ export class CompaniesService {
       };
     }
 
+    // Valores por defecto del TIPO (BusinessTypeConfig.defaults): se aplican al
+    // crear la empresa (horario, exigir caja, fidelización). Editables luego.
+    const typeDefaults = await this.companyDefaultsForType(dto.type);
+
     // Empresa + su usuario administrador (SUPER_ADMIN) de forma atómica: si algo
     // falla, no queda una empresa sin acceso ni un usuario huérfano.
     const result = await this.prisma.$transaction(async (tx) => {
@@ -1236,6 +1262,7 @@ export class CompaniesService {
           plan: dto.plan ?? null,
           paidUntil: dto.paidUntil ? new Date(dto.paidUntil) : null,
           startDate: dto.startDate ? new Date(dto.startDate) : null,
+          ...typeDefaults,
           ...(dto.domain !== undefined && { domain: dto.domain || null }),
           ...(dto.websiteEnabled !== undefined && {
             websiteEnabled: dto.websiteEnabled,

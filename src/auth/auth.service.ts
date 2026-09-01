@@ -196,6 +196,27 @@ export class AuthService {
   // AUTO-REGISTRO DE NEGOCIO (público): crea la empresa + su usuario
   // administrador (SUPER_ADMIN) de forma atómica y devuelve un token para que
   // entre directamente. Empieza en el plan gratuito (Despegue).
+  // Defaults del tipo de negocio para aplicar al crear la empresa (whitelist).
+  private async companyDefaultsForType(type?: string) {
+    if (!type) return {};
+    const cfg = await this.prisma.businessTypeConfig.findUnique({
+      where: { type },
+      select: { defaults: true, active: true },
+    });
+    const d: any =
+      cfg && cfg.active && cfg.defaults ? (cfg.defaults as any) : {};
+    const out: any = {};
+    if (typeof d.requireCashOpen === 'boolean')
+      out.requireCashOpen = d.requireCashOpen;
+    if (typeof d.loyaltyEnabled === 'boolean')
+      out.loyaltyEnabled = d.loyaltyEnabled;
+    if (Number.isInteger(d.openHour) && d.openHour >= 0 && d.openHour <= 23)
+      out.openHour = d.openHour;
+    if (Number.isInteger(d.closeHour) && d.closeHour >= 0 && d.closeHour <= 23)
+      out.closeHour = d.closeHour;
+    return out;
+  }
+
   async registerBusiness(dto: RegisterBusinessDto) {
     const email = dto.email.trim().toLowerCase();
 
@@ -229,6 +250,11 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
+    // Defaults del tipo (horario, exigir caja, fidelización) para la empresa nueva.
+    const typeDefaults = await this.companyDefaultsForType(
+      dto.type ?? BusinessType.COMERCIO,
+    );
+
     const { company, admin } = await this.prisma.$transaction(async (tx) => {
       const company = await tx.company.create({
         data: {
@@ -240,6 +266,7 @@ export class AuthService {
           status: Status.ACTIVO,
           plan: dto.plan,
           startDate: new Date(),
+          ...typeDefaults,
           couponCode: coupon ? coupon.code : null,
         },
       });

@@ -71,6 +71,7 @@ export class BusinessTypesService {
       terminology?: any;
       productFields?: any;
       roles?: string[];
+      defaults?: any;
     },
   ) {
     this.assertPlatform(user);
@@ -94,10 +95,22 @@ export class BusinessTypesService {
         terminology: dto.terminology ?? undefined,
         productFields: dto.productFields ?? undefined,
         roles: Array.isArray(dto.roles) ? dto.roles : [],
+        defaults: dto.defaults ?? undefined,
         active: true,
       },
     });
     return { success: true, data: created };
+  }
+
+  // Valores por defecto para aplicar al crear una empresa de un tipo.
+  async defaultsForType(type?: string) {
+    if (!type) return {};
+    const cfg = await this.prisma.businessTypeConfig.findUnique({
+      where: { type },
+      select: { defaults: true, active: true },
+    });
+    if (!cfg || !cfg.active || !cfg.defaults) return {};
+    return cfg.defaults as Record<string, any>;
   }
 
   async update(
@@ -110,6 +123,7 @@ export class BusinessTypesService {
       terminology?: any;
       productFields?: any;
       roles?: string[];
+      defaults?: any;
     },
   ) {
     this.assertPlatform(user);
@@ -128,6 +142,7 @@ export class BusinessTypesService {
       data.productFields = dto.productFields ?? null;
     if (dto.roles !== undefined)
       data.roles = Array.isArray(dto.roles) ? dto.roles : [];
+    if (dto.defaults !== undefined) data.defaults = dto.defaults ?? null;
 
     const updated = await this.prisma.businessTypeConfig.update({
       where: { type },

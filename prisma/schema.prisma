@@ -1727,6 +1727,9 @@ model BusinessTypeConfig {
   terminology  Json?
   productFields Json?
   roles        String[] @default([])
+  // Valores por defecto que se aplican al CREAR una empresa de este tipo
+  // (requireCashOpen, openHour, closeHour, loyaltyEnabled). Editables.
+  defaults     Json?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
