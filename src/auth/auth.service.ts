@@ -381,7 +381,7 @@ export class AuthService {
       role: admin.role,
       companyId: admin.companyId,
       localId: admin.localId,
-      impersonatedBy: actingUser.sub,
+      impersonatedBy: actingUser.id,
     };
     const { password, ...safeUser } = admin;
     return {
