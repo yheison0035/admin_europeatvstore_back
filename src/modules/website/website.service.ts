@@ -63,11 +63,14 @@ export class WebsiteService {
     const typeCfg = company.type
       ? await this.prisma.businessTypeConfig.findUnique({
           where: { type: company.type },
-          select: { storefront: true, active: true },
+          select: { storefront: true, terminology: true, active: true },
         })
       : null;
     (company as any).typeStorefront =
       typeCfg && typeCfg.active ? (typeCfg.storefront ?? null) : null;
+    // Vocabulario del tipo: la tienda lo usa para nombrar producto/pedido/menú.
+    (company as any).typeTerminology =
+      typeCfg && typeCfg.active ? (typeCfg.terminology ?? null) : null;
 
     return {
       companyId: company.id,
