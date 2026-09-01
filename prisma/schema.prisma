@@ -1679,3 +1679,20 @@ model Announcement {
 
   @@index([active])
 }
+
+// Pagos de suscripción (upgrade de plan vía Wompi Web Checkout). Cada intento
+// crea una fila PENDING; el webhook de Wompi la pasa a APPROVED y activa el
+// plan de la empresa (plan + monthlyPrice + paidUntil +30 días).
+model SubscriptionPayment {
+  id            Int      @id @default(autoincrement())
+  companyId     Int
+  plan          String
+  amount        Int // COP
+  reference     String   @unique
+  status        String   @default("PENDING") // PENDING | APPROVED | DECLINED | VOIDED | ERROR
+  transactionId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([companyId])
+}

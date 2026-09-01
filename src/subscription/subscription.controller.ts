@@ -1,4 +1,12 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { SubscriptionService } from './subscription.service';
 
@@ -10,5 +18,10 @@ export class SubscriptionController {
   @Post('checkout')
   checkout(@Req() req, @Body('plan') plan: string) {
     return this.service.startCheckout(req.user, plan);
+  }
+
+  @Get('status')
+  status(@Req() req, @Query('ref') ref: string) {
+    return this.service.status(req.user, ref);
   }
 }

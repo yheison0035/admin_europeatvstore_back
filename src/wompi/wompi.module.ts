@@ -6,5 +6,6 @@ import { PrismaService } from '@/prisma.service';
 @Module({
   controllers: [WompiController],
   providers: [WompiService, PrismaService],
+  exports: [WompiService],
 })
 export class WompiModule {}
