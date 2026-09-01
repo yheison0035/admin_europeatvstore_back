@@ -1363,6 +1363,12 @@ export class CompaniesService {
         }),
         ...(dto.crmTheme !== undefined && { crmTheme: dto.crmTheme }),
         ...(dto.crmFont !== undefined && { crmFont: dto.crmFont }),
+        ...(dto.cycleStartDay !== undefined && {
+          cycleStartDay:
+            Number(dto.cycleStartDay) >= 1 && Number(dto.cycleStartDay) <= 28
+              ? Number(dto.cycleStartDay)
+              : 1,
+        }),
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.logo !== undefined && { logo: dto.logo }),
         ...(dto.phone !== undefined && { phone: dto.phone }),

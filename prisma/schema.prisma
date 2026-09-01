@@ -222,6 +222,11 @@ model Company {
   openHour  Int @default(9)
   closeHour Int @default(20)
 
+  // Día de inicio del CICLO DE CIERRE mensual (reportes y comisiones). 1 = mes
+  // calendario (1→fin). Ej. RAGNOR usa 3 → el cierre va del 3 al 2 del mes
+  // siguiente. Configurable por empresa; por defecto 1 (nadie más cambia).
+  cycleStartDay Int @default(1)
+
   // Tema de diseño del panel/CRM elegido por el dueño (orange | blue | emerald).
   crmTheme String @default("orange")
   crmFont  String @default("system")

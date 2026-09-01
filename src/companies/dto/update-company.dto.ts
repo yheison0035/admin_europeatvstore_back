@@ -82,6 +82,12 @@ export class UpdateCompanyDto {
   @IsString()
   crmFont?: string;
 
+  // Día de inicio del ciclo de cierre mensual (1–28). 1 = mes calendario.
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  cycleStartDay?: number;
+
   // Precio acordado (COP/mes) y descuento inicial por tiempo.
   @IsOptional()
   @IsInt()

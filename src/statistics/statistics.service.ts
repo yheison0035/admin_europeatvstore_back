@@ -425,8 +425,11 @@ export class StatisticsService {
       if (b) b.total += s.totalAmount || 0;
     }
 
-    // ---- Mes en curso: ventas, IVA generado, gastos y utilidad ----
-    const monthStart = dayStartUtc(y, m, 1);
+    // ---- Cierre en curso: ventas, IVA generado, gastos y utilidad ----
+    // El "mes" respeta el ciclo de cierre de la empresa (default día 1 = mes
+    // calendario; ej. RAGNOR día 3 → del 3 al 2 del siguiente).
+    const sd = await this.cycleStartDay(companyId);
+    const monthStart = this.commissionMonth(y, m, d, sd).gte;
     const monthSalesAgg = await this.prisma.sale.aggregate({
       where: {
         local: { companyId },
@@ -737,9 +740,10 @@ export class StatisticsService {
     const tEnd = dayStartUtc(y, m, d + 1);
     const wStart = dayStartUtc(y, m, d - dow);
     const wEnd = dayStartUtc(y, m, d - dow + 7);
-    // Cierre de mes del barbero: del 3 de un mes al 2 del siguiente (los
-    // productos se pagan el 3), NO el mes calendario.
-    const cycle = this.commissionMonth(y, m, d);
+    // Cierre de mes configurable por empresa (default mes calendario; ej.
+    // RAGNOR usa día 3 → del 3 al 2 del siguiente).
+    const sd = await this.cycleStartDay(companyId);
+    const cycle = this.commissionMonth(y, m, d, sd);
     const moStart = cycle.gte;
     const moEnd = cycle.lt;
 
@@ -904,20 +908,40 @@ export class StatisticsService {
   // (los productos se pagan el 3), NO el mes calendario. Devuelve la ventana
   // [gte, lt) que contiene el día (y,m,d), su etiqueta con fechas y el día de
   // pago. `back` desplaza a ciclos anteriores (0 = actual, 1 = anterior, …).
-  private commissionMonth(y: number, m: number, d: number, back = 0) {
+  // Día de inicio del ciclo de cierre de la empresa (default 1 = mes calendario).
+  private async cycleStartDay(companyId: number): Promise<number> {
+    if (!companyId) return 1;
+    const c = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { cycleStartDay: true },
+    });
+    const v = c?.cycleStartDay ?? 1;
+    return Number.isInteger(v) && v >= 1 && v <= 28 ? v : 1;
+  }
+
+  private commissionMonth(
+    y: number,
+    m: number,
+    d: number,
+    startDay = 1,
+    back = 0,
+  ) {
     const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-    // Mes ancla: si aún no llega el 3, seguimos en el ciclo del mes anterior.
-    const anchor = d >= 3 ? m : m - 1;
-    const gte = dayStartUtc(y, anchor - back, 3);
-    const lt = dayStartUtc(y, anchor - back + 1, 3);
-    const end = new Date(lt.getTime() - 86400000); // el 2 del mes siguiente
+    const sd = Number.isInteger(startDay) && startDay >= 1 && startDay <= 28 ? startDay : 1;
+    // Mes ancla: si aún no llega el día de inicio, seguimos en el ciclo anterior.
+    const anchor = d >= sd ? m : m - 1;
+    const gte = dayStartUtc(y, anchor - back, sd);
+    const lt = dayStartUtc(y, anchor - back + 1, sd);
+    const end = new Date(lt.getTime() - 86400000); // día previo al próximo inicio
     const gy = gte.getUTCFullYear();
     const ey = end.getUTCFullYear();
+    const gd = gte.getUTCDate();
+    const ed = end.getUTCDate();
     const range =
       gy === ey
-        ? `3 ${MES[gte.getUTCMonth()]} – 2 ${MES[end.getUTCMonth()]} ${ey}`
-        : `3 ${MES[gte.getUTCMonth()]} ${gy} – 2 ${MES[end.getUTCMonth()]} ${ey}`;
-    const payDay = `3 ${MES[lt.getUTCMonth()]}`; // se paga el 3 del mes de cierre
+        ? `${gd} ${MES[gte.getUTCMonth()]} – ${ed} ${MES[end.getUTCMonth()]} ${ey}`
+        : `${gd} ${MES[gte.getUTCMonth()]} ${gy} – ${ed} ${MES[end.getUTCMonth()]} ${ey}`;
+    const payDay = `${sd} ${MES[lt.getUTCMonth()]}`; // se paga el día de cierre
     return { gte, lt, range, payDay };
   }
 
@@ -1067,8 +1091,9 @@ export class StatisticsService {
       lt = dayStartUtc(y, m, d - dow + 7);
       label = `${lb(gte)} – ${lb(new Date(lt.getTime() - 86400000))}`;
     } else if (period === 'month') {
-      // Cierre 3→2 (no mes calendario), con fechas.
-      const cycle = this.commissionMonth(y, m, d);
+      // Cierre configurable por empresa (default mes calendario), con fechas.
+      const sd = await this.cycleStartDay(companyId);
+      const cycle = this.commissionMonth(y, m, d, sd);
       gte = cycle.gte;
       lt = cycle.lt;
       label = cycle.range;
@@ -1132,9 +1157,10 @@ export class StatisticsService {
         windows.push({ label, gte, lt });
       }
     } else if (group === 'month') {
-      // 6 cierres 3→2 (actual y anteriores), con sus fechas.
+      // 6 cierres (actual y anteriores) según el ciclo de la empresa, con fechas.
+      const sd = await this.cycleStartDay(user.companyId);
       for (let i = 5; i >= 0; i--) {
-        const c = this.commissionMonth(y, m, d, i);
+        const c = this.commissionMonth(y, m, d, sd, i);
         windows.push({ label: c.range, gte: c.gte, lt: c.lt });
       }
     } else {
