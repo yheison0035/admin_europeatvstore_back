@@ -38,6 +38,12 @@ export class CompaniesController {
     return this.service.platformOverview(req.user);
   }
 
+  // Auditoría de accesos de soporte (impersonaciones). Antes de :id.
+  @Get('platform/audit')
+  audit(@Req() req, @Query() query) {
+    return this.service.platformAudit(req.user, query);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.findOne(id, req.user);

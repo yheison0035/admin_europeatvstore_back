@@ -1641,3 +1641,19 @@ model ElectronicInvoice {
 
   @@index([companyId])
 }
+
+// Auditoría de accesos de soporte: cada vez que la plataforma "entra como" una
+// empresa (impersonación) se registra aquí, para trazabilidad. No lleva FKs a
+// propósito (se conserva aunque se borre la empresa/usuario).
+model ImpersonationLog {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  companyName  String
+  actorId      Int // usuario de plataforma que impersonó
+  actorEmail   String?
+  targetUserId Int // dueño (SUPER_ADMIN) al que se entró
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([companyId])
+}

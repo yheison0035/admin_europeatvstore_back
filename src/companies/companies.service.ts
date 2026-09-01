@@ -641,7 +641,13 @@ export class CompaniesService {
           name: true,
           status: true,
           type: true,
+          plan: true,
           paidUntil: true,
+          startDate: true,
+          createdAt: true,
+          monthlyPrice: true,
+          discountedPrice: true,
+          discountUntil: true,
         },
         orderBy: { name: 'asc' },
       }),
@@ -655,9 +661,91 @@ export class CompaniesService {
     const suspended = companies.filter(
       (c) => c.status === Status.INACTIVO,
     ).length;
+    const pending = companies.filter(
+      (c) => c.status === Status.PENDIENTE,
+    ).length;
     const overdue = companies.filter(
       (c) => c.paidUntil && new Date(c.paidUntil) < now,
     ).length;
+
+    // Precio efectivo/mes: si hay descuento vigente se usa ese, si no el normal.
+    const effPrice = (c: (typeof companies)[number]) => {
+      if (
+        c.discountedPrice != null &&
+        c.discountUntil &&
+        new Date(c.discountUntil) > now
+      ) {
+        return c.discountedPrice;
+      }
+      return c.monthlyPrice ?? 0;
+    };
+
+    // MRR = ingreso recurrente mensual de las empresas ACTIVAS.
+    const mrr = companies
+      .filter((c) => c.status === Status.ACTIVO)
+      .reduce((sum, c) => sum + effPrice(c), 0);
+    const arr = mrr * 12;
+
+    // Ingreso en riesgo: empresas vencidas (paidUntil pasado) que aún no se
+    // suspenden o que ya cayeron por impago.
+    const revenueAtRisk = companies
+      .filter((c) => c.paidUntil && new Date(c.paidUntil) < now)
+      .reduce((sum, c) => sum + effPrice(c), 0);
+
+    // Desglose por tipo de negocio (solo cuenta las que dejan ingreso/activas
+    // no; aquí contamos todas las no eliminadas para ver la mezcla del portafolio).
+    const byTypeMap = new Map<string, number>();
+    for (const c of companies) {
+      byTypeMap.set(c.type, (byTypeMap.get(c.type) ?? 0) + 1);
+    }
+    const byType = [...byTypeMap.entries()]
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Desglose por plan (null -> "Sin plan").
+    const byPlanMap = new Map<string, number>();
+    for (const c of companies) {
+      const key = c.plan || 'Sin plan';
+      byPlanMap.set(key, (byPlanMap.get(key) ?? 0) + 1);
+    }
+    const byPlan = [...byPlanMap.entries()]
+      .map(([plan, count]) => ({ plan, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Crecimiento: altas por mes en los últimos 6 meses (por startDate o, si no,
+    // createdAt). Se devuelven ordenadas del mes más antiguo al actual.
+    const months: { key: string; label: string; count: number }[] = [];
+    const monthLabels = [
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
+    ];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.push({
+        key,
+        label: `${monthLabels[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`,
+        count: 0,
+      });
+    }
+    for (const c of companies) {
+      const created = c.startDate ?? c.createdAt;
+      if (!created) continue;
+      const d = new Date(created);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const bucket = months.find((m) => m.key === key);
+      if (bucket) bucket.count += 1;
+    }
 
     const expiringSoon = companies
       .filter((c) => {
@@ -675,13 +763,33 @@ export class CompaniesService {
           companies: companies.length,
           active,
           suspended,
+          pending,
           overdue,
           users: totalUsers,
           locals: totalLocals,
+          mrr,
+          arr,
+          revenueAtRisk,
         },
+        byType,
+        byPlan,
+        growth: months,
         expiringSoon,
       },
     };
+  }
+
+  // AUDITORÍA GLOBAL: últimos accesos de soporte (impersonaciones).
+  async platformAudit(user: any, query: any = {}) {
+    if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+    const take = Math.min(Number(query.limit) || 50, 200);
+    const logs = await this.prisma.impersonationLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take,
+    });
+    return { success: true, data: logs };
   }
 
   // LISTADO GLOBAL

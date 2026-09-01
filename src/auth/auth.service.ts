@@ -374,6 +374,18 @@ export class AuthService {
     if (!admin) {
       throw new NotFoundException('La empresa no tiene un administrador dueño.');
     }
+    // Auditoría: deja rastro de cada acceso de soporte (no bloquea si falla).
+    await this.prisma.impersonationLog
+      .create({
+        data: {
+          companyId: company.id,
+          companyName: company.name,
+          actorId: actingUser.id,
+          actorEmail: actingUser.email ?? null,
+          targetUserId: admin.id,
+        },
+      })
+      .catch(() => undefined);
     const payload = {
       sub: admin.id,
       email: admin.email,
