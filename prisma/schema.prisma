@@ -1779,3 +1779,18 @@ model ClinicalEntry {
 
   @@index([companyId, customerId])
 }
+
+// Consentimiento informado firmado del paciente (historia clínica).
+model ClinicalConsent {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  customerId   Int
+  title        String
+  notes        String?
+  signatureUrl String? // imagen de la firma (Cloudinary)
+  userName     String?
+  signedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([companyId, customerId])
+}

@@ -48,6 +48,20 @@ export class ClinicalController {
     return this.service.addEntry(req.user, customerId, dto);
   }
 
+  @Post(':customerId/consent')
+  addConsent(
+    @Param('customerId', ParseIntPipe) customerId: number,
+    @Body() dto: any,
+    @Req() req,
+  ) {
+    return this.service.addConsent(req.user, customerId, dto);
+  }
+
+  @Delete('consent/:id')
+  removeConsent(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.service.removeConsent(req.user, id);
+  }
+
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   upload(@UploadedFile() file: Express.Multer.File, @Req() req) {

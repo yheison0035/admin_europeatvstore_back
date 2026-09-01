@@ -26,7 +26,7 @@ export class ClinicalService {
 
   async get(user: any, customerId: number) {
     await this.assertCustomer(user, customerId);
-    const [record, entries] = await Promise.all([
+    const [record, entries, consents, appointments] = await Promise.all([
       this.prisma.clinicalRecord.findUnique({
         where: { companyId_customerId: { companyId: user.companyId, customerId } },
       }),
@@ -34,8 +34,24 @@ export class ClinicalService {
         where: { companyId: user.companyId, customerId },
         orderBy: { date: 'desc' },
       }),
+      this.prisma.clinicalConsent.findMany({
+        where: { companyId: user.companyId, customerId },
+        orderBy: { signedAt: 'desc' },
+      }),
+      // Citas recientes del paciente (para poder ligar una evolución a su cita).
+      this.prisma.appointment.findMany({
+        where: { companyId: user.companyId, customerId },
+        orderBy: { date: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          date: true,
+          startTime: true,
+          service: { select: { name: true } },
+        },
+      }),
     ]);
-    return { success: true, data: { record, entries } };
+    return { success: true, data: { record, entries, consents, appointments } };
   }
 
   async upsertRecord(user: any, customerId: number, dto: any) {
@@ -75,6 +91,34 @@ export class ClinicalService {
       },
     });
     return { success: true, data: entry };
+  }
+
+  async addConsent(user: any, customerId: number, dto: any) {
+    await this.assertCustomer(user, customerId);
+    const title = (dto.title || '').trim();
+    if (!title) throw new BadRequestException('El consentimiento necesita un título.');
+    const consent = await this.prisma.clinicalConsent.create({
+      data: {
+        companyId: user.companyId,
+        customerId,
+        title,
+        notes: dto.notes?.trim() || null,
+        signatureUrl: dto.signatureUrl?.trim() || null,
+        userName: user.name || user.email || null,
+        signedAt: dto.signedAt ? new Date(dto.signedAt) : new Date(),
+      },
+    });
+    return { success: true, data: consent };
+  }
+
+  async removeConsent(user: any, id: number) {
+    const c = await this.prisma.clinicalConsent.findFirst({
+      where: { id, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!c) throw new NotFoundException('Consentimiento no encontrado');
+    await this.prisma.clinicalConsent.delete({ where: { id } });
+    return { success: true };
   }
 
   // Sube una imagen (foto/radiografía) y devuelve su URL para adjuntarla.
