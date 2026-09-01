@@ -63,7 +63,7 @@ export const BUSINESS_TYPE_MODULES: Record<string, string[]> = {
   ],
   ODONTOLOGIA: [
     'locals', 'users', 'categories', 'providers', 'inventory', 'purchases',
-    'customers', 'cartera', 'impuestos', 'loyalty', 'services', 'appointments', 'quotes',
+    'customers', 'cartera', 'impuestos', 'loyalty', 'services', 'appointments', 'quotes', 'clinical',
     'sales', 'delivered_sales', 'cash', 'expenses', 'payables', 'employee-charges', 'statistics',
   ],
   TELEVENTAS: [

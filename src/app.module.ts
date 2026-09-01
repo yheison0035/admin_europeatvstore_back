@@ -47,6 +47,7 @@ import { AuditModule } from './audit/audit.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { BusinessTypesModule } from './business-types/business-types.module';
+import { ClinicalModule } from './clinical/clinical.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 
 @Module({
@@ -98,6 +99,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     CouponsModule,
     AnnouncementsModule,
     BusinessTypesModule,
+    ClinicalModule,
     SubscriptionModule,
   ],
   providers: [

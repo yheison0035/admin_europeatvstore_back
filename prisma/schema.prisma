@@ -1742,3 +1742,39 @@ model BusinessTypeConfig {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// HISTORIA CLÍNICA (verticales de salud: odontología, estética, veterinaria).
+// Un expediente por paciente (Customer) por empresa + evoluciones fechadas.
+model ClinicalRecord {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  customerId  Int
+  bloodType   String? // tipo de sangre (opcional)
+  allergies   String? // alergias
+  medications String? // medicamentos actuales
+  conditions  String? // antecedentes / enfermedades
+  notes       String? // observaciones generales
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, customerId])
+}
+
+// Evolución / nota clínica fechada de cada atención.
+model ClinicalEntry {
+  id            Int      @id @default(autoincrement())
+  companyId     Int
+  customerId    Int
+  appointmentId Int?
+  userId        Int? // profesional que atendió
+  userName      String?
+  date          DateTime @default(now())
+  reason        String? // motivo de consulta
+  diagnosis     String? // diagnóstico
+  treatment     String? // procedimiento / plan de tratamiento
+  notes         String? // evolución / observaciones
+  attachments   String[] @default([]) // fotos / radiografías (Fase 2)
+  createdAt     DateTime @default(now())
+
+  @@index([companyId, customerId])
+}
