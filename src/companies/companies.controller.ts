@@ -44,6 +44,22 @@ export class CompaniesController {
     return this.service.platformAudit(req.user, query);
   }
 
+  // Vista 360° de una empresa (antes de :id).
+  @Get('platform/:id/detail')
+  detail(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.service.companyDetail(req.user, id);
+  }
+
+  // Renovar/marcar pagado: extiende la fecha de pago +N días (default 30).
+  @Patch('platform/:id/renew')
+  renew(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('days') days: number,
+    @Req() req,
+  ) {
+    return this.service.renewCompany(req.user, id, days ? Number(days) : 30);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.service.findOne(id, req.user);

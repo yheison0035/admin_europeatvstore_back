@@ -869,6 +869,141 @@ export class CompaniesService {
     };
   }
 
+  // VISTA 360° de una empresa (para el rol plataforma): todo de un vistazo sin
+  // impersonar — datos, plan/cobro, tienda, usuarios y ventas del mes.
+  async companyDetail(user: any, id: number) {
+    if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        logo: true,
+        type: true,
+        status: true,
+        phone: true,
+        email: true,
+        manager: true,
+        plan: true,
+        paidUntil: true,
+        startDate: true,
+        createdAt: true,
+        monthlyPrice: true,
+        discountedPrice: true,
+        discountUntil: true,
+        enabledModules: true,
+        bankNotifyEnabled: true,
+        electronicInvoicingEnabled: true,
+        wompiEnabled: true,
+        wompiPublicKey: true,
+        websiteEnabled: true,
+        websiteName: true,
+        domain: true,
+        crmTheme: true,
+      },
+    });
+    if (!company) throw new NotFoundException('Empresa no encontrada');
+
+    const now = new Date();
+    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [users, localsCount, salesMonth, salesMonthPaid] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { companyId: id, status: { not: Status.ELIMINADO } },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+        },
+        orderBy: [{ role: 'asc' }, { name: 'asc' }],
+      }),
+      this.prisma.local.count({
+        where: { companyId: id, status: { not: Status.ELIMINADO } },
+      }),
+      this.prisma.sale.aggregate({
+        where: { local: { companyId: id }, createdAt: { gte: startMonth } },
+        _count: { _all: true },
+        _sum: { totalAmount: true },
+      }),
+      this.prisma.sale.aggregate({
+        where: {
+          local: { companyId: id },
+          createdAt: { gte: startMonth },
+          paymentStatus: 'PAGADA' as any,
+        },
+        _sum: { totalAmount: true },
+      }),
+    ]);
+
+    const daysLeft = company.paidUntil
+      ? Math.ceil(
+          (new Date(company.paidUntil).getTime() - now.getTime()) / 86_400_000,
+        )
+      : null;
+
+    return {
+      success: true,
+      data: {
+        company,
+        billing: {
+          plan: company.plan,
+          paidUntil: company.paidUntil,
+          daysLeft,
+          overdue: daysLeft !== null && daysLeft < 0,
+          monthlyPrice: company.monthlyPrice,
+          discountedPrice: company.discountedPrice,
+          discountUntil: company.discountUntil,
+        },
+        counts: {
+          users: users.length,
+          locals: localsCount,
+        },
+        salesMonth: {
+          count: salesMonth._count._all,
+          total: salesMonth._sum.totalAmount || 0,
+          paidTotal: salesMonthPaid._sum.totalAmount || 0,
+        },
+        users,
+      },
+    };
+  }
+
+  // Renovar/registrar el pago manual de una empresa: extiende paidUntil +N días
+  // (por defecto 30) desde hoy o desde la fecha vigente si aún no ha vencido.
+  async renewCompany(user: any, id: number, days = 30) {
+    if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
+      throw new ForbiddenException('No tienes permisos');
+    }
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+      select: { id: true, paidUntil: true, status: true },
+    });
+    if (!company) throw new NotFoundException('Empresa no encontrada');
+
+    const now = new Date();
+    const from =
+      company.paidUntil && new Date(company.paidUntil) > now
+        ? new Date(company.paidUntil)
+        : now;
+    const paidUntil = new Date(from.getTime() + days * 86_400_000);
+
+    const updated = await this.prisma.company.update({
+      where: { id },
+      data: {
+        paidUntil,
+        // Si estaba suspendida por impago, al renovar se reactiva.
+        ...(company.status === Status.INACTIVO && { status: Status.ACTIVO }),
+      },
+      select: { id: true, paidUntil: true, status: true },
+    });
+    return { success: true, data: updated };
+  }
+
   // AUDITORÍA GLOBAL: últimos accesos de soporte (impersonaciones).
   async platformAudit(user: any, query: any = {}) {
     if (user.role !== Role.SUPER_PLATFORM_ADMIN) {
