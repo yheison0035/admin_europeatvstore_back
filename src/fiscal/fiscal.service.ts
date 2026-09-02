@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '@/prisma.service';
+import { MailService } from '@/mail/mail.service';
 
 const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN];
 
@@ -25,7 +26,10 @@ const DOC_TYPE_MAP: Record<string, string> = {
  */
 @Injectable()
 export class FiscalService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private mail: MailService,
+  ) {}
 
   private get baseUrl() {
     return (
@@ -257,6 +261,46 @@ export class FiscalService {
     this.assertAdmin(user);
     await this.company(user);
     return this.fapi(`/invoices/${id}`);
+  }
+
+  /** Envía la factura electrónica al correo del cliente. */
+  async sendEmail(user: any, id: string) {
+    this.assertAdmin(user);
+    const c = await this.company(user);
+    const doc = await this.fapi(`/invoices/${id}`);
+    if (!doc?.customerEmail)
+      throw new BadRequestException('El cliente no tiene correo registrado.');
+    const html = await this.representation(user, id);
+    const companyName = c.businessName || c.name;
+    // Se envía por el correo central (Resend/Brevo) con el nombre de la empresa.
+    const res = await this.mail.sendInvoiceEmail({
+      to: doc.customerEmail,
+      subject: `Factura electrónica ${doc.number || ''} · ${companyName}`,
+      html,
+      companyName,
+    });
+    return { success: true, ...res, to: doc.customerEmail };
+  }
+
+  /** Devuelve el enlace de WhatsApp para enviar la factura al cliente. */
+  async whatsappLink(user: any, id: string) {
+    this.assertAdmin(user);
+    await this.company(user);
+    const doc = await this.fapi(`/invoices/${id}`);
+    const raw = String(doc?.customerPhone || '').replace(/\D/g, '');
+    if (!raw)
+      throw new BadRequestException('El cliente no tiene teléfono registrado.');
+    // Normaliza a Colombia: 57 + 10 dígitos que empiezan en 3.
+    let phone = raw;
+    if (phone.length === 10 && phone.startsWith('3')) phone = `57${phone}`;
+    const link = doc.cufe
+      ? `https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=${doc.cufe}`
+      : '';
+    const msg =
+      `Hola, te compartimos tu *Factura electrónica* ${doc.number || ''}.` +
+      (link ? `\nConsúltala en la DIAN: ${link}` : '');
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    return { success: true, url };
   }
 
   /** Representación gráfica (HTML) de un documento. */

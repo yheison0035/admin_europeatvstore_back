@@ -255,6 +255,49 @@ export class MailService {
     await this.transporter.sendMail({ from, to, subject, html });
   }
 
+  // Envío genérico de un documento (factura electrónica) al correo del cliente.
+  // Usa la misma prioridad: Resend/Brevo (si la empresa no puso su SMTP) o el
+  // SMTP propio de la empresa. Lanza si no hay ningún medio configurado.
+  async sendInvoiceEmail(opts: {
+    to: string;
+    subject: string;
+    html: string;
+    companyName: string;
+    smtp?: SmtpConfig;
+    attachments?: { filename: string; content: string; contentType?: string }[];
+  }): Promise<{ ok: boolean; via: string }> {
+    const { to, subject, html, companyName, smtp, attachments } = opts;
+
+    if (!smtp?.host && this.resendEnabled()) {
+      await this.sendViaResend({ to, subject, html, fromName: companyName });
+      return { ok: true, via: 'resend' };
+    }
+    if (!smtp?.host && this.brevoEnabled()) {
+      await this.sendViaBrevo({ to, subject, html, fromName: companyName });
+      return { ok: true, via: 'brevo' };
+    }
+    const resolved = this.resolveTransporter(smtp);
+    if (!resolved) {
+      throw new Error('No hay correo configurado para enviar la factura.');
+    }
+    const usingOwn = !!smtp?.host;
+    const from = usingOwn
+      ? resolved.from
+      : `"${companyName}" <${resolved.from}>`;
+    await resolved.tx.sendMail({
+      from,
+      to,
+      subject,
+      html,
+      attachments: attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
+    });
+    return { ok: true, via: usingOwn ? 'smtp-empresa' : 'smtp-global' };
+  }
+
   // Correo de restablecimiento para el CLIENTE de la tienda online, con la marca
   // de la empresa dueña del dominio (logo, nombre y color). Diseño email-safe
   // (tablas + estilos en línea) para que se vea bien en todos los clientes.

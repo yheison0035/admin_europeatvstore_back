@@ -61,6 +61,16 @@ export class FiscalController {
     return this.service.getDocument(req.user, id);
   }
 
+  @Post('documents/:id/send-email')
+  sendEmail(@Req() req, @Param('id') id: string) {
+    return this.service.sendEmail(req.user, id);
+  }
+
+  @Get('documents/:id/whatsapp')
+  whatsapp(@Req() req, @Param('id') id: string) {
+    return this.service.whatsappLink(req.user, id);
+  }
+
   @Get('documents/:id/representation')
   @Header('Content-Type', 'text/html; charset=utf-8')
   representation(@Req() req, @Param('id') id: string) {
