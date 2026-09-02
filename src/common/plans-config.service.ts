@@ -22,7 +22,7 @@ const DEFAULT_GATES: Record<string, string> = {
   shipping: 'ALTURA',
   bank: 'ALTURA',
   clinical: 'ALTURA',
-  payroll: 'ORBITA',
+  'nomina-electronica': 'ORBITA',
 };
 
 export interface PlanLimits {
@@ -64,12 +64,16 @@ export class PlansConfigService implements OnModuleInit {
         skipDuplicates: true,
       });
     }
-    if ((await this.prisma.planModuleGate.count()) === 0) {
+    // Asegura que todos los gates por defecto existan (agrega los nuevos como
+    // nomina-electronica sin pisar los que el superplatform haya personalizado).
+    const existing = await this.prisma.planModuleGate.findMany({
+      select: { moduleKey: true },
+    });
+    const have = new Set(existing.map((g) => g.moduleKey));
+    const missing = Object.entries(DEFAULT_GATES).filter(([k]) => !have.has(k));
+    if (missing.length) {
       await this.prisma.planModuleGate.createMany({
-        data: Object.entries(DEFAULT_GATES).map(([moduleKey, minPlan]) => ({
-          moduleKey,
-          minPlan,
-        })),
+        data: missing.map(([moduleKey, minPlan]) => ({ moduleKey, minPlan })),
         skipDuplicates: true,
       });
     }

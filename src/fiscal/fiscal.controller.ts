@@ -62,6 +62,11 @@ export class FiscalController {
     return this.service.emitTest(req.user);
   }
 
+  @Post('payroll')
+  emitPayroll(@Req() req, @Body() dto: any) {
+    return this.service.emitPayroll(req.user, dto);
+  }
+
   @Get('documents/:id')
   getDocument(@Req() req, @Param('id') id: string) {
     return this.service.getDocument(req.user, id);

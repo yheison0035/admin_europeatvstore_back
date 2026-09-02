@@ -242,6 +242,20 @@ export class FiscalService {
     });
   }
 
+  /** Emite un Documento Soporte de Pago de Nómina Electrónica (DSPNE). */
+  async emitPayroll(user: any, dto: any) {
+    this.assertAdmin(user);
+    // La nómina electrónica requiere el plan que la incluye (Órbita).
+    await this.planLimits.assertModule(user.companyId, 'nomina-electronica');
+    const c = await this.company(user);
+    if (!c.fiscalCompanyId)
+      throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
+    return this.fapi('/payroll', {
+      method: 'POST',
+      body: JSON.stringify({ companyId: c.fiscalCompanyId, ...dto }),
+    });
+  }
+
   /** Emite una factura de PRUEBA (datos de ejemplo) para validar el flujo. */
   async emitTest(user: any) {
     this.assertAdmin(user);
