@@ -134,7 +134,7 @@ export class FiscalService {
     });
     await this.prisma.company.update({
       where: { id: c.id },
-      data: { fiscalCompanyId: created.id },
+      data: { fiscalCompanyId: created.id, electronicInvoicingEnabled: true },
     });
     return { success: true, data: { fiscalCompanyId: created.id } };
   }
@@ -261,6 +261,18 @@ export class FiscalService {
     this.assertAdmin(user);
     await this.company(user);
     return this.fapi(`/invoices/${id}`);
+  }
+
+  /** Crea una nota crédito (parcial) sobre una factura. */
+  async createCreditNote(user: any, dto: any) {
+    this.assertAdmin(user);
+    const c = await this.company(user);
+    if (!c.fiscalCompanyId)
+      throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
+    return this.fapi('/credit-notes', {
+      method: 'POST',
+      body: JSON.stringify({ companyId: c.fiscalCompanyId, ...dto }),
+    });
   }
 
   /** Elimina un documento (solo si aún no fue transmitido a la DIAN). */
