@@ -455,6 +455,18 @@ model Customer {
   address       String?
   status        Status  @default(ACTIVO)
 
+  // --- Facturación electrónica DIAN ---
+  // Si el cliente recibe factura electrónica; al activarlo, los campos DIAN
+  // (tipo/número de documento, nombre, persona, régimen, dirección, ciudad,
+  // correo) se vuelven obligatorios en el formulario.
+  requiresEInvoice  Boolean @default(false)
+  // Tipo de persona: NATURAL | JURIDICA
+  personType        String?
+  // Responsabilidad frente al IVA / régimen: RESPONSABLE_IVA | NO_RESPONSABLE
+  taxResponsibility String?
+  // Código DANE del municipio (lo exige la DIAN; `city` es el nombre legible)
+  municipalityCode  String?
+
   // Origen del cliente: creado en el CRM por el negocio, o registrado desde la
   // tienda online (ecommerce). Sirve para saber de dónde viene cada cliente.
   source CustomerSource @default(CRM)

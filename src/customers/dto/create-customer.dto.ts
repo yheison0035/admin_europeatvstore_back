@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsEmail,
   IsOptional,
@@ -55,4 +56,21 @@ export class CreateCustomerDto {
   // Segmento/etiqueta del cliente (catálogo administrable).
   @IsOptional()
   segmentId?: number;
+
+  // --- Facturación electrónica DIAN ---
+  @IsOptional()
+  @IsBoolean()
+  requiresEInvoice?: boolean;
+
+  @IsOptional()
+  @IsString()
+  personType?: string; // NATURAL | JURIDICA
+
+  @IsOptional()
+  @IsString()
+  taxResponsibility?: string; // RESPONSABLE_IVA | NO_RESPONSABLE
+
+  @IsOptional()
+  @IsString()
+  municipalityCode?: string;
 }

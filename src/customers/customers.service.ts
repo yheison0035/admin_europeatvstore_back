@@ -548,9 +548,29 @@ export class CustomersService {
     return { success: true, data: { id, loyaltyRewards: updated.loyaltyRewards } };
   }
 
+  // Si el cliente recibe factura electrónica, la DIAN exige datos completos.
+  private assertDianFields(dto: any) {
+    if (!dto?.requiresEInvoice) return;
+    const faltan: string[] = [];
+    if (!dto.type_document) faltan.push('tipo de documento');
+    if (!dto.document) faltan.push('número de documento');
+    if (!dto.name?.trim()) faltan.push('nombre / razón social');
+    if (!dto.personType) faltan.push('tipo de persona');
+    if (!dto.taxResponsibility) faltan.push('responsabilidad de IVA');
+    if (!dto.address?.trim()) faltan.push('dirección');
+    if (!dto.email?.trim()) faltan.push('correo');
+    if (!dto.phone?.trim()) faltan.push('teléfono');
+    if (faltan.length) {
+      throw new BadRequestException(
+        `Para factura electrónica faltan datos obligatorios: ${faltan.join(', ')}.`,
+      );
+    }
+  }
+
   async create(dto: CreateCustomerDto, user: any) {
     // Límite de clientes según el plan de la empresa.
     await this.planLimits.assertCanCreate(user.companyId, 'customers');
+    this.assertDianFields(dto);
 
     // El cliente es global por empresa, pero guardamos el "local de registro"
     // (de dónde viene): el del contexto (factura/formulario) o, si no llega,
@@ -617,6 +637,9 @@ export class CustomersService {
     if (customer.companyId !== user.companyId) {
       throw new ForbiddenException('No tienes permiso');
     }
+
+    // Valida datos DIAN sobre el estado resultante (merge del cliente + cambios).
+    this.assertDianFields({ ...customer, ...dto });
 
     const { localId, birthday, segmentId, ...rest } = dto;
 
