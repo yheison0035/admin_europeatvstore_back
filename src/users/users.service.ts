@@ -555,7 +555,7 @@ export class UsersService {
     if (requester?.id === user.id) {
       return {
         success: true,
-        data: sanitizeUser(user),
+        data: sanitizeUser(user, { planConfig: this.plansConfig.config() }),
       };
     }
 
@@ -564,7 +564,7 @@ export class UsersService {
     if (localIds === null) {
       return {
         success: true,
-        data: sanitizeUser(user),
+        data: sanitizeUser(user, { planConfig: this.plansConfig.config() }),
       };
     }
 
@@ -809,7 +809,7 @@ export class UsersService {
   }
 }
 
-export function sanitizeUser(user: any) {
+export function sanitizeUser(user: any, extra: Record<string, any> = {}) {
   // Se quitan la contraseña y los campos internos del OTP de recuperación: no
   // deben salir al front (seguridad) y además romperían el editar de usuario,
   // porque el form los reenviaría y el validador (forbidNonWhitelisted) los
@@ -825,7 +825,6 @@ export function sanitizeUser(user: any) {
   return {
     ...rest,
     company: user.company ?? null,
-    // Config dinámica de planes (gates + orden) para el gating del menú.
-    planConfig: this.plansConfig.config(),
+    ...extra,
   };
 }
