@@ -217,6 +217,34 @@ export class FiscalService {
     });
   }
 
+  /** Emite una factura de PRUEBA (datos de ejemplo) para validar el flujo. */
+  async emitTest(user: any) {
+    this.assertAdmin(user);
+    const c = await this.company(user);
+    if (!c.fiscalCompanyId)
+      throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
+    return this.fapi('/invoices', {
+      method: 'POST',
+      body: JSON.stringify({
+        companyId: c.fiscalCompanyId,
+        idempotencyKey: `test-${Date.now()}`,
+        customer: {
+          name: 'Cliente de Prueba',
+          identification: '222222222222',
+          idType: '13',
+        },
+        lines: [
+          {
+            description: 'Producto/servicio de prueba',
+            quantity: 1,
+            unitPrice: 50000,
+            vatRate: 19,
+          },
+        ],
+      }),
+    });
+  }
+
   async getDocument(user: any, id: string) {
     this.assertAdmin(user);
     await this.company(user);

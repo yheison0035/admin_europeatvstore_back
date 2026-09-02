@@ -51,6 +51,11 @@ export class FiscalController {
     return this.service.emitForSale(req.user, Number(saleId));
   }
 
+  @Post('test-invoice')
+  emitTest(@Req() req) {
+    return this.service.emitTest(req.user);
+  }
+
   @Get('documents/:id')
   getDocument(@Req() req, @Param('id') id: string) {
     return this.service.getDocument(req.user, id);
