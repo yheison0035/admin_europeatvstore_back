@@ -15,6 +15,7 @@ import { CloudinaryService } from '@/cloudinary/cloudinary.service';
 import { getAccessibleLocalIds } from '@/common/access-locals.util';
 import { applyLocalFilter } from '@/common/local-filter.util';
 import { PlanLimitsService } from '@/common/plan-limits.service';
+import { PlansConfigService } from '@/common/plans-config.service';
 
 @Injectable()
 export class UsersService {
@@ -22,6 +23,7 @@ export class UsersService {
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
     private planLimits: PlanLimitsService,
+    private plansConfig: PlansConfigService,
   ) {}
 
   // LISTADO GLOBAL (todos los usuarios de todas las empresas) — plataforma
@@ -823,5 +825,7 @@ export function sanitizeUser(user: any) {
   return {
     ...rest,
     company: user.company ?? null,
+    // Config dinámica de planes (gates + orden) para el gating del menú.
+    planConfig: this.plansConfig.config(),
   };
 }

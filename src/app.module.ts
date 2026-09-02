@@ -15,6 +15,8 @@ import { ConfigModule } from '@nestjs/config';
 
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma.module';
+import { PlansConfigModule } from './common/plans-config.module';
+import { PlatformPlansModule } from './platform-plans/platform-plans.module';
 import { VariantsModule } from './inventory/variants/variants.module';
 import { EnumsModule } from './enums/enums.module';
 import { EcommerceModule } from './ecommerce/ecommerce.module';
@@ -58,6 +60,8 @@ import { SubscriptionModule } from './subscription/subscription.module';
     // Rate-limiting global: máx. 100 peticiones por minuto por IP
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
+    PlansConfigModule,
+    PlatformPlansModule,
     AuthModule,
     BrandsModule,
     CategoriesModule,

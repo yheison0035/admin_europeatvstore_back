@@ -191,7 +191,7 @@ enum InvoiceType {
 //////////////////////////////////////////////////
 
 model Company {
-  id      Int          @id @default(autoincrement())
+  id      Int     @id @default(autoincrement())
   name    String
   logo    String?
   nit     String?
@@ -199,8 +199,8 @@ model Company {
   // Clave del tipo de negocio. Es TEXTO (no enum) para permitir tipos nuevos
   // creados desde la plataforma (BusinessTypeConfig). El enum BusinessType se
   // conserva como catálogo de referencia/semilla de los 17 tipos base.
-  type    String       @default("COMERCIO")
-  status  Status       @default(ACTIVO)
+  type    String  @default("COMERCIO")
+  status  Status  @default(ACTIVO)
   phone   String?
   manager String?
 
@@ -308,45 +308,45 @@ model Company {
 
   //////////////////////////////////////////////////
 
-  users          User[]
-  locals         Local[]
-  provider       Provider[]
-  categories     Category[]
-  brand          Brand[]
-  customers      Customer[]
-  services       Service[]
-  appointments   Appointment[]
-  websiteBanners WebsiteBanner[]
-  websiteSetting WebsiteSetting?
-  mesas          Mesa[]
-  comandas       Comanda[]
-  salePayments   SalePayment[]
-  inventory      Inventory[]     @relation("CompanyInventory")
-  cashRegisters  CashRegister[]
-  purchases      Purchase[]
-  quotes         Quote[]
-  returns        Return[]
-  supplies       Supply[]
-  bankDeposits   BankDeposit[]
+  users               User[]
+  locals              Local[]
+  provider            Provider[]
+  categories          Category[]
+  brand               Brand[]
+  customers           Customer[]
+  services            Service[]
+  appointments        Appointment[]
+  websiteBanners      WebsiteBanner[]
+  websiteSetting      WebsiteSetting?
+  mesas               Mesa[]
+  comandas            Comanda[]
+  salePayments        SalePayment[]
+  inventory           Inventory[]          @relation("CompanyInventory")
+  cashRegisters       CashRegister[]
+  purchases           Purchase[]
+  quotes              Quote[]
+  returns             Return[]
+  supplies            Supply[]
+  bankDeposits        BankDeposit[]
   bankProcessedEmails BankProcessedEmail[]
 
   // Notificaciones de consignaciones a la cuenta del banco (SMS/correo reenviado).
-  bankNotifyEnabled Boolean @default(false)
+  bankNotifyEnabled          Boolean @default(false)
   // Facturación electrónica DIAN habilitada por la plataforma para esta empresa
   // (muestra el módulo/menú y su configuración).
   electronicInvoicingEnabled Boolean @default(false)
   // Id de la empresa en la Pegazo Fiscal API (integración directa DIAN). Se llena
   // al vincular la empresa; null = aún no vinculada al servicio fiscal propio.
-  fiscalCompanyId String?
+  fiscalCompanyId            String?
   // Secreto del webhook. NO es único: varias empresas que comparten el mismo
   // buzón/cuenta usan el mismo token y se distinguen por bankIdentifier.
-  bankNotifyToken   String?
+  bankNotifyToken            String?
   // Cómo se identifica esta empresa en la notificación del banco (nombre y/o
   // llave del QR, separados por coma). Ej: "RAGNOR BARBER, @ragnorbarber".
-  bankIdentifier    String?
+  bankIdentifier             String?
   // Correo donde el negocio recibe las confirmaciones del banco (informativo /
   // para las instrucciones del reenviador). Ej: "ragnor.pagos@gmail.com".
-  bankEmail         String?
+  bankEmail                  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -355,12 +355,12 @@ model Company {
 // Consignación/transferencia recibida en la cuenta del banco de la empresa,
 // detectada al parsear el SMS de Bancolombia reenviado por el celular.
 model BankDeposit {
-  id         Int      @id @default(autoincrement())
-  amount     Float    @default(0)
+  id         Int     @id @default(autoincrement())
+  amount     Float   @default(0)
   senderName String? // nombre de quien consignó (si el SMS lo trae)
   reference  String? // referencia/últimos dígitos si vienen en el SMS
   raw        String? // texto original del SMS (respaldo)
-  seen       Boolean  @default(false)
+  seen       Boolean @default(false)
 
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -417,14 +417,14 @@ model User {
   companyId Int
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  managedLocals      Local[]       @relation("LocalManager")
-  createdInventories Inventory[]   @relation("InventoryCreatedBy")
-  updatedInventories Inventory[]   @relation("InventoryUpdatedBy")
-  services           Service[]     @relation("BarberServices")
-  appointments       Appointment[] @relation("BarberAppointments")
+  managedLocals      Local[]           @relation("LocalManager")
+  createdInventories Inventory[]       @relation("InventoryCreatedBy")
+  updatedInventories Inventory[]       @relation("InventoryUpdatedBy")
+  services           Service[]         @relation("BarberServices")
+  appointments       Appointment[]     @relation("BarberAppointments")
   // Descansos: días de la semana recurrentes (0=Dom..6=Sáb) y fechas puntuales.
-  restWeekdays Int[]            @default([])
-  timeOff      EmployeeTimeOff[]
+  restWeekdays       Int[]             @default([])
+  timeOff            EmployeeTimeOff[]
 
   sales    Sale[]    @relation("UserSales")
   comandas Comanda[]
@@ -482,16 +482,16 @@ model Customer {
 
   // Fidelización: sellos acumulados hacia el próximo premio y premios ganados
   // pendientes de canjear.
-  loyaltyStamps    Int       @default(0)
-  loyaltyRewards   Int       @default(0)
-  loyaltyLastVisit DateTime? // última visita que sumó a la fidelización
+  loyaltyStamps         Int       @default(0)
+  loyaltyRewards        Int       @default(0)
+  loyaltyLastVisit      DateTime? // última visita que sumó a la fidelización
   // Cliente "graduado": ya completó el rango de fidelización (llegó al tope).
   // La fidelización queda desactivada para él de forma permanente (ya es
   // cliente antiguo y paga normal); se lista aparte para futuras ofertas.
-  loyaltyCompleted Boolean   @default(false)
+  loyaltyCompleted      Boolean   @default(false)
   // Graduado MANUAL por el dueño (ej. se le completó la tarjeta por cortesía):
   // se respeta aunque los sellos se recalculen desde las ventas.
-  loyaltyManualComplete Boolean @default(false)
+  loyaltyManualComplete Boolean   @default(false)
 
   // Última vez que se le escribió para reactivarlo (campaña de win-back).
   lastWinbackAt DateTime?
@@ -593,11 +593,11 @@ model Local {
 //////////////////////////////////////////////////
 
 model Category {
-  id          Int     @id @default(autoincrement())
-  name        String
-  description String?
-  status      Status  @default(ACTIVO)
-  localId     Int?
+  id              Int     @id @default(autoincrement())
+  name            String
+  description     String?
+  status          Status  @default(ACTIVO)
+  localId         Int?
   // ¿Los productos de esta categoría generan comisión al empleado? (Ej. insumos
   // sí; cervezas/bebidas no.) Por defecto NO: solo pagan las que se marquen.
   earnsCommission Boolean @default(false)
@@ -674,17 +674,17 @@ model Inventory {
   createdById Int?
   updatedById Int?
 
-  createdBy User?     @relation("InventoryCreatedBy", fields: [createdById], references: [id])
-  updatedBy User?     @relation("InventoryUpdatedBy", fields: [updatedById], references: [id])
-  company   Company?  @relation("CompanyInventory", fields: [companyId], references: [id], onDelete: Cascade)
-  local     Local?    @relation("LocalInventory", fields: [localId], references: [id], onDelete: SetNull)
-  provider  Provider? @relation("ProviderProducts", fields: [providerId], references: [id], onDelete: SetNull)
-  category  Category? @relation("CategoryProducts", fields: [categoryId], references: [id], onDelete: SetNull)
+  createdBy     User?          @relation("InventoryCreatedBy", fields: [createdById], references: [id])
+  updatedBy     User?          @relation("InventoryUpdatedBy", fields: [updatedById], references: [id])
+  company       Company?       @relation("CompanyInventory", fields: [companyId], references: [id], onDelete: Cascade)
+  local         Local?         @relation("LocalInventory", fields: [localId], references: [id], onDelete: SetNull)
+  provider      Provider?      @relation("ProviderProducts", fields: [providerId], references: [id], onDelete: SetNull)
+  category      Category?      @relation("CategoryProducts", fields: [categoryId], references: [id], onDelete: SetNull)
   // Unidad de medida del catálogo administrable (opcional). El string `unit`
   // (UNIDAD|PESO) se deriva de su code para la lógica del POS.
   unitId        Int?
   unitOfMeasure UnitOfMeasure? @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  brand     Brand?    @relation("BrandProducts", fields: [brandId], references: [id], onDelete: SetNull)
+  brand         Brand?         @relation("BrandProducts", fields: [brandId], references: [id], onDelete: SetNull)
 
   variants       InventoryVariant[]
   images         InventoryImage[]
@@ -772,14 +772,14 @@ model Expense {
   status        Status         @default(ACTIVO)
   expenseDate   DateTime
 
-  providerId Int?
-  localId    Int
+  providerId        Int?
+  localId           Int
   // Categoría administrable por el negocio (opcional). El enum `type` se
   // mantiene sincronizado para compatibilidad (payables/estadísticas legacy).
   expenseCategoryId Int?
 
-  provider Provider? @relation("ProviderExpenses", fields: [providerId], references: [id], onDelete: SetNull)
-  local    Local     @relation("LocalExpenses", fields: [localId], references: [id], onDelete: Cascade)
+  provider        Provider?        @relation("ProviderExpenses", fields: [providerId], references: [id], onDelete: SetNull)
+  local           Local            @relation("LocalExpenses", fields: [localId], references: [id], onDelete: Cascade)
   expenseCategory ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
@@ -841,13 +841,13 @@ model UnitOfMeasure {
 // base (enum PaymentMethod): así "Nequi" puede comportarse como TRANSFERENCIA
 // (va al banco) y la caja/estadísticas siguen funcionando por el enum.
 model PaymentMethodCatalog {
-  id        Int      @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   companyId Int
   name      String
   code      PaymentMethod
-  status    Status   @default(ACTIVO)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status    Status        @default(ACTIVO)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   sales Sale[]
 
@@ -904,7 +904,7 @@ model Sale {
   cashReceived  Float? // efectivo con el que pagó el cliente (para calcular el cambio en la factura)
   // Venta sin comisión para el empleado (ej. corte de cortesía / mal aplicado):
   // no le genera comisión, aunque siga contando el total de la venta.
-  noCommission  Boolean @default(false)
+  noCommission  Boolean       @default(false)
 
   source              OrderSource @default(CRM)
   ecommerceCustomerId Int?
@@ -1106,11 +1106,11 @@ model ServiceLocal {
 model Appointment {
   id Int @id @default(autoincrement())
 
-  date      DateTime
-  startTime String
+  date         DateTime
+  startTime    String
   // Minutos desde medianoche (derivado de startTime) para ordenar por hora real
   // de reloj, ya que startTime se guarda en 12h ("01:00 p. m.") y no ordena bien.
-  startMinutes Int @default(0)
+  startMinutes Int      @default(0)
 
   status AppointmentStatus @default(CONFIRMADA)
   notes  String?
@@ -1269,13 +1269,13 @@ model ComandaItem {
 //////////////////////////////////////////////////
 
 model Supply {
-  id       Int     @id @default(autoincrement())
+  id       Int    @id @default(autoincrement())
   name     String
-  unit     String  @default("UNIDAD") // UNIDAD | KG | GRAMO | LITRO | ML
-  stock    Float   @default(0)
+  unit     String @default("UNIDAD") // UNIDAD | KG | GRAMO | LITRO | ML
+  stock    Float  @default(0)
   minStock Float? // alerta de bajo (opcional)
-  cost     Float   @default(0) // costo por unidad (opcional)
-  status   Status  @default(ACTIVO)
+  cost     Float  @default(0) // costo por unidad (opcional)
+  status   Status @default(ACTIVO)
 
   providerId Int?
   provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
@@ -1561,23 +1561,23 @@ enum EmployeeChargeType {
 }
 
 model EmployeeCharge {
-  id        Int                @id @default(autoincrement())
-  companyId Int
-  userId    Int // empleado/barbero que debe
-  type      EmployeeChargeType @default(OTRO)
+  id               Int                @id @default(autoincrement())
+  companyId        Int
+  userId           Int // empleado/barbero que debe
+  type             EmployeeChargeType @default(OTRO)
   // Categoría administrable por el negocio (opcional); `type` se deriva de ella.
   chargeCategoryId Int?
-  chargeCategory   ChargeCategory? @relation(fields: [chargeCategoryId], references: [id], onDelete: SetNull)
-  concept   String
-  amount    Float
-  notes     String?
+  chargeCategory   ChargeCategory?    @relation(fields: [chargeCategoryId], references: [id], onDelete: SetNull)
+  concept          String
+  amount           Float
+  notes            String?
   // PENDIENTE (debe) | PAGADO (respondió efectivo) | DESCONTADO (de comisión)
-  status        String    @default("PENDIENTE")
-  settledMethod String? // EFECTIVO | COMISION
-  settledAt     DateTime?
-  saleId        Int? // opcional: venta que originó el cargo (ej. membresía)
-  createdById   Int?
-  createdByName String?
+  status           String             @default("PENDIENTE")
+  settledMethod    String? // EFECTIVO | COMISION
+  settledAt        DateTime?
+  saleId           Int? // opcional: venta que originó el cargo (ej. membresía)
+  createdById      Int?
+  createdByName    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1605,15 +1605,15 @@ model PushSubscription {
 // CUENTAS POR PAGAR: algo pendiente de pagar (proveedor, servicio, etc.) con su
 // fecha de vencimiento. Al pagarlo se genera un Gasto con la fecha del pago.
 model Payable {
-  id        Int          @id @default(autoincrement())
-  companyId Int
-  localId   Int
-  concept   String
-  paidTo    String? // proveedor / a quién se le paga
-  type      ExpenseType  @default(OTROS) // categoría (misma del gasto)
-  amount    Float
-  dueDate   DateTime? // cuándo se debe pagar (vencimiento)
-  notes     String?
+  id            Int            @id @default(autoincrement())
+  companyId     Int
+  localId       Int
+  concept       String
+  paidTo        String? // proveedor / a quién se le paga
+  type          ExpenseType    @default(OTROS) // categoría (misma del gasto)
+  amount        Float
+  dueDate       DateTime? // cuándo se debe pagar (vencimiento)
+  notes         String?
   // PENDIENTE (por pagar) | PAGADO (ya se pagó → generó gasto)
   status        String         @default("PENDIENTE")
   paidAt        DateTime? // fecha real del pago
@@ -1737,25 +1737,25 @@ model SubscriptionPayment {
 // hardcode como respaldo. El override por empresa (Company.enabledModules)
 // sigue mandando sobre esto.
 model BusinessTypeConfig {
-  id        Int      @id @default(autoincrement())
-  type      String   @unique
-  label     String
-  modules   String[] @default([])
+  id            Int      @id @default(autoincrement())
+  type          String   @unique
+  label         String
+  modules       String[] @default([])
   // Configuración avanzada por tipo (opcional; si null/vacío, el front usa su
   // mapa por defecto). terminology: overrides de vocabulario; productFields:
   // qué campos de producto aplican; roles: roles asignables del tipo.
-  terminology  Json?
+  terminology   Json?
   productFields Json?
-  roles        String[] @default([])
+  roles         String[] @default([])
   // Valores por defecto que se aplican al CREAR una empresa de este tipo
   // (requireCashOpen, openHour, closeHour, loyaltyEnabled). Editables.
-  defaults     Json?
+  defaults      Json?
   // Ajustes de la TIENDA online por tipo: modos de entrega (fulfillment) y
   // layout del catálogo. Lo consume el storefront vía /website/config.
-  storefront   Json?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  storefront    Json?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 // HISTORIA CLÍNICA (verticales de salud: odontología, estética, veterinaria).
@@ -1808,4 +1808,35 @@ model ClinicalConsent {
   createdAt    DateTime @default(now())
 
   @@index([companyId, customerId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Planes configurables (SUPER_PLATFORM). Reemplazan los valores
+// hardcodeados de plans.js / plan-limits.service.ts cuando existen filas;
+// si la tabla está vacía, se usan los defaults de código.
+// ─────────────────────────────────────────────────────────────
+
+model PlanConfig {
+  id           String   @id // DESPEGUE, IMPULSO, ALTURA, ORBITA (o nuevos)
+  name         String
+  emoji        String?
+  tagline      String?
+  priceMonthly Int      @default(0)
+  order        Int      @default(0)
+  active       Boolean  @default(true)
+  // Límites (null = ilimitado)
+  maxUsers     Int?
+  maxLocals    Int?
+  maxProducts  Int?
+  maxCustomers Int?
+  updatedAt    DateTime @updatedAt
+}
+
+// Plan mínimo requerido por cada módulo del CRM. minPlan = id de plan o 'BASE'
+// (disponible en todos los planes). Los módulos que no tienen fila usan su
+// default de código o 'BASE'.
+model PlanModuleGate {
+  moduleKey String   @id
+  minPlan   String
+  updatedAt DateTime @updatedAt
 }

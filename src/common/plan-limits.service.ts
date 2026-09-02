@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma.service';
 import { Status } from '@prisma/client';
+import { PlansConfigService } from './plans-config.service';
 
 // Límites por plan. null = ilimitado. Debe coincidir con src/lib/plans.js del
 // frontend. Las empresas SIN plan (o con un plan desconocido) NO tienen límite,
@@ -83,7 +84,10 @@ const RESOURCE_LABEL: Record<PlanResource, string> = {
 
 @Injectable()
 export class PlanLimitsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private plansConfig: PlansConfigService,
+  ) {}
 
   // Lanza ForbiddenException si crear un nuevo recurso superaría el límite del
   // plan de la empresa. No cuenta los registros ELIMINADO.
@@ -101,15 +105,13 @@ export class PlanLimitsService {
     const plan = company?.plan;
     if (!plan) return; // sin plan → sin límite (empresas existentes)
 
-    const limits = PLAN_LIMITS[plan];
-    if (!limits) return; // plan desconocido → sin límite
-
+    const limits = this.plansConfig.limits(plan);
     const max = limits[resource];
     if (max == null) return; // ilimitado
 
     const count = await this.countResource(companyId, resource);
     if (count >= max) {
-      const planName = PLAN_NAMES[plan] ?? plan;
+      const planName = this.plansConfig.planName(plan);
       // Siguiente plan que sube (o quita) el límite de este recurso.
       const requiredPlan = this.nextPlanForResource(plan, resource, max);
       throw new ForbiddenException({
@@ -119,7 +121,7 @@ export class PlanLimitsService {
         message:
           `Tu plan ${planName} permite hasta ${max} ${RESOURCE_LABEL[resource]}. ` +
           (requiredPlan
-            ? `Mejora al plan ${PLAN_NAMES[requiredPlan]} para agregar más.`
+            ? `Mejora al plan ${this.plansConfig.planName(requiredPlan)} para agregar más.`
             : 'Contacta a soporte para ampliar tu plan.'),
       });
     }
@@ -130,10 +132,11 @@ export class PlanLimitsService {
     resource: PlanResource,
     currentMax: number,
   ): string | null {
-    const idx = PLAN_ORDER.indexOf(plan);
-    for (let i = idx + 1; i < PLAN_ORDER.length; i++) {
-      const l = PLAN_LIMITS[PLAN_ORDER[i]][resource];
-      if (l == null || l > currentMax) return PLAN_ORDER[i];
+    const plans = this.plansConfig.config().plans; // ordenados por `order`
+    const idx = plans.findIndex((p) => p.id === plan);
+    for (let i = idx + 1; i < plans.length; i++) {
+      const l = this.plansConfig.limits(plans[i].id)[resource];
+      if (l == null || l > currentMax) return plans[i].id;
     }
     return null;
   }
@@ -167,17 +170,17 @@ export class PlanLimitsService {
       });
     }
 
-    // Sin control manual: gating por plan (comportamiento por defecto).
-    if (planAllowsModule(company?.plan, moduleKey)) return;
+    // Sin control manual: gating por plan (config dinámica de SUPER_PLATFORM).
+    if (this.plansConfig.planAllowsModule(company?.plan, moduleKey)) return;
 
-    const min = MODULE_MIN_PLAN[moduleKey];
+    const min = this.plansConfig.moduleMinPlan(moduleKey);
     throw new ForbiddenException({
       error: 'PLAN_FEATURE',
       requiredPlan: min,
       module: moduleKey,
-      message: `Esta función está disponible desde el plan ${
-        PLAN_NAMES[min] ?? min
-      }. Mejora tu plan para usarla.`,
+      message: `Esta función está disponible desde el plan ${this.plansConfig.planName(
+        min,
+      )}. Mejora tu plan para usarla.`,
     });
   }
 
