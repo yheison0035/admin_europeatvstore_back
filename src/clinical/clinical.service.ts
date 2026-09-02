@@ -6,16 +6,20 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma.service';
 import { CloudinaryService } from '@/cloudinary/cloudinary.service';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 
 @Injectable()
 export class ClinicalService {
   constructor(
     private prisma: PrismaService,
     private cloudinary: CloudinaryService,
+    private planLimits: PlanLimitsService,
   ) {}
 
-  // El paciente (Customer) debe ser de la empresa del usuario.
+  // El paciente (Customer) debe ser de la empresa del usuario. Además, la
+  // historia clínica requiere plan Altura o superior (se limita el CRM por plan).
   private async assertCustomer(user: any, customerId: number) {
+    await this.planLimits.assertModule(user.companyId, 'clinical');
     const c = await this.prisma.customer.findFirst({
       where: { id: customerId, companyId: user.companyId },
       select: { id: true, name: true },
