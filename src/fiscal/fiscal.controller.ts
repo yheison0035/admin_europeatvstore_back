@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Param,
@@ -69,6 +70,16 @@ export class FiscalController {
   @Get('documents/:id/whatsapp')
   whatsapp(@Req() req, @Param('id') id: string) {
     return this.service.whatsappLink(req.user, id);
+  }
+
+  @Delete('documents/:id')
+  deleteDocument(@Req() req, @Param('id') id: string) {
+    return this.service.deleteDocument(req.user, id);
+  }
+
+  @Post('documents/:id/annul')
+  annul(@Req() req, @Param('id') id: string, @Body() body: any) {
+    return this.service.annulDocument(req.user, id, body?.reason);
   }
 
   @Get('documents/:id/representation')

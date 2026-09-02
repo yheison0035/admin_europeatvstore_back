@@ -263,6 +263,23 @@ export class FiscalService {
     return this.fapi(`/invoices/${id}`);
   }
 
+  /** Elimina un documento (solo si aún no fue transmitido a la DIAN). */
+  async deleteDocument(user: any, id: string) {
+    this.assertAdmin(user);
+    await this.company(user);
+    return this.fapi(`/invoices/${id}`, { method: 'DELETE' });
+  }
+
+  /** Anula una factura generando su nota crédito total. */
+  async annulDocument(user: any, id: string, reason?: string) {
+    this.assertAdmin(user);
+    await this.company(user);
+    return this.fapi(`/invoices/${id}/annul`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
   /** Envía la factura electrónica al correo del cliente. */
   async sendEmail(user: any, id: string) {
     this.assertAdmin(user);
