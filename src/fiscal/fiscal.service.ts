@@ -7,6 +7,7 @@ import {
 import { Role } from '@prisma/client';
 import { PrismaService } from '@/prisma.service';
 import { MailService } from '@/mail/mail.service';
+import { PlanLimitsService } from '@/common/plan-limits.service';
 
 const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN];
 
@@ -29,6 +30,7 @@ export class FiscalService {
   constructor(
     private prisma: PrismaService,
     private mail: MailService,
+    private planLimits: PlanLimitsService,
   ) {}
 
   private get baseUrl() {
@@ -41,6 +43,15 @@ export class FiscalService {
   private assertAdmin(user: any) {
     if (!ADMIN_ROLES.includes(user.role))
       throw new ForbiddenException('No tienes permisos');
+  }
+
+  // La factura electrónica requiere plan Impulso o superior (lanza 403 con
+  // requiredPlan para abrir "Mejora tu plan" en el CRM).
+  private async assertPlan(user: any) {
+    await this.planLimits.assertModule(
+      user.companyId,
+      'facturacion-electronica',
+    );
   }
 
   /** Llama a la Fiscal API. Devuelve el JSON o lanza con el mensaje del servicio. */
@@ -114,6 +125,7 @@ export class FiscalService {
   /** Vincula la empresa del CRM con una empresa en la Fiscal API. */
   async setup(user: any) {
     this.assertAdmin(user);
+    await this.assertPlan(user);
     const c = await this.company(user);
     if (c.fiscalCompanyId)
       return { success: true, data: { fiscalCompanyId: c.fiscalCompanyId } };
@@ -182,6 +194,7 @@ export class FiscalService {
   /** Emite una factura electrónica a partir de una venta del CRM. */
   async emitForSale(user: any, saleId: number) {
     this.assertAdmin(user);
+    await this.assertPlan(user);
     const c = await this.company(user);
     if (!c.fiscalCompanyId)
       throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
@@ -232,6 +245,7 @@ export class FiscalService {
   /** Emite una factura de PRUEBA (datos de ejemplo) para validar el flujo. */
   async emitTest(user: any) {
     this.assertAdmin(user);
+    await this.assertPlan(user);
     const c = await this.company(user);
     if (!c.fiscalCompanyId)
       throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
@@ -266,6 +280,7 @@ export class FiscalService {
   /** Crea una nota crédito (parcial) sobre una factura. */
   async createCreditNote(user: any, dto: any) {
     this.assertAdmin(user);
+    await this.assertPlan(user);
     const c = await this.company(user);
     if (!c.fiscalCompanyId)
       throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
@@ -285,6 +300,7 @@ export class FiscalService {
   /** Anula una factura generando su nota crédito total. */
   async annulDocument(user: any, id: string, reason?: string) {
     this.assertAdmin(user);
+    await this.assertPlan(user);
     await this.company(user);
     return this.fapi(`/invoices/${id}/annul`, {
       method: 'POST',

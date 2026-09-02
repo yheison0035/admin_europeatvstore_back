@@ -39,14 +39,22 @@ const PLAN_RANK: Record<string, number> = {
 // son base (disponibles en todos los planes). Debe coincidir con el front
 // (src/lib/plans.js). Empresas sin plan o con plan desconocido = sin gating.
 export const MODULE_MIN_PLAN: Record<string, string> = {
+  // Impulso: negocio en marcha
   expenses: 'IMPULSO',
   appointments: 'IMPULSO',
   services: 'IMPULSO',
   users: 'IMPULSO',
   statistics: 'IMPULSO',
   fiado: 'IMPULSO', // ventas a crédito / fiado
+  loyalty: 'IMPULSO', // fidelización
+  'facturacion-electronica': 'IMPULSO', // factura electrónica DIAN ilimitada
+  // Altura: crece con varias sedes
   website: 'ALTURA',
   shipping: 'ALTURA',
+  bank: 'ALTURA', // avisos de consignación (banco)
+  clinical: 'ALTURA', // historia clínica (salud)
+  // Órbita: cadena / empresa
+  payroll: 'ORBITA', // nómina electrónica (cuando se implemente)
 };
 
 // Orden ascendente de planes.
