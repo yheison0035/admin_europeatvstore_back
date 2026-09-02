@@ -37,6 +37,7 @@ import { ReturnsModule } from './returns/returns.module';
 import { WebsiteModule } from './modules/website/website.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { ElectronicInvoicingModule } from './electronic-invoicing/electronic-invoicing.module';
+import { FiscalModule } from './fiscal/fiscal.module';
 import { ExpenseCategoriesModule } from './expense-categories/expense-categories.module';
 import { ChargeCategoriesModule } from './charge-categories/charge-categories.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
@@ -89,6 +90,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     WebsiteModule,
     StatisticsModule,
     ElectronicInvoicingModule,
+    FiscalModule,
     ExpenseCategoriesModule,
     ChargeCategoriesModule,
     PaymentMethodsModule,
