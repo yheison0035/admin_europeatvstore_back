@@ -154,7 +154,15 @@ export class FiscalService {
     if (!c.fiscalCompanyId) return { data: [], meta: { page: 1, totalPages: 1, total: 0 } };
     const params = new URLSearchParams();
     params.set('companyId', c.fiscalCompanyId);
-    for (const k of ['type', 'status', 'search', 'page', 'limit']) {
+    for (const k of [
+      'type',
+      'status',
+      'search',
+      'dateFrom',
+      'dateTo',
+      'page',
+      'limit',
+    ]) {
       if (query[k] != null && query[k] !== '') params.set(k, String(query[k]));
     }
     return this.fapi(`/documents?${params.toString()}`);
