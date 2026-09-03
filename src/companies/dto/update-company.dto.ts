@@ -74,6 +74,11 @@ export class UpdateCompanyDto {
   @IsBoolean()
   electronicInvoicingEnabled?: boolean;
 
+  // Empresa de PRUEBAS (sandbox): ve funciones aún no liberadas al 100% (DIAN).
+  @IsOptional()
+  @IsBoolean()
+  isTestCompany?: boolean;
+
   @IsOptional()
   @IsString()
   crmTheme?: string;

@@ -45,9 +45,25 @@ export class FiscalService {
       throw new ForbiddenException('No tienes permisos');
   }
 
+  // TEMPORAL: la DIAN (factura + nómina electrónica) aún no está liberada al
+  // 100%, así que SOLO opera en empresas de prueba (isTestCompany). Los negocios
+  // reales en producción no la ven ni la pueden usar hasta que se libere. Cuando
+  // esté todo listo se elimina este guard y queda solo el gating por plan.
+  private async assertFeatureAvailable(user: any) {
+    const c = await this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: { isTestCompany: true },
+    });
+    if (!c?.isTestCompany)
+      throw new ForbiddenException(
+        'La facturación y nómina electrónica DIAN aún no está disponible.',
+      );
+  }
+
   // La factura electrónica requiere plan Impulso o superior (lanza 403 con
   // requiredPlan para abrir "Mejora tu plan" en el CRM).
   private async assertPlan(user: any) {
+    await this.assertFeatureAvailable(user);
     await this.planLimits.assertModule(
       user.companyId,
       'facturacion-electronica',
@@ -300,6 +316,7 @@ export class FiscalService {
   /** Emite un Documento Soporte de Pago de Nómina Electrónica (DSPNE). */
   async emitPayroll(user: any, dto: any) {
     this.assertAdmin(user);
+    await this.assertFeatureAvailable(user);
     // La nómina electrónica requiere el plan que la incluye (Órbita).
     await this.planLimits.assertModule(user.companyId, 'nomina-electronica');
     const c = await this.company(user);
@@ -314,6 +331,7 @@ export class FiscalService {
   /** Nota de ajuste de nómina de REEMPLAZO (corrige con datos nuevos). */
   async replacePayroll(user: any, id: string, dto: any) {
     this.assertAdmin(user);
+    await this.assertFeatureAvailable(user);
     await this.planLimits.assertModule(user.companyId, 'payroll');
     await this.company(user);
     return this.fapi(`/payroll/${id}/replace`, {
@@ -325,6 +343,7 @@ export class FiscalService {
   /** Nota de ajuste de nómina de ELIMINACIÓN (borra una mal enviada). */
   async eliminatePayroll(user: any, id: string, reason?: string) {
     this.assertAdmin(user);
+    await this.assertFeatureAvailable(user);
     await this.planLimits.assertModule(user.companyId, 'payroll');
     await this.company(user);
     return this.fapi(`/payroll/${id}/eliminate`, {

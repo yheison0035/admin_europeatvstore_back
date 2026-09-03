@@ -897,6 +897,7 @@ export class CompaniesService {
         enabledModules: true,
         bankNotifyEnabled: true,
         electronicInvoicingEnabled: true,
+        isTestCompany: true,
         wompiEnabled: true,
         wompiPublicKey: true,
         websiteEnabled: true,
@@ -1360,6 +1361,9 @@ export class CompaniesService {
         ...bankPatch,
         ...(dto.electronicInvoicingEnabled !== undefined && {
           electronicInvoicingEnabled: dto.electronicInvoicingEnabled,
+        }),
+        ...(dto.isTestCompany !== undefined && {
+          isTestCompany: dto.isTestCompany,
         }),
         ...(dto.crmTheme !== undefined && { crmTheme: dto.crmTheme }),
         ...(dto.crmFont !== undefined && { crmFont: dto.crmFont }),

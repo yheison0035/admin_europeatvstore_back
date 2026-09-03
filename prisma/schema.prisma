@@ -262,6 +262,12 @@ model Company {
   // Vacío = comportamiento por defecto (según su tipo de negocio/plan).
   enabledModules String[] @default([])
 
+  // Empresa de PRUEBAS (sandbox interno). Las funciones que aún NO están al 100%
+  // (p. ej. la DIAN: factura y nómina electrónica) SOLO se muestran/operan en
+  // empresas marcadas así. Los negocios reales en producción no las ven hasta que
+  // se libere oficialmente. Se administra desde SUPER_PLATFORM.
+  isTestCompany Boolean @default(false)
+
   // Precio acordado con el cliente (COP/mes) y descuento inicial por tiempo
   // (informativo/manual: se muestra en el superplatform, el cobro es manual).
   monthlyPrice    Int?

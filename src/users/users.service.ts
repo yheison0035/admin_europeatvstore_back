@@ -502,6 +502,9 @@ export class UsersService {
             electronicInvoicingEnabled: true,
             // Vinculada al servicio fiscal propio (si ya se activó).
             fiscalCompanyId: true,
+            // Empresa de pruebas: gobierna la visibilidad de funciones aún no
+            // liberadas al 100% (DIAN). Solo estas empresas ven el tema DIAN.
+            isTestCompany: true,
             // Régimen de IVA (para el encabezado de la factura impresa).
             responsableIVA: true,
             // Vencimiento del pago y precio acordado: el CRM del dueño los usa
