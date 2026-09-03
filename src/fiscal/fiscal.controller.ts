@@ -72,6 +72,16 @@ export class FiscalController {
     return this.service.emitPayroll(req.user, dto);
   }
 
+  @Post('payroll/:id/replace')
+  replacePayroll(@Req() req, @Param('id') id: string, @Body() dto: any) {
+    return this.service.replacePayroll(req.user, id, dto);
+  }
+
+  @Post('payroll/:id/eliminate')
+  eliminatePayroll(@Req() req, @Param('id') id: string, @Body() body: any) {
+    return this.service.eliminatePayroll(req.user, id, body?.reason);
+  }
+
   @Get('documents/:id')
   getDocument(@Req() req, @Param('id') id: string) {
     return this.service.getDocument(req.user, id);

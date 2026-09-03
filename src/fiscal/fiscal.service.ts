@@ -256,6 +256,28 @@ export class FiscalService {
     });
   }
 
+  /** Nota de ajuste de nómina de REEMPLAZO (corrige con datos nuevos). */
+  async replacePayroll(user: any, id: string, dto: any) {
+    this.assertAdmin(user);
+    await this.planLimits.assertModule(user.companyId, 'payroll');
+    await this.company(user);
+    return this.fapi(`/payroll/${id}/replace`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  /** Nota de ajuste de nómina de ELIMINACIÓN (borra una mal enviada). */
+  async eliminatePayroll(user: any, id: string, reason?: string) {
+    this.assertAdmin(user);
+    await this.planLimits.assertModule(user.companyId, 'payroll');
+    await this.company(user);
+    return this.fapi(`/payroll/${id}/eliminate`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
   /** Emite una factura de PRUEBA (datos de ejemplo) para validar el flujo. */
   async emitTest(user: any) {
     this.assertAdmin(user);
