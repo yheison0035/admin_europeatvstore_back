@@ -57,6 +57,11 @@ export class FiscalController {
     return this.service.createCreditNote(req.user, dto);
   }
 
+  @Post('debit-notes')
+  createDebitNote(@Req() req, @Body() dto: any) {
+    return this.service.createDebitNote(req.user, dto);
+  }
+
   @Post('test-invoice')
   emitTest(@Req() req) {
     return this.service.emitTest(req.user);

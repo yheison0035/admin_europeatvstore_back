@@ -291,7 +291,7 @@ export class FiscalService {
     return this.fapi(`/invoices/${id}`);
   }
 
-  /** Crea una nota crédito (parcial) sobre una factura. */
+  /** Crea una nota crédito (parcial) sobre una factura. dto.reasonCode = 1..5 */
   async createCreditNote(user: any, dto: any) {
     this.assertAdmin(user);
     await this.assertPlan(user);
@@ -299,6 +299,19 @@ export class FiscalService {
     if (!c.fiscalCompanyId)
       throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
     return this.fapi('/credit-notes', {
+      method: 'POST',
+      body: JSON.stringify({ companyId: c.fiscalCompanyId, ...dto }),
+    });
+  }
+
+  /** Crea una nota débito (subir valor) sobre una factura. dto.reasonCode = 1..4 */
+  async createDebitNote(user: any, dto: any) {
+    this.assertAdmin(user);
+    await this.assertPlan(user);
+    const c = await this.company(user);
+    if (!c.fiscalCompanyId)
+      throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
+    return this.fapi('/debit-notes', {
       method: 'POST',
       body: JSON.stringify({ companyId: c.fiscalCompanyId, ...dto }),
     });
