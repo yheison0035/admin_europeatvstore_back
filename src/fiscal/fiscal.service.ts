@@ -192,13 +192,8 @@ export class FiscalService {
   }
 
   /** Emite una factura electrónica a partir de una venta del CRM. */
-  async emitForSale(user: any, saleId: number) {
-    this.assertAdmin(user);
-    await this.assertPlan(user);
-    const c = await this.company(user);
-    if (!c.fiscalCompanyId)
-      throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
-
+  // Carga la venta y arma el payload de factura (cliente + líneas).
+  private async saleAndPayload(user: any, saleId: number) {
     const sale = await this.prisma.sale.findFirst({
       where: { id: saleId, local: { companyId: user.companyId } },
       include: {
@@ -212,7 +207,6 @@ export class FiscalService {
       },
     });
     if (!sale) throw new NotFoundException('Venta no encontrada');
-
     const cust: any = sale.customer;
     const docType = (cust?.type_document || 'CC').toUpperCase();
     const customer = {
@@ -230,8 +224,31 @@ export class FiscalService {
       unitPrice: it.price,
       vatRate: Number(it.taxRate ?? 0),
     }));
+    return { sale, customer, lines };
+  }
 
-    return this.fapi('/invoices', {
+  // Guarda el vínculo factura ↔ venta.
+  private async linkSale(saleId: number, doc: any) {
+    await this.prisma.sale
+      .update({
+        where: { id: saleId },
+        data: {
+          eInvoiceDocId: doc?.id || null,
+          eInvoiceNumber: doc?.number || null,
+          eInvoiceStatus: doc?.status || null,
+        },
+      })
+      .catch(() => undefined);
+  }
+
+  async emitForSale(user: any, saleId: number) {
+    this.assertAdmin(user);
+    await this.assertPlan(user);
+    const c = await this.company(user);
+    if (!c.fiscalCompanyId)
+      throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
+    const { customer, lines } = await this.saleAndPayload(user, saleId);
+    const doc = await this.fapi('/invoices', {
       method: 'POST',
       body: JSON.stringify({
         companyId: c.fiscalCompanyId,
@@ -240,6 +257,44 @@ export class FiscalService {
         lines,
       }),
     });
+    await this.linkSale(saleId, doc);
+    return doc;
+  }
+
+  /**
+   * Corrige la factura de una venta: anula la actual y reemite una nueva con
+   * los datos corregidos de la venta/cliente (clave de idempotencia versionada).
+   */
+  async reissueForSale(user: any, saleId: number) {
+    this.assertAdmin(user);
+    await this.assertPlan(user);
+    const c = await this.company(user);
+    if (!c.fiscalCompanyId)
+      throw new BadRequestException('La empresa no está vinculada al servicio fiscal.');
+    const sale = await this.prisma.sale.findFirst({
+      where: { id: saleId, local: { companyId: user.companyId } },
+      select: { id: true, eInvoiceDocId: true },
+    });
+    if (!sale) throw new NotFoundException('Venta no encontrada');
+    // Anula la factura anterior (si la hay y no está ya anulada).
+    if (sale.eInvoiceDocId) {
+      await this.fapi(`/invoices/${sale.eInvoiceDocId}/annul`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'Corrección de la factura' }),
+      }).catch(() => undefined);
+    }
+    const { customer, lines } = await this.saleAndPayload(user, saleId);
+    const doc = await this.fapi('/invoices', {
+      method: 'POST',
+      body: JSON.stringify({
+        companyId: c.fiscalCompanyId,
+        idempotencyKey: `sale-${saleId}-r${Date.now()}`,
+        customer,
+        lines,
+      }),
+    });
+    await this.linkSale(saleId, doc);
+    return doc;
   }
 
   /** Emite un Documento Soporte de Pago de Nómina Electrónica (DSPNE). */

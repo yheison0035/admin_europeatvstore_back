@@ -902,6 +902,12 @@ model Sale {
   dueDate       DateTime? // vencimiento de la venta a crédito (fiado)
   notes         String?
   cashReceived  Float? // efectivo con el que pagó el cliente (para calcular el cambio en la factura)
+
+  // Vínculo con la factura electrónica DIAN (Pegazo Fiscal API). Permite ver el
+  // estado fiscal de la venta y anular+reemitir corregida.
+  eInvoiceDocId  String? // id del documento en la Fiscal API
+  eInvoiceNumber String? // número (p.ej. SETP990000001)
+  eInvoiceStatus String? // BORRADOR | FIRMADO | ENVIADO | ACEPTADO | RECHAZADO | ANULADA
   // Venta sin comisión para el empleado (ej. corte de cortesía / mal aplicado):
   // no le genera comisión, aunque siga contando el total de la venta.
   noCommission  Boolean       @default(false)

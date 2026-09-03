@@ -52,6 +52,11 @@ export class FiscalController {
     return this.service.emitForSale(req.user, Number(saleId));
   }
 
+  @Post('reissue/:saleId')
+  reissue(@Req() req, @Param('saleId') saleId: string) {
+    return this.service.reissueForSale(req.user, Number(saleId));
+  }
+
   @Post('credit-notes')
   createCreditNote(@Req() req, @Body() dto: any) {
     return this.service.createCreditNote(req.user, dto);
