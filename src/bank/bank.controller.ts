@@ -16,22 +16,10 @@ import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/auth/guards/roles.guard';
 import { Roles } from '@/auth/roles.decorator';
 
-// Ver/oír consignaciones: roles del negocio que manejan/ven dinero. El BARBERO
-// NO ve consignaciones (es información financiera del negocio, no le compete).
-const VIEW_ROLES = [
-  'SUPER_ADMIN',
-  'COORDINADOR',
-  'ADMIN',
-  'ASESOR',
-  'AUXILIAR',
-  'BODEGUERO',
-  'VENTAS',
-  'CAJA',
-  'RECEPCIONISTA',
-  'MESERO',
-  'COCINERO',
-  'PROFESIONAL',
-];
+// Ver/oír consignaciones: información financiera sensible. SOLO el dueño
+// (SUPER_ADMIN), el administrador (ADMIN) y la recepcionista. El barbero/
+// profesional y demás roles operativos NO la ven.
+const VIEW_ROLES = ['SUPER_ADMIN', 'ADMIN', 'RECEPCIONISTA'];
 // Configurar/eliminar: solo dueño/administrador.
 const OWNER_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 
