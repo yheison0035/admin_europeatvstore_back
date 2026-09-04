@@ -838,8 +838,6 @@ export class StatisticsService {
       ).padStart(2, '0')}`;
     const weekRange = `${label(wStart)} – ${label(new Date(wEnd.getTime() - 86400000))}`;
 
-    const teamBirthdays = await this.teamBirthdays(user, y, m, d);
-
     // Cargos que afectan el pago del BARBERO. Para que el descuento NO
     // desaparezca al marcar "pagó con comisión" (y NO se repita en semanas
     // siguientes), el descuento de LA SEMANA = pendientes + los que se
@@ -875,7 +873,8 @@ export class StatisticsService {
     return {
       success: true,
       data: {
-        teamBirthdays,
+        // El barbero solo ve SU información: nada de compañeros (sin cumpleaños
+        // del equipo) ni del negocio.
         ratesConfigured,
         rates: { service: svcRate, product: prodRate },
         today: { earnings: earn(tDay.services, tDay.products), cuts: tDay.cuts },
