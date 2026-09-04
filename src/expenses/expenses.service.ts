@@ -246,30 +246,10 @@ export class ExpensesService {
       },
     });
 
-    // Caja: si el gasto se pagó en EFECTIVO y hay una caja abierta en el local,
-    // se registra el egreso automáticamente para que el arqueo cuadre (igual
-    // que las ventas en efectivo entran como ingreso).
-    if (dto.paymentMethod === 'EFECTIVO') {
-      const openReg = await this.prisma.cashRegister.findFirst({
-        where: {
-          localId: dto.localId,
-          companyId: user.companyId,
-          status: 'ABIERTA',
-        },
-        select: { id: true },
-      });
-      if (openReg) {
-        await this.prisma.cashMovement.create({
-          data: {
-            cashRegisterId: openReg.id,
-            type: 'EGRESO',
-            amount: dto.amount,
-            concept: `Gasto: ${dto.concept}`,
-            userId: user.id,
-          },
-        });
-      }
-    }
+    // Gastos y Caja son INDEPENDIENTES: un gasto del módulo Gastos NO afecta el
+    // arqueo de caja. La caja solo cuenta los egresos que se registren
+    // directamente en el módulo Caja (movimientos EGRESO). Antes se creaba un
+    // egreso automático aquí, pero se quitó a pedido del negocio.
 
     await this.audit.log({
       entity: 'expense',
