@@ -1715,26 +1715,103 @@ export class SalesService {
         },
       },
       include: {
+        // Se trae el % de comisión de cada usuario (barbero) para calcular lo
+        // que gana en el rango, además de lo vendido.
         user: {
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+            commissionServiceRate: true,
+            commissionProductRate: true,
+          },
+        },
+        // Ítems para separar servicios (cortes) de productos y saber qué
+        // productos generan comisión (categoría con earnsCommission).
+        items: {
+          select: {
+            subtotal: true,
+            serviceId: true,
+            inventoryVariantId: true,
+            variant: {
+              select: {
+                inventory: {
+                  select: { category: { select: { earnsCommission: true } } },
+                },
+              },
+            },
+          },
         },
       },
     });
 
     let totalGeneral = 0;
 
-    const usersMap: Record<string, number> = {};
+    // Estados que NO pagan comisión (ventas canceladas/anuladas/devueltas).
+    const CANCELED = ['CANCELADA', 'RECHAZADA', 'DEVUELTA'];
+    const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+    // Desglose por usuario: vendido + base de comisión (servicios/productos) +
+    // su % y lo que gana.
+    const usersMap: Record<
+      number,
+      {
+        userId: number;
+        name: string;
+        total: number;
+        services: number;
+        products: number;
+        serviceRate: number | null;
+        productRate: number | null;
+      }
+    > = {};
     const methodsMap: Record<string, { total: number }> = {};
     const dailyMap: Record<string, number> = {};
 
     for (const sale of sales) {
       const amount = sale.totalAmount;
+      const uid = sale.user?.id ?? 0;
       const userName = sale.user?.name || 'SIN ASESOR';
       const method = sale.paymentMethod || 'OTROS';
 
       totalGeneral += amount;
 
-      usersMap[userName] = (usersMap[userName] || 0) + amount;
+      if (!usersMap[uid]) {
+        usersMap[uid] = {
+          userId: uid,
+          name: userName,
+          total: 0,
+          services: 0,
+          products: 0,
+          serviceRate:
+            sale.user?.commissionServiceRate != null
+              ? Number(sale.user.commissionServiceRate)
+              : null,
+          productRate:
+            sale.user?.commissionProductRate != null
+              ? Number(sale.user.commissionProductRate)
+              : null,
+        };
+      }
+      usersMap[uid].total += amount;
+
+      // Base para comisión: solo ventas no canceladas y no marcadas "sin
+      // comisión". Servicios cuentan siempre; productos solo si su categoría
+      // genera comisión.
+      const paysCommission =
+        !CANCELED.includes(sale.saleStatus as any) && !sale.noCommission;
+      if (paysCommission) {
+        for (const it of sale.items) {
+          const v = it.subtotal || 0;
+          if (it.serviceId) {
+            usersMap[uid].services += v;
+          } else if (
+            it.inventoryVariantId &&
+            it.variant?.inventory?.category?.earnsCommission === true
+          ) {
+            usersMap[uid].products += v;
+          }
+        }
+      }
 
       if (!methodsMap[method]) {
         methodsMap[method] = { total: 0 };
@@ -1746,6 +1823,24 @@ export class SalesService {
 
       dailyMap[dateKey] = (dailyMap[dateKey] || 0) + amount;
     }
+
+    // Arma la lista de usuarios con su comisión ganada (servicios×% + productos×%)
+    // ordenada de mayor a menor comisión.
+    const usersList = Object.values(usersMap)
+      .map((u) => {
+        const sr = u.serviceRate ?? 0;
+        const pr = u.productRate ?? 0;
+        const serviceCommission = r2((u.services * sr) / 100);
+        const productCommission = r2((u.products * pr) / 100);
+        return {
+          ...u,
+          serviceCommission,
+          productCommission,
+          commission: r2(serviceCommission + productCommission),
+          ratesConfigured: u.serviceRate != null || u.productRate != null,
+        };
+      })
+      .sort((a, b) => b.commission - a.commission || b.total - a.total);
 
     const daily: { date: string; total: number }[] = [];
 
@@ -1772,7 +1867,9 @@ export class SalesService {
         userId,
         total: {
           total: totalGeneral,
-          users: usersMap,
+          // Lista por barbero/asesor con vendido, servicios, productos, su % y
+          // lo que gana (comisión) en el rango.
+          users: usersList,
         },
         methods: methodsMap,
         daily,
