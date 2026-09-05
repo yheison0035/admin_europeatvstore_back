@@ -2004,12 +2004,25 @@ export class SalesService {
         },
       },
       include: {
-        user: { select: { id: true, name: true } },
+        // Se trae el % de comisión propio de cada barbero (servicios y productos).
+        user: {
+          select: {
+            id: true,
+            name: true,
+            commissionServiceRate: true,
+            commissionProductRate: true,
+          },
+        },
         items: {
           include: {
             service: true,
             variant: {
-              include: { inventory: true },
+              include: {
+                inventory: {
+                  // Necesitamos saber si el producto genera comisión.
+                  include: { category: { select: { earnsCommission: true } } },
+                },
+              },
             },
           },
         },
@@ -2021,18 +2034,24 @@ export class SalesService {
     let globalTotal = 0;
     const paymentTotals: Record<string, number> = {};
 
-    // Comisión de barberos: 40% hasta el sábado 25/07/2026 y 45% desde el
-    // domingo 26/07/2026 (00:00 hora Colombia = 05:00 UTC).
-    const RATE_OLD = 0.4;
-    const RATE_NEW = 0.45;
-    const RATE_CHANGE = new Date('2026-07-26T05:00:00Z');
-
     for (const sale of sales) {
       const userName = sale.user?.name || 'SIN USUARIO';
 
       if (!usersMap[userName]) {
         usersMap[userName] = {
           userId: sale.user?.id ?? null,
+          // % propio del barbero (o null si no lo tiene configurado).
+          serviceRate:
+            sale.user?.commissionServiceRate != null
+              ? Number(sale.user.commissionServiceRate)
+              : null,
+          productRate:
+            sale.user?.commissionProductRate != null
+              ? Number(sale.user.commissionProductRate)
+              : null,
+          ratesConfigured:
+            sale.user?.commissionServiceRate != null ||
+            sale.user?.commissionProductRate != null,
           services: {},
           products: {},
           totals: {
@@ -2044,9 +2063,12 @@ export class SalesService {
         };
       }
 
+      const svcRate = usersMap[userName].serviceRate; // % (ej. 45)
+      const prodRate = usersMap[userName].productRate;
+
       for (const item of sale.items) {
         // ======================
-        // SERVICIOS
+        // SERVICIOS (comisión con el % de servicio del barbero)
         // ======================
         if (item.serviceId && item.service) {
           const name = item.service.name;
@@ -2063,9 +2085,11 @@ export class SalesService {
           usersMap[userName].services[name].count += item.quantity;
           usersMap[userName].services[name].total += item.subtotal;
 
-          const rate = sale.saleDate >= RATE_CHANGE ? RATE_NEW : RATE_OLD;
-          // Venta marcada sin comisión (cortesía / mal aplicada) → 0.
-          const commission = sale.noCommission ? 0 : item.subtotal * rate;
+          // Venta marcada sin comisión (cortesía / mal aplicada) o sin % → 0.
+          const commission =
+            sale.noCommission || svcRate == null
+              ? 0
+              : item.subtotal * (svcRate / 100);
 
           usersMap[userName].services[name].commission += commission;
 
@@ -2074,22 +2098,35 @@ export class SalesService {
         }
 
         // ======================
-        // PRODUCTOS
+        // PRODUCTOS (comisión con el % de producto del barbero, solo si la
+        // categoría del producto genera comisión)
         // ======================
         if (item.inventoryVariantId && item.variant) {
           const name = item.variant.inventory.name;
+          const earns =
+            item.variant.inventory.category?.earnsCommission === true;
 
           if (!usersMap[userName].products[name]) {
             usersMap[userName].products[name] = {
               count: 0,
               total: 0,
+              commission: 0,
+              earnsCommission: earns,
             };
           }
 
           usersMap[userName].products[name].count += item.quantity;
           usersMap[userName].products[name].total += item.subtotal;
 
+          const pCommission =
+            sale.noCommission || prodRate == null || !earns
+              ? 0
+              : item.subtotal * (prodRate / 100);
+
+          usersMap[userName].products[name].commission += pCommission;
+
           usersMap[userName].totals.productsTotal += item.subtotal;
+          usersMap[userName].totals.commission += pCommission;
         }
 
         usersMap[userName].totals.total += item.subtotal;
@@ -2144,9 +2181,9 @@ export class SalesService {
     return {
       success: true,
       globalTotal,
-      commissionRate: RATE_NEW,
-      previousCommissionRate: RATE_OLD,
-      commissionRateChangeDate: '2026-07-26',
+      // La comisión ahora se calcula con el % propio de cada barbero (viene en
+      // cada usuario del reporte: serviceRate / productRate).
+      perUserRates: true,
       paymentBreakdown,
       data: usersMap,
     };
