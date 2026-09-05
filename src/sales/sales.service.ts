@@ -2058,6 +2058,10 @@ export class SalesService {
             servicesTotal: 0,
             productsTotal: 0,
             total: 0,
+            // Comisión separada: cortes (se paga SEMANAL, cada sábado) y
+            // productos (se paga MENSUAL, del 3 al 2). commission = suma (info).
+            servicesCommission: 0,
+            productsCommission: 0,
             commission: 0,
           },
         };
@@ -2094,6 +2098,7 @@ export class SalesService {
           usersMap[userName].services[name].commission += commission;
 
           usersMap[userName].totals.servicesTotal += item.subtotal;
+          usersMap[userName].totals.servicesCommission += commission;
           usersMap[userName].totals.commission += commission;
         }
 
@@ -2126,6 +2131,7 @@ export class SalesService {
           usersMap[userName].products[name].commission += pCommission;
 
           usersMap[userName].totals.productsTotal += item.subtotal;
+          usersMap[userName].totals.productsCommission += pCommission;
           usersMap[userName].totals.commission += pCommission;
         }
 
@@ -2174,7 +2180,10 @@ export class SalesService {
         const chargesTotal = list.reduce((s, c) => s + c.amount, 0);
         entry.chargesList = list;
         entry.totals.charges = chargesTotal;
-        entry.totals.netCommission = entry.totals.commission - chargesTotal;
+        // Los cargos/descuentos se restan del pago SEMANAL (cortes). Los
+        // productos se pagan aparte (mensual) y no se tocan con los cargos.
+        entry.totals.netCommission =
+          entry.totals.servicesCommission - chargesTotal;
       }
     }
 
